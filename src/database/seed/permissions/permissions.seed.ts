@@ -1,0 +1,123 @@
+// src/database/seeds/rbac/permissions/permissions.seed.ts
+
+export const permissionsPermissions = [
+    {
+        key: 'permission.view',
+        name: 'View Permissions',
+        action: 'view',
+        description: 'View all permission modules and permissions.',
+        displayOrder: 1,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.create',
+        name: 'Create Permissions',
+        action: 'create',
+        description: 'Create new custom permissions.',
+        displayOrder: 2,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.update',
+        name: 'Update Permissions',
+        action: 'update',
+        description: 'Modify existing permissions.',
+        displayOrder: 3,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.delete',
+        name: 'Delete Permissions',
+        action: 'delete',
+        description: 'Delete custom permissions.',
+        displayOrder: 4,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.restore',
+        name: 'Restore Permissions',
+        action: 'restore',
+        description: 'Restore previously deleted permissions.',
+        displayOrder: 5,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.export',
+        name: 'Export Permissions',
+        action: 'export',
+        description: 'Export permission definitions.',
+        displayOrder: 6,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.sync',
+        name: 'Synchronize Permissions',
+        action: 'sync',
+        description: 'Synchronize seeded permissions with the database.',
+        displayOrder: 7,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.review',
+        name: 'Review Permissions',
+        action: 'review',
+        description: 'Review newly introduced permissions before assigning them to roles.',
+        displayOrder: 8,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.module.manage',
+        name: 'Manage Permission Modules',
+        action: 'manage',
+        description: 'Manage permission modules.',
+        displayOrder: 9,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+
+    {
+        key: 'permission.audit',
+        name: 'View Permission Audit',
+        action: 'audit',
+        description: 'View permission change history.',
+        displayOrder: 10,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+    },
+];

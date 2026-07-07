@@ -1,0 +1,38 @@
+# Production multi-stage Dockerfile
+# Stage 1: Build TypeScript → JavaScript
+# Stage 2: Minimal runtime image (no devDependencies, no TypeScript)
+
+# ── Builder ───────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src ./src
+
+RUN npm run build
+
+# ── Runner ────────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+# Non-root user for security
+RUN addgroup --system nexusbid && \
+    adduser  --system --ingroup nexusbid nexusbid
+
+COPY --from=builder /app/dist         ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY package.json ./
+
+USER nexusbid
+
+EXPOSE 3000
+
+# PM2 is installed globally in the prod environment
+# Use: pm2-runtime ecosystem.config.js
+# Or for simple single-worker: node dist/config/server.js
+CMD ["node", "dist/config/server.js"]

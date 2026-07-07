@@ -1,0 +1,63 @@
+version: '3.9'
+
+# ─── Local Docker Compose ──────────────────────────────────────────────────────
+# Usage: docker compose up --build
+# NODE_ENV=local  →  no real AWS/PayPal/email (dummy mode)
+# DOCKER=true     →  DATABASE_URL host auto-swapped localhost → db
+# Nginx: HTTP only (port 80) — no SSL certs needed
+#
+# For dev env:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# For prod env: docker compose -f docker-compose.prod.yml up
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: local
+      DOCKER: 'true'
+      # DATABASE_URL host is automatically swapped from localhost → db by env.ts when DOCKER=true
+    env_file:
+      - .env
+      - .env.local
+    volumes:
+      - ./src:/app/src     # Hot reload — ts-node watches src/
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: rfp
+      POSTGRES_PASSWORD: rfp
+      POSTGRES_DB: nexusbid_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rfp -d nexusbid_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '80:80'
+      # Port 443 not exposed — no SSL in local env
+    volumes:
+      - ./docker/nginx.local.conf:/etc/nginx/nginx.conf:ro
+      # No SSL volume — HTTP only for local/dev
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

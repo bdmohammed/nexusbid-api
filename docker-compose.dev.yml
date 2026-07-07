@@ -1,0 +1,19 @@
+version: '3.9'
+
+# ─── Dev Environment Docker Compose Override ──────────────────────────────────
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Overrides the base docker-compose.yml for the 'dev' environment:
+#   - NODE_ENV=dev  →  real AWS / PayPal sandbox / Resend connections
+#   - Still uses HTTP-only nginx (no SSL) — same as local
+#   - DATABASE_URL still points to 'db' container (DOCKER=true)
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+  api:
+    environment:
+      NODE_ENV: dev
+      DOCKER: 'true'
+    env_file:
+      - .env
+      - .env.dev     # Override with real credentials

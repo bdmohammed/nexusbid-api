@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+# .env (global defaults) — safe to commit (no secrets)
+# .env.local, .env.dev — DO NOT commit if they contain real credentials
+# .env.uat, .env.prod — commit as templates only (inject real values via CI/CD)
+.env.*.local          # Personal local overrides — always ignored
+docker/ssl/           # Self-signed certs — never commit
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+
+# PM2
+.pm2/
+
+# Docker
+docker/data/
+
+# Temp
+*.tmp

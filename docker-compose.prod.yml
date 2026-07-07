@@ -1,0 +1,32 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prod
+    environment:
+      NODE_ENV: production
+    env_file:
+      - .env
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+    restart: always
+
+volumes:
+  postgres_data:
