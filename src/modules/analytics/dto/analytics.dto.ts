@@ -17,7 +17,7 @@ export const AnalyticsQuerySchema = z.object({
 
 export const SaveDashboardLayoutSchema = z.object({
   widgets: z.array(z.string()).default([]),
-  filters: z.record(z.any()).default({}),
+  filters: z.record(z.string(), z.any()).default({}),
   theme: z.string().default('default'),
   favorites: z.array(z.string()).default([]),
 });
@@ -26,7 +26,7 @@ export const CreateScheduledReportSchema = z.object({
   reportName: z.string().min(3).max(150),
   frequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
   timezone: z.string().default('UTC'),
-  filters: z.record(z.any()).default({}),
+  filters: z.record(z.string(), z.any()).default({}),
   recipients: z.object({
     users: z.array(z.string().uuid()).optional(),
     roles: z.array(z.string().uuid()).optional(),
@@ -37,7 +37,7 @@ export const CreateScheduledReportSchema = z.object({
 
 export const RequestExportSchema = z.object({
   exportType: z.enum(['tenders', 'bids', 'financial', 'users', 'vendors', 'traffic', 'categories', 'system']),
-  filters: z.record(z.any()).default({}),
+  filters: z.record(z.string(), z.any()).default({}),
 });
 
 export type AnalyticsQueryDto = z.infer<typeof AnalyticsQuerySchema>;
