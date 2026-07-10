@@ -1,13 +1,13 @@
 import crypto from 'crypto';
 import { IsNull, MoreThan } from 'typeorm';
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
 import { EmailToken } from '../entities/EmailToken';
 import { User } from '../entities/User';
 import { AppError } from '../core/AppError';
 import { EMAIL_TOKEN_TTL } from '../core/constants';
 import { EmailTokenType } from '../types/enums';
 
-const tokenRepo = AppDataSource.getRepository(EmailToken);
+const emailTokenRepository = appDataSource.getRepository(EmailToken);
 
 /**
  * Creates a new email token for the given user and type.
@@ -29,14 +29,14 @@ export async function createEmailToken(
       ? EMAIL_TOKEN_TTL.PASSWORD_RESET
       : EMAIL_TOKEN_TTL.VERIFICATION;
 
-  const token = tokenRepo.create({
+  const token = emailTokenRepository.create({
     userId,
     tokenHash,
     type,
     expiresAt: new Date(Date.now() + ttl),
   });
 
-  await tokenRepo.save(token);
+  await emailTokenRepository.save(token);
   return rawToken;
 }
 
@@ -53,7 +53,7 @@ export async function verifyAndConsumeToken(
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
   // Find the exact non-expired, non-used token of this type matching the hash
-  const matched = await tokenRepo.findOne({
+  const matched = await emailTokenRepository.findOne({
     where: {
       tokenHash,
       type,
@@ -71,11 +71,11 @@ export async function verifyAndConsumeToken(
   }
 
   // Mark as used
-  await tokenRepo.update(matched.id, { usedAt: new Date() });
+  await emailTokenRepository.update(matched.id, { usedAt: new Date() });
 
   // For password reset — delete all reset tokens for this user
   if (type === EmailTokenType.PASSWORD_RESET) {
-    await tokenRepo.delete({ userId: matched.userId, type });
+    await emailTokenRepository.delete({ userId: matched.userId, type });
   }
 
   return matched.userId;
@@ -89,7 +89,7 @@ export async function deleteTokensByType(
   userId: string,
   type: EmailTokenType,
 ): Promise<void> {
-  await tokenRepo.delete({ userId, type });
+  await emailTokenRepository.delete({ userId, type });
 }
 
 /**
@@ -100,7 +100,7 @@ export async function getValidTokenDetails(
   type: EmailTokenType,
 ): Promise<EmailToken & { user: User }> {
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const matched = await tokenRepo.findOne({
+  const matched = await emailTokenRepository.findOne({
     where: {
       tokenHash,
       type,

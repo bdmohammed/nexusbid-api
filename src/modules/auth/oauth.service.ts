@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { User } from '../../entities/User';
 import { AppError } from '../../core/AppError';
 import { env } from '../../config/env';
@@ -10,7 +10,7 @@ import { savePasswordToHistory } from './security.service';
 import { logSecurityEvent } from './securityLog.service';
 import { logger } from '../../config/logger';
 
-const userRepo = AppDataSource.getRepository(User);
+const userRepository = appDataSource.getRepository(User);
 
 export interface OAuthProfile {
   providerId: string;
@@ -235,9 +235,9 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
     }
 
     throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
-  } catch (err: any) {
-    logger.error({ err, provider }, 'OAuth callback verification failure');
-    throw new AppError(`OAuth login failed with provider ${provider}: ${err.message}`, 401, 'OAUTH_VERIFICATION_FAILED');
+  } catch (error: any) {
+    logger.error({ err: error, provider }, 'OAuth callback verification failure');
+    throw new AppError(`OAuth login failed with provider ${provider}: ${error.message}`, 401, 'OAUTH_VERIFICATION_FAILED');
   }
 }
 
@@ -247,16 +247,16 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
 export async function authenticateOAuthUser(
   provider: string,
   profile: OAuthProfile,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  clientMetadata?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<User> {
   // 1. Query by provider ID
   let user: User | null = null;
   if (provider === 'google') {
-    user = await userRepo.findOne({ where: { googleId: profile.providerId } });
+    user = await userRepository.findOne({ where: { googleId: profile.providerId } });
   } else if (provider === 'github') {
-    user = await userRepo.findOne({ where: { githubId: profile.providerId } });
+    user = await userRepository.findOne({ where: { githubId: profile.providerId } });
   } else if (provider === 'microsoft') {
-    user = await userRepo.findOne({ where: { microsoftId: profile.providerId } });
+    user = await userRepository.findOne({ where: { microsoftId: profile.providerId } });
   }
 
   if (user) {
@@ -265,14 +265,14 @@ export async function authenticateOAuthUser(
     }
     // Update last login
     user.lastLoginAt = new Date();
-    await userRepo.save(user);
+    await userRepository.save(user);
 
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
       event: 'login.success',
-      ipAddress: details?.ipAddress ?? null,
-      userAgent: details?.userAgent ?? null,
+      ipAddress: clientMetadata?.ipAddress ?? null,
+      userAgent: clientMetadata?.userAgent ?? null,
       details: { method: `oauth_${provider}` },
     });
 
@@ -280,7 +280,7 @@ export async function authenticateOAuthUser(
   }
 
   // 2. Query by Email (Auto-linking)
-  user = await userRepo.findOne({
+  user = await userRepository.findOne({
     where: { email: profile.email },
   });
 
@@ -303,14 +303,14 @@ export async function authenticateOAuthUser(
       user.emailVerified = true;
     }
     user.lastLoginAt = new Date();
-    await userRepo.save(user);
+    await userRepository.save(user);
 
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
       event: 'login.success',
-      ipAddress: details?.ipAddress ?? null,
-      userAgent: details?.userAgent ?? null,
+      ipAddress: clientMetadata?.ipAddress ?? null,
+      userAgent: clientMetadata?.userAgent ?? null,
       details: { method: `oauth_${provider}`, action: 'linked' },
     });
 
@@ -319,8 +319,8 @@ export async function authenticateOAuthUser(
 
   // 3. Register a new user (Auto-registration)
   // Generate random, high-entropy password since they log in via OAuth
-  const tempPassword = crypto.randomBytes(32).toString('hex');
-  const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS.PASSWORD);
+  const temporaryPassword = crypto.randomBytes(32).toString('hex');
+  const passwordHash = await bcrypt.hash(temporaryPassword, BCRYPT_ROUNDS.PASSWORD);
 
   const newUserDto: Partial<User> = {
     name: profile.name,
@@ -340,9 +340,9 @@ export async function authenticateOAuthUser(
     newUserDto.microsoftId = profile.providerId;
   }
 
-  user = userRepo.create(newUserDto);
+  user = userRepository.create(newUserDto);
 
-  await userRepo.save(user);
+  await userRepository.save(user);
 
   // Save the password to history
   await savePasswordToHistory(user.id, passwordHash);
@@ -351,8 +351,8 @@ export async function authenticateOAuthUser(
     userId: user.id,
     email: user.email,
     event: 'register.success',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: clientMetadata?.ipAddress ?? null,
+    userAgent: clientMetadata?.userAgent ?? null,
     details: { method: `oauth_${provider}` },
   });
 
@@ -360,8 +360,8 @@ export async function authenticateOAuthUser(
     userId: user.id,
     email: user.email,
     event: 'login.success',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: clientMetadata?.ipAddress ?? null,
+    userAgent: clientMetadata?.userAgent ?? null,
     details: { method: `oauth_${provider}` },
   });
 

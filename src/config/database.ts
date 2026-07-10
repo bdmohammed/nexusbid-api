@@ -76,7 +76,7 @@ import { TypeOrmPinoLogger } from './databaseLogger';
 import { NotificationRecipient } from '../entities/NotificationRecipient';
 import { NotificationAction } from '../entities/NotificationAction';
 
-export const AppDataSource = new DataSource({
+export const appDataSource = new DataSource({
   type: 'postgres',
   namingStrategy: new SnakeNamingStrategy(),
   url: env.DATABASE_URL,
@@ -195,3 +195,6 @@ export const AppDataSource = new DataSource({
     ? { rejectUnauthorized: false }
     : false,
 });
+
+/** @deprecated Use appDataSource instead to comply with internal naming standard */
+export const AppDataSource = appDataSource;

@@ -1,13 +1,13 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { WebhookEvent } from '../../entities/WebhookEvent';
 import { Subscription } from '../../entities/Subscription';
 import { Transaction } from '../../entities/Transaction';
 import { WebhookEventStatus, SubscriptionStatus, TransactionStatus, TransactionType } from '../../types/enums';
 import { logger } from '../../config/logger';
 
-const webhookRepo = AppDataSource.getRepository(WebhookEvent);
-const subRepo = AppDataSource.getRepository(Subscription);
-const txnRepo = AppDataSource.getRepository(Transaction);
+const webhookEventRepository = appDataSource.getRepository(WebhookEvent);
+const subscriptionRepository = appDataSource.getRepository(Subscription);
+const transactionRepository = appDataSource.getRepository(Transaction);
 
 type PayPalWebhookBody = {
   event_type: string;
@@ -44,7 +44,7 @@ export async function processWebhookEvent(body: PayPalWebhookBody): Promise<void
 
     default:
       // Log as ignored — not an error
-      await webhookRepo.update(
+      await webhookEventRepository.update(
         { eventId: body['id' as keyof typeof body] as string },
         { status: WebhookEventStatus.IGNORED },
       );
@@ -60,7 +60,7 @@ async function handleSubscriptionActivated(
   const paypalSubscriptionId = resource['id'] as string;
   if (!paypalSubscriptionId) return;
 
-  await subRepo.update(
+  await subscriptionRepository.update(
     { paypalSubscriptionId },
     { status: SubscriptionStatus.ACTIVE },
   );
@@ -74,13 +74,13 @@ async function handleSubscriptionCancelledOrExpired(
   const paypalSubscriptionId = resource['id'] as string;
   if (!paypalSubscriptionId) return;
 
-  const sub = await subRepo.findOne({ where: { paypalSubscriptionId } });
-  if (!sub) {
+  const subscription = await subscriptionRepository.findOne({ where: { paypalSubscriptionId } });
+  if (!subscription) {
     logger.warn({ paypalSubscriptionId }, 'Subscription not found for cancellation event');
     return;
   }
 
-  await subRepo.update(sub.id, { status: SubscriptionStatus.CANCELLED });
+  await subscriptionRepository.update(subscription.id, { status: SubscriptionStatus.CANCELLED });
   logger.info({ paypalSubscriptionId }, 'Subscription marked cancelled/expired');
 }
 
@@ -95,36 +95,36 @@ async function handleSaleCompleted(
   if (!billingAgreementId) return;
 
   // Find the subscription
-  const sub = await subRepo.findOne({
+  const subscription = await subscriptionRepository.findOne({
     where: { paypalSubscriptionId: billingAgreementId },
     relations: ['plan', 'planVersion'],
   });
 
-  if (!sub) {
+  if (!subscription) {
     logger.warn({ billingAgreementId }, 'Subscription not found for PAYMENT.SALE.COMPLETED');
     return;
   }
 
   // Extend the subscription end date by plan duration
-  const durationDays = sub.planVersion?.durationDays || 30;
+  const durationDays = subscription.planVersion?.durationDays || 30;
   const newEndDate = new Date(
-    Math.max(sub.endDate.getTime(), Date.now()) +
+    Math.max(subscription.endDate.getTime(), Date.now()) +
     durationDays * 24 * 60 * 60 * 1000,
   );
-  await subRepo.update(sub.id, {
+  await subscriptionRepository.update(subscription.id, {
     endDate: newEndDate,
     status: SubscriptionStatus.ACTIVE,
   });
 
   // Record transaction
   const amountCents = amount ? Math.round(parseFloat(amount.total) * 100) : 0;
-  await txnRepo.save(
-    txnRepo.create({
-      userId: sub.userId,
+  await transactionRepository.save(
+    transactionRepository.create({
+      userId: subscription.userId,
       amountCents,
       currency: amount?.currency?.toLowerCase() ?? 'usd',
       type: TransactionType.SUBSCRIPTION,
-      referenceId: sub.id,
+      referenceId: subscription.id,
       paypalOrderId: saleId,
       paypalCaptureId: saleId,
       status: TransactionStatus.SUCCESS,
@@ -142,7 +142,7 @@ async function handleSaleDenied(
   if (!billingAgreementId) return;
 
   // Mark subscription as expired on payment failure
-  await subRepo.update(
+  await subscriptionRepository.update(
     { paypalSubscriptionId: billingAgreementId },
     { status: SubscriptionStatus.EXPIRED },
   );
@@ -162,7 +162,7 @@ async function handleCaptureCompleted(
   logger.info({ captureId, orderId }, 'One-time capture completed');
 
   // Update transaction status if it exists
-  await txnRepo.update(
+  await transactionRepository.update(
     { paypalOrderId: orderId },
     {
       status: TransactionStatus.SUCCESS,
@@ -172,10 +172,10 @@ async function handleCaptureCompleted(
   );
 
   // Activate corresponding subscription if it exists
-  const sub = await subRepo.findOne({ where: { paypalOrderId: orderId } });
-  if (sub) {
-    await subRepo.update(sub.id, { status: SubscriptionStatus.ACTIVE });
-    logger.info({ orderId, subId: sub.id }, 'Activated subscription from capture');
+  const subscription = await subscriptionRepository.findOne({ where: { paypalOrderId: orderId } });
+  if (subscription) {
+    await subscriptionRepository.update(subscription.id, { status: SubscriptionStatus.ACTIVE });
+    logger.info({ orderId, subId: subscription.id }, 'Activated subscription from capture');
   }
 }
 
@@ -187,32 +187,32 @@ export async function logRawWebhookEvent(
   eventType: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  await webhookRepo.upsert(
+  await webhookEventRepository.upsert(
     { provider, eventId, eventType, payload: payload as any, status: WebhookEventStatus.RECEIVED },
     { conflictPaths: ['provider', 'eventId'] },
   );
 }
 
 export async function isAlreadyProcessed(eventId: string): Promise<boolean> {
-  const existing = await webhookRepo.findOne({
+  const existing = await webhookEventRepository.findOne({
     where: { eventId, status: WebhookEventStatus.PROCESSED },
   });
   return existing !== null;
 }
 
 export async function markProcessing(eventId: string): Promise<void> {
-  await webhookRepo.update({ eventId }, { status: WebhookEventStatus.PROCESSING });
+  await webhookEventRepository.update({ eventId }, { status: WebhookEventStatus.PROCESSING });
 }
 
 export async function markProcessed(eventId: string): Promise<void> {
-  await webhookRepo.update({ eventId }, {
+  await webhookEventRepository.update({ eventId }, {
     status: WebhookEventStatus.PROCESSED,
     processedAt: new Date(),
   });
 }
 
 export async function markFailed(eventId: string, error: string): Promise<void> {
-  await webhookRepo.update({ eventId }, {
+  await webhookEventRepository.update({ eventId }, {
     status: WebhookEventStatus.FAILED,
     error,
   });

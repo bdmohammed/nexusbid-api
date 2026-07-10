@@ -11,16 +11,16 @@ class LRUCache<K, V> {
   }
 
   public get(key: K): V | undefined {
-    const item = this.cache.get(key);
-    if (item !== undefined) {
+    const cachedEntry = this.cache.get(key);
+    if (cachedEntry !== undefined) {
       // Refresh key order on hit
       this.cache.delete(key);
-      this.cache.set(key, item);
+      this.cache.set(key, cachedEntry);
     }
-    return item;
+    return cachedEntry;
   }
 
-  public set(key: K, val: V): void {
+  public set(key: K, value: V): void {
     if (this.cache.has(key)) {
       this.cache.delete(key);
     } else if (this.cache.size >= this.max) {
@@ -30,7 +30,7 @@ class LRUCache<K, V> {
         this.cache.delete(oldestKey);
       }
     }
-    this.cache.set(key, val);
+    this.cache.set(key, value);
   }
 
   public delete(key: K): void {
@@ -57,11 +57,11 @@ try {
       maxRetriesPerRequest: 1,
       connectTimeout: 2000,
     });
-    redisClient.on('error', (err: any) => {
-      logger.warn({ err }, 'Redis connection error. Falling back to memory cache.');
+    redisClient.on('error', (error: any) => {
+      logger.warn({ err: error }, 'Redis connection error. Falling back to memory cache.');
     });
   }
-} catch (e) {
+} catch (error) {
   logger.info('ioredis package not found or environment not configured. Cache fallback enabled.');
 }
 
@@ -84,15 +84,15 @@ export class CacheService {
     // Check L2 Cache (Redis)
     if (redisClient) {
       try {
-        const data = await redisClient.get(key);
-        if (data) {
-          const parsed = JSON.parse(data);
+        const cachedJsonString = await redisClient.get(key);
+        if (cachedJsonString) {
+          const parsedCacheData = JSON.parse(cachedJsonString);
           // Sync back to L1 cache
-          l1Cache.set(key, { data: parsed, expiresAt: Date.now() + 60 * 1000 }); // 1 min memory TTL
-          return parsed as T;
+          l1Cache.set(key, { data: parsedCacheData, expiresAt: Date.now() + 60 * 1000 }); // 1 min memory TTL
+          return parsedCacheData as T;
         }
-      } catch (err) {
-        logger.error({ err, key }, 'Failed to fetch key from Redis');
+      } catch (error) {
+        logger.error({ err: error, key }, 'Failed to fetch key from Redis');
       }
     }
 
@@ -112,8 +112,8 @@ export class CacheService {
     if (redisClient) {
       try {
         await redisClient.set(key, JSON.stringify(value), 'EX', ttlSeconds);
-      } catch (err) {
-        logger.error({ err, key }, 'Failed to set key in Redis');
+      } catch (error) {
+        logger.error({ err: error, key }, 'Failed to set key in Redis');
       }
     }
   }
@@ -129,8 +129,8 @@ export class CacheService {
     if (redisClient) {
       try {
         await redisClient.del(key);
-      } catch (err) {
-        logger.error({ err, key }, 'Failed to delete key from Redis');
+      } catch (error) {
+        logger.error({ err: error, key }, 'Failed to delete key from Redis');
       }
     }
   }
@@ -142,8 +142,8 @@ export class CacheService {
     setImmediate(async () => {
       try {
         await this.invalidate(key);
-      } catch (err) {
-        logger.error({ err, key }, 'Background cache invalidation failed');
+      } catch (error) {
+        logger.error({ err: error, key }, 'Background cache invalidation failed');
       }
     });
   }

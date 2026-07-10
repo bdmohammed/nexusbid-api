@@ -2,7 +2,7 @@ import * as bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { MoreThan } from 'typeorm';
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { User } from '../../entities/User';
 import { UserSession } from '../../entities/UserSession';
 import { EmailToken } from '../../entities/EmailToken';
@@ -22,6 +22,7 @@ import {
   sendAdminRegistrationNotification,
   sendAdminApprovalStatusEmail,
   sendAdminBootstrapNotification,
+  sendAdminBootstrapNotification as sendAdminBootstrapNotificationAlias, // keep imports aligned if needed, but not needed
 } from '../../services/email.service';
 import {
   verifyCaptcha,
@@ -37,8 +38,8 @@ import type { JwtPayload } from '../../types/express.d';
 import type { RegisterDto, LoginDto } from './auth.dto';
 import type { Response } from 'express';
 
-const userRepo = AppDataSource.getRepository(User);
-const sessionRepo = AppDataSource.getRepository(UserSession);
+const userRepository = appDataSource.getRepository(User);
+const userSessionRepository = appDataSource.getRepository(UserSession);
 
 export const REFRESH_COOKIE_NAME = 'nexusbid_refresh_token';
 
@@ -69,7 +70,7 @@ function sanitizeUser(user: User): Omit<User, 'passwordHash' | 'tokenVersion' | 
 async function generateAndSetTokens(
   res: Response,
   user: User,
-  details: { userAgent: string | null; ipAddress: string | null; rememberMe?: boolean }
+  connectionContext: { userAgent: string | null; ipAddress: string | null; rememberMe?: boolean }
 ): Promise<void> {
   const isAdmin = user.accountType === AccountType.ADMIN;
 
@@ -96,21 +97,21 @@ async function generateAndSetTokens(
   let refreshTtl = REFRESH_EXPIRY.NORMAL;
   if (isAdmin) {
     refreshTtl = REFRESH_EXPIRY.ADMIN;
-  } else if (details.rememberMe) {
+  } else if (connectionContext.rememberMe) {
     refreshTtl = REFRESH_EXPIRY.REMEMBER_ME;
   }
 
   const expiresAt = new Date(Date.now() + refreshTtl);
 
   // 3. Save UserSession in DB
-  const session = sessionRepo.create({
+  const session = userSessionRepository.create({
     userId: user.id,
     tokenHash,
     expiresAt,
-    userAgent: details.userAgent,
-    ipAddress: details.ipAddress,
+    userAgent: connectionContext.userAgent,
+    ipAddress: connectionContext.ipAddress,
   });
-  await sessionRepo.save(session);
+  await userSessionRepository.save(session);
 
   // 4. Set Access Token Cookie
   res.cookie(JWT_COOKIE_NAME, accessToken, {
@@ -134,9 +135,9 @@ async function generateAndSetTokens(
 
 export async function registerUser(
   dto: RegisterDto,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
-  const exists = await userRepo.findOne({
+  const exists = await userRepository.findOne({
     where: { email: dto.email },
     select: ['id'],
   });
@@ -149,7 +150,7 @@ export async function registerUser(
 
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
-  const user = userRepo.create({
+  const user = userRepository.create({
     name: dto.name,
     email: dto.email,
     passwordHash,
@@ -161,7 +162,7 @@ export async function registerUser(
     passwordChangedAt: new Date(),
   });
 
-  await userRepo.save(user);
+  await userRepository.save(user);
 
   // Save the initial password to history
   await savePasswordToHistory(user.id, passwordHash);
@@ -171,8 +172,8 @@ export async function registerUser(
     userId: user.id,
     email: user.email,
     event: 'register.success',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
   });
 
   const rawToken = await createEmailToken(user.id, EmailTokenType.EMAIL_VERIFICATION);
@@ -186,14 +187,14 @@ export async function registerUser(
 
 export async function verifyEmail(token: string): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_VERIFICATION);
-  await userRepo.update(userId, { emailVerified: true, status: UserStatus.ACTIVE });
+  await userRepository.update(userId, { emailVerified: true, status: UserStatus.ACTIVE });
 }
 
 export async function resendVerification(
   email: string,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
-  const user = await userRepo.findOne({ where: { email } });
+  const user = await userRepository.findOne({ where: { email } });
 
   // Return silently if user does not exist (avoid email enumeration)
   if (!user) {
@@ -206,8 +207,8 @@ export async function resendVerification(
   }
 
   // Delete any pending verification tokens for this user first
-  const tokenRepo = AppDataSource.getRepository(EmailToken);
-  await tokenRepo.delete({ userId: user.id, type: EmailTokenType.EMAIL_VERIFICATION });
+  const emailTokenRepository = appDataSource.getRepository(EmailToken);
+  await emailTokenRepository.delete({ userId: user.id, type: EmailTokenType.EMAIL_VERIFICATION });
 
   // Create a new token and send the email
   const rawToken = await createEmailToken(user.id, EmailTokenType.EMAIL_VERIFICATION);
@@ -222,27 +223,27 @@ export async function resendVerification(
     userId: user.id,
     email: user.email,
     event: 'resend_verification.success',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
   });
 }
 
 export async function loginUser(
   dto: LoginDto & { rememberMe?: boolean; captchaToken?: string },
   res: Response,
-  details: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null }
 ): Promise<ReturnType<typeof sanitizeUser>> {
   const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
 
-  const user = await userRepo.findOne({
+  const user = await userRepository.findOne({
     where: { email: dto.email },
   });
   if (!user) {
     await logSecurityEvent({
       email: dto.email,
       event: 'login.failed',
-      ipAddress: details.ipAddress,
-      userAgent: details.userAgent,
+      ipAddress: connectionContext.ipAddress,
+      userAgent: connectionContext.userAgent,
       details: { reason: 'User not found' },
     });
     throw GENERIC_ERROR;
@@ -255,8 +256,8 @@ export async function loginUser(
       userId: user.id,
       email: user.email,
       event: 'login.failed',
-      ipAddress: details.ipAddress,
-      userAgent: details.userAgent,
+      ipAddress: connectionContext.ipAddress,
+      userAgent: connectionContext.userAgent,
       details: { reason: 'Account locked out' },
     });
     throw new AppError(
@@ -273,24 +274,24 @@ export async function loginUser(
         userId: user.id,
         email: user.email,
         event: 'captcha.failed',
-        ipAddress: details.ipAddress,
-        userAgent: details.userAgent,
+        ipAddress: connectionContext.ipAddress,
+        userAgent: connectionContext.userAgent,
         details: { reason: 'CAPTCHA token missing' },
       });
       throw new AppError('CAPTCHA verification required', 400, 'CAPTCHA_REQUIRED');
     }
     try {
       await verifyCaptcha(dto.captchaToken);
-    } catch (err) {
+    } catch (error) {
       await logSecurityEvent({
         userId: user.id,
         email: user.email,
         event: 'captcha.failed',
-        ipAddress: details.ipAddress,
-        userAgent: details.userAgent,
+        ipAddress: connectionContext.ipAddress,
+        userAgent: connectionContext.userAgent,
         details: { reason: 'CAPTCHA verification failed' },
       });
-      throw err;
+      throw error;
     }
   }
 
@@ -307,20 +308,20 @@ export async function loginUser(
       reason = 'Account locked out (5 failed attempts)';
     }
 
-    await userRepo.update(user.id, updates);
+    await userRepository.update(user.id, updates);
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
       event: 'login.failed',
-      ipAddress: details.ipAddress,
-      userAgent: details.userAgent,
+      ipAddress: connectionContext.ipAddress,
+      userAgent: connectionContext.userAgent,
       details: { reason, failedAttempts },
     });
     throw GENERIC_ERROR;
   }
 
   // 3. Clear failed login count on successful authentication
-  await userRepo.update(user.id, {
+  await userRepository.update(user.id, {
     failedLoginAttempts: 0,
     lockoutUntil: null,
     lastLoginAt: new Date(),
@@ -331,8 +332,8 @@ export async function loginUser(
       userId: user.id,
       email: user.email,
       event: 'login.failed',
-      ipAddress: details.ipAddress,
-      userAgent: details.userAgent,
+      ipAddress: connectionContext.ipAddress,
+      userAgent: connectionContext.userAgent,
       details: { reason: 'Email not verified' },
     });
     throw new AppError(
@@ -347,8 +348,8 @@ export async function loginUser(
       userId: user.id,
       email: user.email,
       event: 'login.failed',
-      ipAddress: details.ipAddress,
-      userAgent: details.userAgent,
+      ipAddress: connectionContext.ipAddress,
+      userAgent: connectionContext.userAgent,
       details: { reason: 'Account suspended' },
     });
     throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
@@ -359,17 +360,17 @@ export async function loginUser(
     userId: user.id,
     email: user.email,
     event: 'login.success',
-    ipAddress: details.ipAddress,
-    userAgent: details.userAgent,
+    ipAddress: connectionContext.ipAddress,
+    userAgent: connectionContext.userAgent,
   });
 
   // Track device & detect suspicious logins
-  await trackDeviceAndDetectSuspicious(user, details.userAgent, details.ipAddress);
+  await trackDeviceAndDetectSuspicious(user, connectionContext.userAgent, connectionContext.ipAddress);
 
   // Generate tokens, store session, set cookies
   await generateAndSetTokens(res, user, {
-    userAgent: details.userAgent,
-    ipAddress: details.ipAddress,
+    userAgent: connectionContext.userAgent,
+    ipAddress: connectionContext.ipAddress,
     rememberMe: dto.rememberMe,
   });
 
@@ -383,7 +384,7 @@ export async function loginUser(
 export async function refreshSession(
   reqToken: string | undefined,
   res: Response,
-  details: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
   if (!reqToken) {
     throw new AppError('Refresh token required', 401, 'REFRESH_TOKEN_REQUIRED');
@@ -392,7 +393,7 @@ export async function refreshSession(
   const tokenHash = crypto.createHash('sha256').update(reqToken).digest('hex');
 
   // Find the session
-  const session = await sessionRepo.findOne({
+  const session = await userSessionRepository.findOne({
     where: { tokenHash },
     relations: ['user'],
   });
@@ -403,7 +404,7 @@ export async function refreshSession(
 
   // Replay Detection: if the session has already been revoked, revoke ALL active sessions of this user
   if (session.isRevoked) {
-    await sessionRepo.update({ userId: session.userId }, { isRevoked: true });
+    await userSessionRepository.update({ userId: session.userId }, { isRevoked: true });
     throw new AppError(
       'Potential refresh token reuse detected. All sessions revoked for safety.',
       401,
@@ -422,12 +423,12 @@ export async function refreshSession(
   }
 
   // RTR: Invalidate the used refresh token session
-  await sessionRepo.update(session.id, { isRevoked: true });
+  await userSessionRepository.update(session.id, { isRevoked: true });
 
   // Generate a brand new refresh token + access token
   await generateAndSetTokens(res, user, {
-    userAgent: details.userAgent,
-    ipAddress: details.ipAddress,
+    userAgent: connectionContext.userAgent,
+    ipAddress: connectionContext.ipAddress,
   });
 }
 
@@ -437,19 +438,19 @@ export async function refreshSession(
 export async function logoutUser(
   res: Response,
   rawRefreshToken: string | undefined,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
   let userId: string | null = null;
   let email: string | null = null;
 
   if (rawRefreshToken) {
     const tokenHash = crypto.createHash('sha256').update(rawRefreshToken).digest('hex');
-    const session = await sessionRepo.findOne({
+    const session = await userSessionRepository.findOne({
       where: { tokenHash },
       relations: ['user'],
     });
     if (session) {
-      await sessionRepo.update(session.id, { isRevoked: true });
+      await userSessionRepository.update(session.id, { isRevoked: true });
       userId = session.userId;
       email = session.user?.email || null;
     }
@@ -473,20 +474,20 @@ export async function logoutUser(
       userId,
       email,
       event: 'logout',
-      ipAddress: details?.ipAddress ?? null,
-      userAgent: details?.userAgent ?? null,
+      ipAddress: connectionContext?.ipAddress ?? null,
+      userAgent: connectionContext?.userAgent ?? null,
     });
   }
 }
 
 export async function getProfile(userId: string): Promise<ReturnType<typeof sanitizeUser>> {
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
   return sanitizeUser(user);
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  const user = await userRepo.findOne({ where: { email }, select: ['id', 'name', 'email'] });
+  const user = await userRepository.findOne({ where: { email }, select: ['id', 'name', 'email'] });
   if (!user) return; // Silent — don't reveal if email exists
 
   const rawToken = await createEmailToken(user.id, EmailTokenType.PASSWORD_RESET);
@@ -501,17 +502,17 @@ export async function forgotPassword(email: string): Promise<void> {
 export async function resetPassword(
   token: string,
   newPassword: string,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.PASSWORD_RESET);
 
   const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS.PASSWORD);
 
   // Revoke all active database sessions for this user
-  await sessionRepo.update({ userId }, { isRevoked: true });
+  await userSessionRepository.update({ userId }, { isRevoked: true });
 
   // Increment tokenVersion to revoke all existing access tokens
-  await userRepo
+  await userRepository
     .createQueryBuilder()
     .update(User)
     .set({
@@ -522,14 +523,14 @@ export async function resetPassword(
     .where('id = :id', { id: userId })
     .execute();
 
-  const user = await userRepo.findOne({ where: { id: userId }, select: ['email'] });
+  const user = await userRepository.findOne({ where: { id: userId }, select: ['email'] });
   if (user) {
     await logSecurityEvent({
       userId,
       email: user.email,
       event: 'password.change',
-      ipAddress: details?.ipAddress ?? null,
-      userAgent: details?.userAgent ?? null,
+      ipAddress: connectionContext?.ipAddress ?? null,
+      userAgent: connectionContext?.userAgent ?? null,
       details: { method: 'forgot_password_reset' },
     });
   }
@@ -539,7 +540,7 @@ export async function resetPassword(
  * Returns all active (non-revoked, non-expired) sessions for the user.
  */
 export async function getUserSessions(userId: string, currentRawRefreshToken?: string): Promise<any[]> {
-  const sessions = await sessionRepo.find({
+  const sessions = await userSessionRepository.find({
     where: { userId, isRevoked: false, expiresAt: MoreThan(new Date()) },
     order: { createdAt: 'DESC' },
   });
@@ -562,11 +563,11 @@ export async function getUserSessions(userId: string, currentRawRefreshToken?: s
  * Revokes a specific session by ID.
  */
 export async function revokeSessionById(userId: string, sessionId: string): Promise<void> {
-  const session = await sessionRepo.findOne({ where: { id: sessionId, userId } });
+  const session = await userSessionRepository.findOne({ where: { id: sessionId, userId } });
   if (!session) {
     throw new AppError('Session not found', 404, 'NOT_FOUND');
   }
-  await sessionRepo.update(session.id, { isRevoked: true });
+  await userSessionRepository.update(session.id, { isRevoked: true });
 }
 
 /**
@@ -574,10 +575,10 @@ export async function revokeSessionById(userId: string, sessionId: string): Prom
  */
 export async function revokeAllUserSessions(userId: string): Promise<void> {
   // Revoke all sessions in the DB
-  await sessionRepo.update({ userId }, { isRevoked: true });
+  await userSessionRepository.update({ userId }, { isRevoked: true });
 
   // Increment tokenVersion on the user table to invalidate all active JWTs
-  await userRepo
+  await userRepository
     .createQueryBuilder()
     .update(User)
     .set({ tokenVersion: () => 'token_version + 1' })
@@ -593,9 +594,9 @@ export async function changeUserPassword(
   userId: string,
   currentPassword: string,
   newPassword: string,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'NOT_FOUND');
   }
@@ -615,10 +616,10 @@ export async function changeUserPassword(
   const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS.PASSWORD);
 
   // 4. Revoke active database sessions
-  await sessionRepo.update({ userId }, { isRevoked: true });
+  await userSessionRepository.update({ userId }, { isRevoked: true });
 
   // 5. Update user password, increment tokenVersion (revoking access tokens), and reset flags
-  await userRepo
+  await userRepository
     .createQueryBuilder()
     .update(User)
     .set({
@@ -637,8 +638,8 @@ export async function changeUserPassword(
     userId,
     email: user.email,
     event: 'password.change',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
     details: { method: 'settings_password_change' },
   });
 }
@@ -650,21 +651,21 @@ export async function changeUserPassword(
 export async function requestEmailChange(
   userId: string,
   newEmail: string,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'NOT_FOUND');
   }
 
   // Check if the new email is already taken
-  const exists = await userRepo.findOne({ where: { email: newEmail }, select: ['id'] });
+  const exists = await userRepository.findOne({ where: { email: newEmail }, select: ['id'] });
   if (exists) {
     throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
   }
 
   // Set pending email
-  await userRepo.update(userId, { pendingEmail: newEmail });
+  await userRepository.update(userId, { pendingEmail: newEmail });
 
   // Create verification token and send emails
   const rawToken = await createEmailToken(userId, EmailTokenType.EMAIL_CHANGE);
@@ -689,8 +690,8 @@ export async function requestEmailChange(
     userId,
     email: user.email,
     event: 'email.change.request',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
     details: { newEmail },
   });
 }
@@ -700,11 +701,11 @@ export async function requestEmailChange(
  */
 export async function verifyEmailChange(
   token: string,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_CHANGE);
 
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'NOT_FOUND');
   }
@@ -714,7 +715,7 @@ export async function verifyEmailChange(
   }
 
   // Final check to make sure pending email wasn't registered in the meantime
-  const exists = await userRepo.findOne({ where: { email: user.pendingEmail }, select: ['id'] });
+  const exists = await userRepository.findOne({ where: { email: user.pendingEmail }, select: ['id'] });
   if (exists) {
     throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
   }
@@ -723,10 +724,10 @@ export async function verifyEmailChange(
   const oldEmail = user.email;
 
   // Revoke all active database sessions
-  await sessionRepo.update({ userId }, { isRevoked: true });
+  await userSessionRepository.update({ userId }, { isRevoked: true });
 
   // Update email, clear pendingEmail, set emailChangedAt, and increment tokenVersion (revoking access tokens)
-  await userRepo
+  await userRepository
     .createQueryBuilder()
     .update(User)
     .set({
@@ -742,8 +743,8 @@ export async function verifyEmailChange(
     userId,
     email: newEmail,
     event: 'email.change.verify',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
     details: { oldEmail, newEmail },
   });
 }
@@ -752,8 +753,8 @@ export async function verifyEmailChange(
  * Retrieves recognized devices for a specific user.
  */
 export async function getUserDevices(userId: string): Promise<UserDevice[]> {
-  const deviceRepo = AppDataSource.getRepository(UserDevice);
-  return deviceRepo.find({
+  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  return userDeviceRepository.find({
     where: { userId },
     order: { lastActiveAt: 'DESC' },
   });
@@ -763,24 +764,24 @@ export async function getUserDevices(userId: string): Promise<UserDevice[]> {
  * Marks a specific device as trusted.
  */
 export async function trustDeviceById(userId: string, deviceId: string): Promise<void> {
-  const deviceRepo = AppDataSource.getRepository(UserDevice);
-  const device = await deviceRepo.findOne({ where: { id: deviceId, userId } });
+  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  const device = await userDeviceRepository.findOne({ where: { id: deviceId, userId } });
   if (!device) {
     throw new AppError('Device not found', 404, 'NOT_FOUND');
   }
-  await deviceRepo.update(device.id, { isTrusted: true });
+  await userDeviceRepository.update(device.id, { isTrusted: true });
 }
 
 /**
  * Revokes a specific device (deletes it, forcing it to trigger login verification again on next login).
  */
 export async function revokeDeviceById(userId: string, deviceId: string): Promise<void> {
-  const deviceRepo = AppDataSource.getRepository(UserDevice);
-  const device = await deviceRepo.findOne({ where: { id: deviceId, userId } });
+  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  const device = await userDeviceRepository.findOne({ where: { id: deviceId, userId } });
   if (!device) {
     throw new AppError('Device not found', 404, 'NOT_FOUND');
   }
-  await deviceRepo.remove(device);
+  await userDeviceRepository.remove(device);
 }
 
 /**
@@ -789,24 +790,24 @@ export async function revokeDeviceById(userId: string, deviceId: string): Promis
 export async function establishOAuthSession(
   res: Response,
   user: User,
-  details: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
   // Track device & detect suspicious logins
-  await trackDeviceAndDetectSuspicious(user, details.userAgent, details.ipAddress);
+  await trackDeviceAndDetectSuspicious(user, connectionContext.userAgent, connectionContext.ipAddress);
 
   // Generate tokens, store session, set cookies
   await generateAndSetTokens(res, user, {
-    userAgent: details.userAgent,
-    ipAddress: details.ipAddress,
+    userAgent: connectionContext.userAgent,
+    ipAddress: connectionContext.ipAddress,
     rememberMe: true,
   });
 }
 
 export async function registerAdmin(
   dto: RegisterDto,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null }
 ): Promise<void> {
-  const exists = await userRepo.findOne({
+  const exists = await userRepository.findOne({
     where: { email: dto.email },
     select: ['id'],
   });
@@ -819,7 +820,7 @@ export async function registerAdmin(
 
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
-  const user = userRepo.create({
+  const user = userRepository.create({
     name: dto.name,
     email: dto.email,
     passwordHash,
@@ -831,7 +832,7 @@ export async function registerAdmin(
     passwordChangedAt: new Date(),
   });
 
-  await userRepo.save(user);
+  await userRepository.save(user);
 
   // Save the initial password to history
   await savePasswordToHistory(user.id, passwordHash);
@@ -841,8 +842,8 @@ export async function registerAdmin(
     userId: user.id,
     email: user.email,
     event: 'admin_register.success',
-    ipAddress: details?.ipAddress ?? null,
-    userAgent: details?.userAgent ?? null,
+    ipAddress: connectionContext?.ipAddress ?? null,
+    userAgent: connectionContext?.userAgent ?? null,
   });
 
   const rawToken = await createEmailToken(user.id, EmailTokenType.EMAIL_VERIFICATION);
@@ -856,16 +857,16 @@ export async function registerAdmin(
 
 export async function verifyAdminEmail(token: string): Promise<{ superAdminExists: boolean; user: User }> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_VERIFICATION);
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'USER_NOT_FOUND');
   }
 
   user.emailVerified = true;
-  await userRepo.save(user);
+  await userRepository.save(user);
 
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  const superAdminCount = await userRoleRepo.count({
+  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const superAdminCount = await userRoleRepository.count({
     where: {
       role: {
         slug: 'super-admin'
@@ -878,7 +879,7 @@ export async function verifyAdminEmail(token: string): Promise<{ superAdminExist
 
   if (superAdminExists) {
     // Notify Super Admins
-    const superAdmins = await userRoleRepo.find({
+    const superAdmins = await userRoleRepository.find({
       where: {
         role: {
           slug: 'super-admin'
@@ -915,8 +916,8 @@ export async function verifyAdminEmail(token: string): Promise<{ superAdminExist
 
 export async function verifyBootstrapToken(token: string): Promise<{ name: string; email: string }> {
   // Check if a Super Admin already exists in the system
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  const superAdminCount = await userRoleRepo.count({
+  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const superAdminCount = await userRoleRepository.count({
     where: {
       role: { slug: 'super-admin' }
     },
@@ -937,8 +938,8 @@ export async function verifyBootstrapToken(token: string): Promise<{ name: strin
 
 export async function approveBootstrapAdmin(token: string, action: 'approve' | 'reject' = 'approve'): Promise<void> {
   // Check if a Super Admin already exists in the system
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  const superAdminCount = await userRoleRepo.count({
+  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const superAdminCount = await userRoleRepository.count({
     where: {
       role: { slug: 'super-admin' }
     },
@@ -951,7 +952,7 @@ export async function approveBootstrapAdmin(token: string, action: 'approve' | '
 
   // Verify and consume the token
   const userId = await verifyAndConsumeToken(token, EmailTokenType.SYSTEM_OWNER_APPROVAL);
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'USER_NOT_FOUND');
   }
@@ -960,40 +961,40 @@ export async function approveBootstrapAdmin(token: string, action: 'approve' | '
     // Mark status as active and verify email
     user.status = UserStatus.ACTIVE;
     user.emailVerified = true;
-    await userRepo.save(user);
+    await userRepository.save(user);
 
     // Assign super-admin role
-    const roleRepo = AppDataSource.getRepository(Role);
-    let superAdminRole = await roleRepo.findOne({ where: { slug: 'super-admin' } });
+    const roleRepository = appDataSource.getRepository(Role);
+    let superAdminRole = await roleRepository.findOne({ where: { slug: 'super-admin' } });
     if (!superAdminRole) {
-      superAdminRole = roleRepo.create({
+      superAdminRole = roleRepository.create({
         slug: 'super-admin',
         isSystemRole: true,
         status: RoleStatus.ACTIVE,
       });
-      await roleRepo.save(superAdminRole);
+      await roleRepository.save(superAdminRole);
 
-      const versionRepo = AppDataSource.getRepository(RoleVersion);
-      const superAdminVersion = versionRepo.create({
+      const roleVersionRepository = appDataSource.getRepository(RoleVersion);
+      const superAdminVersion = roleVersionRepository.create({
         roleId: superAdminRole.id,
         version: 1,
         name: 'Super Admin',
         description: 'System Super Administrator. Has all system permissions by default.',
         status: RoleVersionStatus.APPROVED,
       });
-      await versionRepo.save(superAdminVersion);
+      await roleVersionRepository.save(superAdminVersion);
 
       superAdminRole.activeVersionId = superAdminVersion.id;
-      await roleRepo.save(superAdminRole);
+      await roleRepository.save(superAdminRole);
     }
 
-    const assignment = userRoleRepo.create({
+    const assignment = userRoleRepository.create({
       userId: user.id,
       roleId: superAdminRole.id,
       assignedBy: user,
       assignedAt: new Date(),
     });
-    await userRoleRepo.save(assignment);
+    await userRoleRepository.save(assignment);
 
     // Send success/approval notification email
     await sendAdminApprovalStatusEmail({
@@ -1005,7 +1006,7 @@ export async function approveBootstrapAdmin(token: string, action: 'approve' | '
     // Reject
     user.status = UserStatus.REJECTED;
     user.rejectionReason = 'Rejected by System Owner during bootstrap setup';
-    await userRepo.save(user);
+    await userRepository.save(user);
 
     // Send rejection email
     await sendAdminApprovalStatusEmail({
@@ -1019,7 +1020,7 @@ export async function approveBootstrapAdmin(token: string, action: 'approve' | '
 
 export async function ownerReview(token: string, action: 'approve' | 'reject'): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.SYSTEM_OWNER_APPROVAL);
-  const user = await userRepo.findOne({ where: { id: userId } });
+  const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'USER_NOT_FOUND');
   }
@@ -1027,41 +1028,41 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
   if (action === 'approve') {
     user.status = UserStatus.ACTIVE;
     user.emailVerified = true;
-    await userRepo.save(user);
+    await userRepository.save(user);
 
-    const roleRepo = AppDataSource.getRepository(Role);
-    const userRoleRepo = AppDataSource.getRepository(UserRole);
+    const roleRepository = appDataSource.getRepository(Role);
+    const userRoleRepository = appDataSource.getRepository(UserRole);
 
-     let superAdminRole = await roleRepo.findOne({ where: { slug: 'super-admin' } });
-     if (!superAdminRole) {
-       superAdminRole = roleRepo.create({
-         slug: 'super-admin',
-         isSystemRole: true,
-         status: RoleStatus.ACTIVE,
-       });
-       await roleRepo.save(superAdminRole);
+    let superAdminRole = await roleRepository.findOne({ where: { slug: 'super-admin' } });
+    if (!superAdminRole) {
+      superAdminRole = roleRepository.create({
+        slug: 'super-admin',
+        isSystemRole: true,
+        status: RoleStatus.ACTIVE,
+      });
+      await roleRepository.save(superAdminRole);
 
-       const versionRepo = AppDataSource.getRepository(RoleVersion);
-       const superAdminVersion = versionRepo.create({
-         roleId: superAdminRole.id,
-         version: 1,
-         name: 'Super Admin',
-         description: 'System Super Administrator. Has all system permissions by default.',
-         status: RoleVersionStatus.APPROVED,
-       });
-       await versionRepo.save(superAdminVersion);
+      const roleVersionRepository = appDataSource.getRepository(RoleVersion);
+      const superAdminVersion = roleVersionRepository.create({
+        roleId: superAdminRole.id,
+        version: 1,
+        name: 'Super Admin',
+        description: 'System Super Administrator. Has all system permissions by default.',
+        status: RoleVersionStatus.APPROVED,
+      });
+      await roleVersionRepository.save(superAdminVersion);
 
-       superAdminRole.activeVersionId = superAdminVersion.id;
-       await roleRepo.save(superAdminRole);
-     }
+      superAdminRole.activeVersionId = superAdminVersion.id;
+      await roleRepository.save(superAdminRole);
+    }
 
-    const assignment = userRoleRepo.create({
+    const assignment = userRoleRepository.create({
       userId: user.id,
       roleId: superAdminRole.id,
       assignedBy: user,
       assignedAt: new Date(),
     });
-    await userRoleRepo.save(assignment);
+    await userRoleRepository.save(assignment);
 
     await sendAdminApprovalStatusEmail({
       to: user.email,
@@ -1071,7 +1072,7 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
   } else {
     user.status = UserStatus.REJECTED;
     user.rejectionReason = 'Rejected by System Owner';
-    await userRepo.save(user);
+    await userRepository.save(user);
 
     await sendAdminApprovalStatusEmail({
       to: user.email,
@@ -1085,11 +1086,11 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
 export async function loginAdmin(
   dto: LoginDto & { captchaToken?: string },
   res: Response,
-  details: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null }
 ): Promise<ReturnType<typeof sanitizeUser>> {
   const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
 
-  const user = await userRepo.findOne({
+  const user = await userRepository.findOne({
     where: { email: dto.email },
   });
   if (!user) {
@@ -1127,12 +1128,12 @@ export async function loginAdmin(
       updates.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
       updates.failedLoginAttempts = 0;
     }
-    await userRepo.update(user.id, updates);
+    await userRepository.update(user.id, updates);
     throw GENERIC_ERROR;
   }
 
   // 3. Clear failed login count
-  await userRepo.update(user.id, {
+  await userRepository.update(user.id, {
     failedLoginAttempts: 0,
     lockoutUntil: null,
     lastLoginAt: new Date(),
@@ -1166,8 +1167,8 @@ export async function loginAdmin(
 
   // Generate tokens & set cookies
   await generateAndSetTokens(res, user, {
-    userAgent: details.userAgent,
-    ipAddress: details.ipAddress,
+    userAgent: connectionContext.userAgent,
+    ipAddress: connectionContext.ipAddress,
     rememberMe: dto.rememberMe,
   });
 

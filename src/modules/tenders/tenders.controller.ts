@@ -3,7 +3,7 @@ import { asyncHandler } from '../../core/asyncHandler';
 import { sendOk, sendCreated, sendNoContent, paginationMeta } from '../../core/response';
 import { generateUploadUrl } from '../../services/s3.service';
 import * as service from './tenders.service';
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { Tender } from '../../entities/Tender';
 import { TenderVersion } from '../../entities/TenderVersion';
 import { TenderWorkflowService } from './TenderWorkflowService';
@@ -39,8 +39,8 @@ export const list = asyncHandler(async (req: Request, res: Response) => {
 export const getBySlug = asyncHandler(async (req: Request, res: Response) => {
   const { slug } = req.params;
   const userId = req.user?.userId;
-  const result = await service.getTenderBySlug(slug, userId);
-  return sendOk(res, result);
+  const tender = await service.getTenderBySlug(slug, userId);
+  return sendOk(res, tender);
 });
 
 export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) => {
@@ -57,7 +57,7 @@ export const adminList = asyncHandler(async (req: Request, res: Response) => {
   const status = req.query['status'] as string | undefined;
 
   // For admin panel listing, load all including versions
-  const qb = AppDataSource.getRepository(TenderVersion)
+  const qb = appDataSource.getRepository(TenderVersion)
     .createQueryBuilder('tv')
     .leftJoinAndSelect('tv.tender', 'tender')
     .leftJoinAndSelect('tv.category', 'category')
@@ -76,8 +76,8 @@ export const adminList = asyncHandler(async (req: Request, res: Response) => {
 
 export const adminGetById = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const result = await service.getTenderBySlug(id, req.user?.userId);
-  return sendOk(res, result);
+  const tender = await service.getTenderBySlug(id, req.user?.userId);
+  return sendOk(res, tender);
 });
 
 export const adminCreate = asyncHandler(async (req: Request, res: Response) => {
@@ -102,18 +102,18 @@ export const adminUpdateStatus = asyncHandler(async (req: Request, res: Response
 
 export const adminDelete = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const tender = await AppDataSource.getRepository(Tender).findOne({ where: { id } });
+  const tender = await appDataSource.getRepository(Tender).findOne({ where: { id } });
   if (tender) {
     tender.status = TenderLifecycleStatus.ARCHIVED;
-    await AppDataSource.getRepository(Tender).save(tender);
+    await appDataSource.getRepository(Tender).save(tender);
   }
   return sendNoContent(res);
 });
 
 export const adminGetUploadUrl = asyncHandler(async (req: Request, res: Response) => {
   const { fileName } = req.validated as UploadUrlDto;
-  const result = await generateUploadUrl(fileName);
-  return sendOk(res, result);
+  const uploadUrlDetails = await generateUploadUrl(fileName);
+  return sendOk(res, uploadUrlDetails);
 });
 
 export const adminRegisterDocument = asyncHandler(async (req: Request, res: Response) => {
@@ -132,13 +132,13 @@ export const cancelTender = asyncHandler(async (req: Request, res: Response) => 
   const { id } = req.params;
   const tender = await service.updateTenderStatus(id, { publicationStatus: TenderPublicationStatus.CLOSED }, req.user!.userId);
   tender.status = TenderLifecycleStatus.CANCELLED;
-  await AppDataSource.getRepository(Tender).save(tender);
+  await appDataSource.getRepository(Tender).save(tender);
   return sendOk(res, tender, 'Tender cancelled');
 });
 
 export const duplicateTender = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const original = await AppDataSource.getRepository(Tender).findOne({
+  const original = await appDataSource.getRepository(Tender).findOne({
     where: { id },
     relations: ['activeVersion'],
   });
@@ -218,8 +218,8 @@ export const postQuestion = asyncHandler(async (req: Request, res: Response) => 
 
 export const postAnswer = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.validated as AnswerQuestionDto;
-  const { qId } = req.params;
-  const question = await service.answerQuestion(qId, dto, req.user!.userId);
+  const { qId: questionId } = req.params;
+  const question = await service.answerQuestion(questionId, dto, req.user!.userId);
   return sendOk(res, question, 'Answer posted');
 });
 
@@ -268,8 +268,8 @@ export const submitEvaluation = asyncHandler(async (req: Request, res: Response)
 export const toggleWatcher = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.validated as TenderWatcherDto;
   const { id } = req.params;
-  const result = await service.toggleWatcher(id, req.user!.userId, dto);
-  return sendOk(res, result);
+  const watcherStatus = await service.toggleWatcher(id, req.user!.userId, dto);
+  return sendOk(res, watcherStatus);
 });
 
 export const inviteVendor = asyncHandler(async (req: Request, res: Response) => {
@@ -281,6 +281,6 @@ export const inviteVendor = asyncHandler(async (req: Request, res: Response) => 
 
 export const saveTemplate = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.validated as TenderTemplateDto;
-  const temp = await service.createTemplate(dto, req.user!.userId);
-  return sendCreated(res, temp, 'Template saved');
+  const tenderTemplate = await service.createTemplate(dto, req.user!.userId);
+  return sendCreated(res, tenderTemplate, 'Template saved');
 });

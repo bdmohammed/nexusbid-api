@@ -1,8 +1,8 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { SecurityLog } from '../../entities/SecurityLog';
 import { logger } from '../../config/logger';
 
-const securityLogRepo = AppDataSource.getRepository(SecurityLog);
+const securityLogRepository = appDataSource.getRepository(SecurityLog);
 
 /**
  * Resolves geolocation for an IP address using ip-api.com.
@@ -40,9 +40,9 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
       return 'Unknown';
     }
 
-    const data: any = await response.json();
-    if (data.status === 'success') {
-      const parts = [data.city, data.regionName, data.country].filter(Boolean);
+    const geolocationData: any = await response.json();
+    if (geolocationData.status === 'success') {
+      const parts = [geolocationData.city, geolocationData.regionName, geolocationData.country].filter(Boolean);
       return parts.join(', ') || 'Unknown';
     }
   } catch (err) {
@@ -56,7 +56,7 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
  * Logs a security event. Performs IP address geolocation lookup asynchronously
  * in the background to avoid blocking the user request.
  */
-export async function logSecurityEvent(opts: {
+export async function logSecurityEvent(options: {
   userId?: string | null;
   email: string | null;
   event: string;
@@ -65,26 +65,26 @@ export async function logSecurityEvent(opts: {
   details?: Record<string, unknown> | null;
 }): Promise<void> {
   // Fire-and-forget background resolution to prevent request latency
-  resolveIpLocation(opts.ipAddress)
+  resolveIpLocation(options.ipAddress)
     .then(async (location) => {
       try {
-        const securityLog = securityLogRepo.create({
-          userId: opts.userId ?? null,
-          email: opts.email ?? null,
-          event: opts.event,
-          ipAddress: opts.ipAddress ?? null,
-          userAgent: opts.userAgent ?? null,
+        const securityLog = securityLogRepository.create({
+          userId: options.userId ?? null,
+          email: options.email ?? null,
+          event: options.event,
+          ipAddress: options.ipAddress ?? null,
+          userAgent: options.userAgent ?? null,
           location,
-          details: opts.details ?? null,
+          details: options.details ?? null,
         });
 
-        await securityLogRepo.save(securityLog);
-        logger.info({ event: opts.event, email: opts.email, location }, 'Security event logged');
+        await securityLogRepository.save(securityLog);
+        logger.info({ event: options.event, email: options.email, location }, 'Security event logged');
       } catch (err) {
-        logger.error({ err, event: opts.event }, 'Failed to save security log record');
+        logger.error({ err, event: options.event }, 'Failed to save security log record');
       }
     })
     .catch((err) => {
-      logger.error({ err, event: opts.event }, 'Error occurred during security log background resolution');
+      logger.error({ err, event: options.event }, 'Error occurred during security log background resolution');
     });
 }

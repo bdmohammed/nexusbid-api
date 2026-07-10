@@ -1,4 +1,4 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { Tender } from '../../entities/Tender';
 import { TenderVersion } from '../../entities/TenderVersion';
 import { TenderReview } from '../../entities/TenderReview';
@@ -56,7 +56,7 @@ export class TenderWorkflowService {
   /**
    * Generate diff comparison between two versions of a tender
    */
-  static compareVersions(v1: TenderVersion, v2: TenderVersion) {
+  static compareVersions(version1: TenderVersion, version2: TenderVersion) {
     const fieldsToCompare: (keyof TenderVersion)[] = [
       'title',
       'description',
@@ -80,17 +80,17 @@ export class TenderWorkflowService {
     const changed: any = {};
 
     for (const field of fieldsToCompare) {
-      const val1 = v1[field];
-      const val2 = v2[field];
+      const value1 = version1[field];
+      const value2 = version2[field];
 
-      if (val1 === null || val1 === undefined) {
-        if (val2 !== null && val2 !== undefined) {
-          added[field] = val2;
+      if (value1 === null || value1 === undefined) {
+        if (value2 !== null && value2 !== undefined) {
+          added[field] = value2;
         }
-      } else if (val2 === null || val2 === undefined) {
-        removed[field] = val1;
-      } else if (JSON.stringify(val1) !== JSON.stringify(val2)) {
-        changed[field] = { old: val1, new: val2 };
+      } else if (value2 === null || value2 === undefined) {
+        removed[field] = value1;
+      } else if (JSON.stringify(value1) !== JSON.stringify(value2)) {
+        changed[field] = { old: value1, new: value2 };
       }
     }
 

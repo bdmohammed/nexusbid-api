@@ -1,4 +1,4 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { Plan } from '../../entities/Plan';
 import { Subscription } from '../../entities/Subscription';
 import { Coupon } from '../../entities/Coupon';
@@ -17,14 +17,14 @@ import type { CreateSubscriptionDto } from './subscriptions.dto';
 import { logger } from '../../config/logger';
 import { performance } from 'perf_hooks';
 
-const planRepo = AppDataSource.getRepository(Plan);
-const subRepo = AppDataSource.getRepository(Subscription);
-const couponRepo = AppDataSource.getRepository(Coupon);
+const planRepository = appDataSource.getRepository(Plan);
+const subscriptionRepository = appDataSource.getRepository(Subscription);
+const couponRepository = appDataSource.getRepository(Coupon);
 
 // ─── List active plans ────────────────────────────────────────────────────────
 
 export async function listPlans(): Promise<Plan[]> {
-  return planRepo.find({
+  return planRepository.find({
     where: { status: 'ACTIVE' },
     relations: ['activeVersion', 'activeVersion.features', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
   });
@@ -39,7 +39,7 @@ export async function createSubscription(
   const start = performance.now();
 
   // Verify plan exists and is active
-  const plan = await planRepo.findOne({
+  const plan = await planRepository.findOne({
     where: { id: dto.planId, status: 'ACTIVE' },
     relations: ['activeVersion', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
   });
@@ -69,11 +69,11 @@ export async function createSubscription(
   }
 
   // Check if user already has an active subscription for the SAME target or overall
-  const existing = await subRepo.findOne({
+  const existingSubscription = await subscriptionRepository.findOne({
     where: { userId: user.userId, status: SubscriptionStatus.ACTIVE },
   });
-  if (existing) {
-    if (existing.paypalSubscriptionId || existing.paypalOrderId) {
+  if (existingSubscription) {
+    if (existingSubscription.paypalSubscriptionId || existingSubscription.paypalOrderId) {
       throw new AppError('You already have an active subscription', 409, 'ALREADY_SUBSCRIBED');
     }
   }
@@ -85,24 +85,24 @@ export async function createSubscription(
 
   // 1. Geographic Pricing Override
   if (user.country && activeVer.countryPricing) {
-    const match = activeVer.countryPricing.find((cp) => cp.country.toLowerCase() === user.country!.toLowerCase());
-    if (match) {
-      finalPriceCents = match.priceCents;
+    const countryPricingMatch = activeVer.countryPricing.find((countryPricingItem) => countryPricingItem.country.toLowerCase() === user.country!.toLowerCase());
+    if (countryPricingMatch) {
+      finalPriceCents = countryPricingMatch.priceCents;
     }
   }
 
   // 2. Category Pricing Override
   if (activeVer.planType === 'category' && dto.targetCategoryId && activeVer.categoryPricing) {
-    const match = activeVer.categoryPricing.find((catP) => catP.categoryId === dto.targetCategoryId);
-    if (match) {
-      finalPriceCents = match.priceCents;
+    const categoryPricingMatch = activeVer.categoryPricing.find((categoryPricingItem) => categoryPricingItem.categoryId === dto.targetCategoryId);
+    if (categoryPricingMatch) {
+      finalPriceCents = categoryPricingMatch.priceCents;
     }
   }
 
   // 3. Apply Coupon Discount (Coupon Code checking)
   let couponId: string | null = null;
   if (dto.couponCode) {
-    const coupon = await couponRepo.findOne({ where: { code: dto.couponCode, isActive: true } });
+    const coupon = await couponRepository.findOne({ where: { code: dto.couponCode, isActive: true } });
     if (!coupon) throw new AppError('Coupon not found or inactive', 404, 'COUPON_NOT_FOUND');
 
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
@@ -122,7 +122,7 @@ export async function createSubscription(
 
     couponId = coupon.id;
     coupon.redemptionCount += 1;
-    await couponRepo.save(coupon);
+    await couponRepository.save(coupon);
   }
 
   if (activeVer.isRecurring && activeVer.badge !== 'Enterprise' && finalPriceCents > 0) {
@@ -143,7 +143,7 @@ export async function createSubscription(
   const totalDays = activeVer.durationDays + activeVer.trialDays;
   const endDate = new Date(startDate.getTime() + totalDays * 24 * 60 * 60 * 1000);
 
-  const subscription = subRepo.create({
+  const subscription = subscriptionRepository.create({
     userId: user.userId,
     planId: plan.id,
     planVersionId: activeVer.id,
@@ -159,7 +159,7 @@ export async function createSubscription(
     selectedCategoryIds: dto.selectedCategoryIds || null,
   });
 
-  await subRepo.save(subscription);
+  await subscriptionRepository.save(subscription);
 
   // Log audit info
   logger.info({ planId: dto.planId, versionId: activeVer.id, finalPriceCents }, 'Subscription created');
@@ -176,37 +176,37 @@ export async function getMySubscription(userId: string): Promise<{
   subscription: Subscription | null;
   plan: Plan | null;
 }> {
-  const sub = await subRepo.findOne({
+  const subscription = await subscriptionRepository.findOne({
     where: { userId, status: SubscriptionStatus.ACTIVE },
     relations: ['plan', 'planVersion'],
     order: { createdAt: 'DESC' },
   });
 
-  if (!sub) return { subscription: null, plan: null };
-  return { subscription: sub, plan: sub.plan };
+  if (!subscription) return { subscription: null, plan: null };
+  return { subscription, plan: subscription.plan };
 }
 
 // ─── Cancel subscription ──────────────────────────────────────────────────────
 
 export async function cancelMySubscription(userId: string): Promise<void> {
   const start = performance.now();
-  const sub = await subRepo.findOne({
+  const subscription = await subscriptionRepository.findOne({
     where: { userId, status: SubscriptionStatus.ACTIVE },
     relations: ['plan'],
   });
 
-  if (!sub) throw new AppError('No active subscription found', 404, 'NOT_FOUND');
+  if (!subscription) throw new AppError('No active subscription found', 404, 'NOT_FOUND');
 
-  if (sub.paypalSubscriptionId) {
+  if (subscription.paypalSubscriptionId) {
     try {
-      await paypalCancelSubscription(sub.paypalSubscriptionId);
-    } catch (e) {
-      logger.warn({ error: e }, 'PayPal cancel failed, moving forward with local cancel');
+      await paypalCancelSubscription(subscription.paypalSubscriptionId);
+    } catch (error) {
+      logger.warn({ error }, 'PayPal cancel failed, moving forward with local cancel');
     }
   }
 
-  await subRepo.update(sub.id, { status: SubscriptionStatus.CANCELLED });
+  await subscriptionRepository.update(subscription.id, { status: SubscriptionStatus.CANCELLED });
 
   const durationMs = performance.now() - start;
-  logger.info({ userId, subscriptionId: sub.id, durationMs }, 'Subscription cancellation completed');
+  logger.info({ userId, subscriptionId: subscription.id, durationMs }, 'Subscription cancellation completed');
 }

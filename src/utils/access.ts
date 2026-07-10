@@ -1,12 +1,12 @@
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
 import { Subscription } from '../entities/Subscription';
 import { PurchasedTender } from '../entities/PurchasedTender';
 import { Tender } from '../entities/Tender';
 import { SubscriptionStatus } from '../types/enums';
 
-const subRepo = AppDataSource.getRepository(Subscription);
-const purchasedRepo = AppDataSource.getRepository(PurchasedTender);
-const tenderRepo = AppDataSource.getRepository(Tender);
+const subscriptionRepository = appDataSource.getRepository(Subscription);
+const purchasedTenderRepository = appDataSource.getRepository(PurchasedTender);
+const tenderRepository = appDataSource.getRepository(Tender);
 
 /**
  * Determines if a user can access the full details and document of a tender.
@@ -23,25 +23,25 @@ export async function hasAccessToTender(
   tenderId: string,
 ): Promise<boolean> {
   // Check active subscriptions first (most common case)
-  const activeSubs = await subRepo.find({
+  const activeSubscriptions = await subscriptionRepository.find({
     where: { userId, status: SubscriptionStatus.ACTIVE },
     relations: ['plan', 'planVersion', 'plan.activeVersion'],
   });
 
   const now = new Date();
-  const validSubs = activeSubs.filter((sub) => sub.endDate > now);
+  const validSubscriptions = activeSubscriptions.filter((subscription) => subscription.endDate > now);
 
-  if (validSubs.length > 0) {
+  if (validSubscriptions.length > 0) {
     // Fetch the tender details (category, state) to verify access
-    const tender = await tenderRepo.findOne({
+    const tender = await tenderRepository.findOne({
       where: { id: tenderId },
       relations: ['activeVersion', 'activeVersion.state', 'activeVersion.category'],
     });
 
     if (tender && tender.activeVersion) {
       const version = tender.activeVersion;
-      for (const sub of validSubs) {
-        const plan = sub.planVersion || sub.plan?.activeVersion;
+      for (const subscription of validSubscriptions) {
+        const plan = subscription.planVersion || subscription.plan?.activeVersion;
         if (!plan) continue;
 
         // 1. All-Access Plan
@@ -50,31 +50,31 @@ export async function hasAccessToTender(
         }
 
         // 2. State-Specific Plan
-        if (plan.planType === 'state' && sub.targetStateId === version.stateId) {
+        if (plan.planType === 'state' && subscription.targetStateId === version.stateId) {
           return true;
         }
 
         // 3. Country-Specific Plan
         if (
           plan.planType === 'country' &&
-          sub.targetCountry &&
+          subscription.targetCountry &&
           version.state?.country &&
-          version.state.country.toLowerCase() === sub.targetCountry.toLowerCase()
+          version.state.country.toLowerCase() === subscription.targetCountry.toLowerCase()
         ) {
           return true;
         }
 
         // 4. Category-Specific Plan
-        if (plan.planType === 'category' && sub.targetCategoryId === version.categoryId) {
+        if (plan.planType === 'category' && subscription.targetCategoryId === version.categoryId) {
           return true;
         }
 
         // 5. Custom Bundle Plan (Pick 3/5/10/20 categories)
         if (
           plan.planType === 'bundle' &&
-          sub.selectedCategoryIds &&
+          subscription.selectedCategoryIds &&
           version.categoryId &&
-          sub.selectedCategoryIds.includes(version.categoryId)
+          subscription.selectedCategoryIds.includes(version.categoryId)
         ) {
           return true;
         }
@@ -83,7 +83,7 @@ export async function hasAccessToTender(
   }
 
   // Fall back to per-tender purchase
-  const purchase = await purchasedRepo.findOne({
+  const purchase = await purchasedTenderRepository.findOne({
     where: { userId, tenderId },
     select: ['id'],
   });

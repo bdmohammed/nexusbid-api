@@ -1,14 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
 import { User } from '../entities/User';
 import { AppError } from '../core/AppError';
 import { JWT_COOKIE_NAME } from '../core/constants';
 import { env } from '../config/env';
 import { setUserId } from '../config/requestContext';
 
-const userRepo = AppDataSource.getRepository(User);
+const userRepository = appDataSource.getRepository(User);
 
 /**
  * Verifies the JWT stored in the HTTP-only cookie.
@@ -32,19 +32,19 @@ export const authenticate = async (
     return next(new AppError('Authentication required', 401, 'UNAUTHENTICATED'));
   }
 
-  let payload: any;
+  let decodedTokenPayload: any;
   try {
-    payload = jwt.verify(token, env.JWT_SECRET) as any;
-  } catch (err: any) {
-    if (err?.name === 'TokenExpiredError') {
+    decodedTokenPayload = jwt.verify(token, env.JWT_SECRET) as any;
+  } catch (error: any) {
+    if (error?.name === 'TokenExpiredError') {
       return next(new AppError('Access token expired', 401, 'TOKEN_EXPIRED'));
     }
     return next(new AppError('Session expired or invalid', 401, 'INVALID_TOKEN'));
   }
 
   // Verify tokenVersion against DB to detect revoked sessions
-  const user = await userRepo.findOne({
-    where: { id: payload.sub },
+  const user = await userRepository.findOne({
+    where: { id: decodedTokenPayload.sub },
     select: ['id', 'tokenVersion', 'isBlocked', 'emailVerified', 'mustResetPassword', 'passwordChangedAt', 'createdAt'],
   });
 
@@ -56,7 +56,7 @@ export const authenticate = async (
     return next(new AppError('Account suspended', 403, 'ACCOUNT_BLOCKED'));
   }
 
-  if (user.tokenVersion !== payload.tokenVersion) {
+  if (user.tokenVersion !== decodedTokenPayload.tokenVersion) {
     return next(new AppError('Session has been revoked', 401, 'SESSION_REVOKED'));
   }
 
@@ -83,17 +83,17 @@ export const authenticate = async (
   }
 
   req.user = {
-    sub: payload.sub,
-    userId: payload.sub,
-    email: payload.email,
-    accountType: payload.accountType,
-    role: payload.accountType,
+    sub: decodedTokenPayload.sub,
+    userId: decodedTokenPayload.sub,
+    email: decodedTokenPayload.email,
+    accountType: decodedTokenPayload.accountType,
+    role: decodedTokenPayload.accountType,
     adminRole: null,
-    tokenVersion: payload.tokenVersion,
+    tokenVersion: decodedTokenPayload.tokenVersion,
   };
-  setUserId(payload.sub);
+  setUserId(decodedTokenPayload.sub);
   if (req.log) {
-    req.log = req.log.child({ userId: payload.sub });
+    req.log = req.log.child({ userId: decodedTokenPayload.sub });
   }
   next();
 };
@@ -112,24 +112,24 @@ export const optionalAuthenticate = async (
   if (!token) return next();
 
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET) as any;
-    const user = await userRepo.findOne({
-      where: { id: payload.sub },
+    const decodedTokenPayload = jwt.verify(token, env.JWT_SECRET) as any;
+    const user = await userRepository.findOne({
+      where: { id: decodedTokenPayload.sub },
       select: ['id', 'tokenVersion', 'isBlocked'],
     });
-    if (user && !user.isBlocked && user.tokenVersion === payload.tokenVersion) {
+    if (user && !user.isBlocked && user.tokenVersion === decodedTokenPayload.tokenVersion) {
       req.user = {
-        sub: payload.sub,
-        userId: payload.sub,
-        email: payload.email,
-        accountType: payload.accountType,
-        role: payload.accountType,
+        sub: decodedTokenPayload.sub,
+        userId: decodedTokenPayload.sub,
+        email: decodedTokenPayload.email,
+        accountType: decodedTokenPayload.accountType,
+        role: decodedTokenPayload.accountType,
         adminRole: null,
-        tokenVersion: payload.tokenVersion,
+        tokenVersion: decodedTokenPayload.tokenVersion,
       };
-      setUserId(payload.sub);
+      setUserId(decodedTokenPayload.sub);
       if (req.log) {
-        req.log = req.log.child({ userId: payload.sub });
+        req.log = req.log.child({ userId: decodedTokenPayload.sub });
       }
     }
   } catch {

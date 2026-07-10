@@ -14,7 +14,7 @@ import type {
   ChangePasswordDto,
 } from './auth.dto';
 import { AppError } from '../../core/AppError';
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { User } from '../../entities/User';
 import { EmailToken } from '../../entities/EmailToken';
 import { EmailTokenType } from '../../types/enums';
@@ -178,13 +178,13 @@ export const ownerReview = asyncHandler(async (req: Request, res: Response) => {
 export const resendAdminVerification = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.validated as ResendVerificationDto;
 
-  const user = await AppDataSource.getRepository(User).findOne({ where: { email } });
+  const user = await appDataSource.getRepository(User).findOne({ where: { email } });
   if (!user || user.emailVerified) {
     return sendOk(res, null, 'If the email exists and is not verified, a new verification link has been sent.');
   }
 
-  const tokenRepo = AppDataSource.getRepository(EmailToken);
-  await tokenRepo.delete({ userId: user.id, type: EmailTokenType.EMAIL_VERIFICATION });
+  const emailTokenRepository = appDataSource.getRepository(EmailToken);
+  await emailTokenRepository.delete({ userId: user.id, type: EmailTokenType.EMAIL_VERIFICATION });
 
   const rawToken = await createEmailToken(user.id, EmailTokenType.EMAIL_VERIFICATION);
   await sendAdminVerificationEmail({
@@ -217,13 +217,13 @@ export const resetAdminPassword = asyncHandler(async (req: Request, res: Respons
  * Revokes all sessions for the current user.
  */
 export const revokeAllSessions = asyncHandler(async (req: Request, res: Response) => {
-  const details = {
+  const clientMetadata = {
     userAgent: req.headers['user-agent'] || null,
     ipAddress: req.ip || null,
   };
   await authService.revokeAllUserSessions(req.user!.userId);
   // Clear the cookies for the current client too
-  await authService.logoutUser(res, undefined, details);
+  await authService.logoutUser(res, undefined, clientMetadata);
   return sendOk(res, null, 'All sessions revoked successfully');
 });
 
@@ -242,13 +242,13 @@ export const getCsrfToken = (req: Request, res: Response): void => {
  */
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const { currentPassword, newPassword } = req.validated as ChangePasswordDto;
-  const details = {
+  const clientMetadata = {
     userAgent: req.headers['user-agent'] || null,
     ipAddress: req.ip || null,
   };
-  await authService.changeUserPassword(req.user!.userId, currentPassword, newPassword, details);
+  await authService.changeUserPassword(req.user!.userId, currentPassword, newPassword, clientMetadata);
   // Clear the cookies of the current client too
-  await authService.logoutUser(res, undefined, details);
+  await authService.logoutUser(res, undefined, clientMetadata);
   return sendOk(res, null, 'Password changed successfully. Please log in again.');
 });
 
@@ -258,11 +258,11 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
  */
 export const requestEmailChange = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.validated as EmailChangeDto;
-  const details = {
+  const clientMetadata = {
     userAgent: req.headers['user-agent'] || null,
     ipAddress: req.ip || null,
   };
-  await authService.requestEmailChange(req.user!.userId, email, details);
+  await authService.requestEmailChange(req.user!.userId, email, clientMetadata);
   return sendOk(res, null, 'Verification emails sent. Please check your inbox.');
 });
 
@@ -272,13 +272,13 @@ export const requestEmailChange = asyncHandler(async (req: Request, res: Respons
  */
 export const verifyEmailChange = asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.validated as VerifyEmailDto;
-  const details = {
+  const clientMetadata = {
     userAgent: req.headers['user-agent'] || null,
     ipAddress: req.ip || null,
   };
-  await authService.verifyEmailChange(token, details);
+  await authService.verifyEmailChange(token, clientMetadata);
   // Clear the cookies of the current client too
-  await authService.logoutUser(res, undefined, details);
+  await authService.logoutUser(res, undefined, clientMetadata);
   return sendOk(res, null, 'Email changed successfully. Please log in again.');
 });
 
@@ -317,8 +317,8 @@ export const verifyBootstrapToken = asyncHandler(async (req: Request, res: Respo
     throw new AppError('Token is required', 400, 'VALIDATION_ERROR');
   }
 
-  const details = await authService.verifyBootstrapToken(token);
-  return sendOk(res, details);
+  const bootstrapTokenDetails = await authService.verifyBootstrapToken(token);
+  return sendOk(res, bootstrapTokenDetails);
 });
 
 export const approveBootstrapAdmin = asyncHandler(async (req: Request, res: Response) => {
@@ -327,10 +327,10 @@ export const approveBootstrapAdmin = asyncHandler(async (req: Request, res: Resp
     throw new AppError('Token is required', 400, 'VALIDATION_ERROR');
   }
 
-  const act = action === 'reject' ? 'reject' : 'approve';
-  await authService.approveBootstrapAdmin(token, act);
+  const finalAction = action === 'reject' ? 'reject' : 'approve';
+  await authService.approveBootstrapAdmin(token, finalAction);
   
-  const message = act === 'approve'
+  const message = finalAction === 'approve'
     ? 'Administrator successfully bootstrapped and activated.'
     : 'Administrator setup request has been rejected.';
 

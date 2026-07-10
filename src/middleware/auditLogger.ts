@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
 import { AuditLog } from '../entities/AuditLog';
 import { asyncHandler } from '../core/asyncHandler';
 
-const auditLogRepo = AppDataSource.getRepository(AuditLog);
+const auditLogRepository = appDataSource.getRepository(AuditLog);
 
 /**
  * Middleware factory that logs admin actions to the audit_logs table.
@@ -25,10 +25,10 @@ export const auditLogger = (action: string, entityType: string) =>
   asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
 
-    res.json = (data: unknown) => {
+    res.json = (responseBody: unknown) => {
       // Non-blocking — does not delay the response
       setImmediate(() => {
-        auditLogRepo
+        auditLogRepository
           .save({
             actorId: req.user?.userId ?? null,
             actorEmail: req.user?.email ?? 'unknown',
@@ -36,7 +36,7 @@ export const auditLogger = (action: string, entityType: string) =>
             entityType,
             entityId: req.params['id'] ?? null,
             before: (res.locals['auditBefore'] as Record<string, unknown>) ?? null,
-            after: (data as Record<string, unknown>)?.['data'] ?? null,
+            after: (responseBody as Record<string, unknown>)?.['data'] ?? null,
             requestId: req.requestId ?? null,
             userAgent: req.headers['user-agent'] ?? null,
             ipAddress: req.ip ?? null,
@@ -46,7 +46,7 @@ export const auditLogger = (action: string, entityType: string) =>
           });
       });
 
-      return originalJson(data);
+      return originalJson(responseBody);
     };
 
     next();

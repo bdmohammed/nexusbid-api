@@ -1,0 +1,385 @@
+.
+├── docker
+│   ├── ssl
+│   ├── Dockerfile
+│   ├── Dockerfile.prod
+│   ├── nginx.conf
+│   └── nginx.local.conf
+├── scripts
+│   └── gen-local-ssl.ps1
+├── src
+│   ├── authorization
+│   │   └── registry
+│   │       ├── modules
+│   │       │   ├── analytics.ts
+│   │       │   ├── audit.ts
+│   │       │   ├── billing.ts
+│   │       │   ├── cms.ts
+│   │       │   ├── dashboard.ts
+│   │       │   ├── index.ts
+│   │       │   ├── notifications.ts
+│   │       │   ├── permission-management.ts
+│   │       │   ├── roles.ts
+│   │       │   ├── support.ts
+│   │       │   ├── system.ts
+│   │       │   ├── taxonomy.ts
+│   │       │   ├── tenders.ts
+│   │       │   └── users.ts
+│   │       ├── DependencyResolver.ts
+│   │       ├── DependencyValidator.ts
+│   │       ├── index.ts
+│   │       ├── PermissionGraph.ts
+│   │       ├── query.ts
+│   │       ├── registry.ts
+│   │       ├── startup-sync.ts
+│   │       ├── types.ts
+│   │       └── validator.ts
+│   ├── cache
+│   │   ├── CacheKeyFactory.ts
+│   │   ├── CacheProvider.ts
+│   │   ├── index.ts
+│   │   ├── MemoryCacheProvider.ts
+│   │   ├── RedisCacheProvider.ts
+│   │   └── ValkeyCacheProvider.ts
+│   ├── config
+│   │   ├── app.ts
+│   │   ├── database.ts
+│   │   ├── databaseLogger.ts
+│   │   ├── env.ts
+│   │   ├── logger.ts
+│   │   ├── namingStrategy.ts
+│   │   ├── rbacInitializer.ts
+│   │   ├── requestContext.ts
+│   │   ├── server.ts
+│   │   └── swagger.ts
+│   ├── core
+│   │   ├── AppError.ts
+│   │   ├── asyncHandler.ts
+│   │   ├── constants.ts
+│   │   ├── PermissionRegistry.ts
+│   │   └── response.ts
+│   ├── database
+│   │   └── seed
+│   │       ├── permissions
+│   │       │   ├── analytics.seed.ts
+│   │       │   ├── audit.seed.ts
+│   │       │   ├── billing.seed.ts
+│   │       │   ├── cms.seed.ts
+│   │       │   ├── dashboard.seed.ts
+│   │       │   ├── index.ts
+│   │       │   ├── notifications.seed.ts
+│   │       │   ├── permissions.seed.ts
+│   │       │   ├── roles.seed.ts
+│   │       │   ├── support.seed.ts
+│   │       │   ├── system.seed.ts
+│   │       │   ├── taxonomy.seed.ts
+│   │       │   ├── tenders.seed.ts
+│   │       │   └── users.seed.ts
+│   │       ├── permissionModule.seed.ts
+│   │       ├── role.seed.ts
+│   │       └── seed.ts
+│   ├── entities
+│   │   ├── AlertPreference.ts
+│   │   ├── AnalyticsAlert.ts
+│   │   ├── AnalyticsEvent.ts
+│   │   ├── AnalyticsMetric.ts
+│   │   ├── AuditLog.ts
+│   │   ├── AuditRetentionPolicy.ts
+│   │   ├── Category.ts
+│   │   ├── Coupon.ts
+│   │   ├── DownloadHistory.ts
+│   │   ├── EmailToken.ts
+│   │   ├── EvaluationTemplate.ts
+│   │   ├── ExportJob.ts
+│   │   ├── FeatureCatalog.ts
+│   │   ├── FeatureFlag.ts
+│   │   ├── Notification.ts
+│   │   ├── NotificationAction.ts
+│   │   ├── NotificationRecipient.ts
+│   │   ├── PasswordHistory.ts
+│   │   ├── Permission.ts
+│   │   ├── PermissionModule.ts
+│   │   ├── Plan.ts
+│   │   ├── PlanCategoryPricing.ts
+│   │   ├── PlanCountryPricing.ts
+│   │   ├── PlanFeature.ts
+│   │   ├── PlanReview.ts
+│   │   ├── PlanReviewComment.ts
+│   │   ├── PlanVersion.ts
+│   │   ├── PurchasedTender.ts
+│   │   ├── Role.ts
+│   │   ├── RolePermission.ts
+│   │   ├── RoleReview.ts
+│   │   ├── RoleReviewAssignment.ts
+│   │   ├── RoleReviewComment.ts
+│   │   ├── RoleVersion.ts
+│   │   ├── RoleVersionPermission.ts
+│   │   ├── SavedTender.ts
+│   │   ├── ScheduledReport.ts
+│   │   ├── SecurityLog.ts
+│   │   ├── State.ts
+│   │   ├── StaticPage.ts
+│   │   ├── Subscription.ts
+│   │   ├── SubscriptionDailyMetrics.ts
+│   │   ├── SubscriptionMigration.ts
+│   │   ├── SupportTicket.ts
+│   │   ├── Tender.ts
+│   │   ├── TenderAmendment.ts
+│   │   ├── TenderClarification.ts
+│   │   ├── TenderCommittee.ts
+│   │   ├── TenderDailyMetrics.ts
+│   │   ├── TenderDocument.ts
+│   │   ├── TenderEvaluation.ts
+│   │   ├── TenderInvitation.ts
+│   │   ├── TenderParticipant.ts
+│   │   ├── TenderQuestion.ts
+│   │   ├── TenderReview.ts
+│   │   ├── TenderReviewAssignment.ts
+│   │   ├── TenderReviewComment.ts
+│   │   ├── TenderSubmission.ts
+│   │   ├── TenderTemplate.ts
+│   │   ├── TenderVersion.ts
+│   │   ├── TenderWatcher.ts
+│   │   ├── TrafficDailyMetrics.ts
+│   │   ├── Transaction.ts
+│   │   ├── User.ts
+│   │   ├── UserDailyMetrics.ts
+│   │   ├── UserDashboardLayout.ts
+│   │   ├── UserDevice.ts
+│   │   ├── UserNote.ts
+│   │   ├── UserRole.ts
+│   │   ├── UserSession.ts
+│   │   └── WebhookEvent.ts
+│   ├── jobs
+│   │   ├── cleanupInvitations.job.ts
+│   │   ├── CronManager.ts
+│   │   ├── deadlineReminders.job.ts
+│   │   ├── expireSubscriptions.job.ts
+│   │   ├── expireTenders.job.ts
+│   │   ├── exportGeneration.job.ts
+│   │   ├── index.ts
+│   │   ├── publishTenders.job.ts
+│   │   ├── retryNotifications.job.ts
+│   │   ├── sendAlertDigest.job.ts
+│   │   └── virusScanning.job.ts
+│   ├── middleware
+│   │   ├── auditLogger.ts
+│   │   ├── authenticate.ts
+│   │   ├── authorize.ts
+│   │   ├── csrf.ts
+│   │   ├── errorHandler.ts
+│   │   ├── permissions.ts
+│   │   ├── rateLimits.ts
+│   │   ├── requestLogger.ts
+│   │   ├── requireAccountType.ts
+│   │   ├── security.middleware.ts
+│   │   ├── traceContext.ts
+│   │   └── validate.ts
+│   ├── migrations
+│   │   ├── 1700000000001-CreateUsers.ts
+│   │   ├── 1700000000002-CreateCategoriesAndStates.ts
+│   │   ├── 1700000000003-CreateTenders.ts
+│   │   ├── 1700000000004-CreateBillingTables.ts
+│   │   ├── 1700000000005-CreateUserFeatureTables.ts
+│   │   ├── 1700000000006-CreateAuditAndMiscTables.ts
+│   │   ├── 1700000000007-EnableFtsAndTrigram.ts
+│   │   ├── 1700000000008-AddSoftDeleteToCategories.ts
+│   │   ├── 1700000000009-AddAuditAndCountryToStates.ts
+│   │   ├── 1700000000010-AddSubscriptionPlanFields.ts
+│   │   ├── 1772452361000-ImplementRBAC.ts
+│   │   ├── 1772452362000-CreateUserSessions.ts
+│   │   ├── 1772452363000-SecurityBacklog.ts
+│   │   ├── 1772452364000-SecurityLogsAndOauth.ts
+│   │   ├── 1772452365000-AddUserStatusAndApprovalFields.ts
+│   │   ├── 1772452366000-AddEmailTokenEnumValues.ts
+│   │   ├── 1772452367000-EnhanceRBAC.ts
+│   │   ├── 1772452368000-EnhanceCategories.ts
+│   │   ├── 1772456000000-DropCategoryParentId.ts
+│   │   ├── 1772457000000-UserNotesAndImpersonation.ts
+│   │   ├── 1772458000000-AddProfileColumnsToUser.ts
+│   │   ├── 1772459000000-Remove2FAColumns.ts
+│   │   ├── 1772460000000-CreateEnterpriseTenders.ts
+│   │   ├── 1772470000000-CreateEnterpriseSubscriptions.ts
+│   │   ├── 1772480000000-CreateBIAnalyticsTables.ts
+│   │   ├── 1772490000000-EnhanceAuditLogs.ts
+│   │   ├── 1772510000000-ActionableNotificationsSchema.ts
+│   │   └── 1772520000000-AddDbVersionToTenders.ts
+│   ├── modules
+│   │   ├── admin
+│   │   │   ├── admin.controller.ts
+│   │   │   ├── admin.dto.ts
+│   │   │   ├── admin.routes.ts
+│   │   │   └── admin.service.ts
+│   │   ├── analytics
+│   │   │   ├── api
+│   │   │   │   ├── analytics.controller.ts
+│   │   │   │   └── analytics.routes.ts
+│   │   │   ├── cache
+│   │   │   │   └── redis.ts
+│   │   │   ├── dto
+│   │   │   │   └── analytics.dto.ts
+│   │   │   ├── events
+│   │   │   │   └── dispatcher.ts
+│   │   │   ├── jobs
+│   │   │   │   ├── export.job.ts
+│   │   │   │   └── rollup.job.ts
+│   │   │   ├── metrics
+│   │   │   │   └── formulas.ts
+│   │   │   ├── reports
+│   │   │   │   └── reports.job.ts
+│   │   │   └── services
+│   │   │       └── analytics.service.ts
+│   │   ├── audit
+│   │   │   ├── api
+│   │   │   │   ├── audit.controller.ts
+│   │   │   │   └── audit.routes.ts
+│   │   │   ├── dto
+│   │   │   │   └── audit.dto.ts
+│   │   │   ├── jobs
+│   │   │   │   └── index.ts
+│   │   │   ├── services
+│   │   │   │   └── audit.service.ts
+│   │   │   └── utils
+│   │   │       └── redaction.ts
+│   │   ├── auth
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── auth.dto.ts
+│   │   │   ├── auth.routes.ts
+│   │   │   ├── auth.service.ts
+│   │   │   ├── oauth.controller.ts
+│   │   │   ├── oauth.service.ts
+│   │   │   ├── security.service.ts
+│   │   │   └── securityLog.service.ts
+│   │   ├── categories
+│   │   │   └── categories.routes.ts
+│   │   ├── dashboard
+│   │   │   ├── api
+│   │   │   │   ├── dashboard.controller.ts
+│   │   │   │   └── dashboard.routes.ts
+│   │   │   ├── dto
+│   │   │   │   └── dashboard.dto.ts
+│   │   │   └── services
+│   │   │       └── dashboard.service.ts
+│   │   ├── notifications
+│   │   │   ├── api
+│   │   │   │   ├── notifications.controller.ts
+│   │   │   │   └── notifications.routes.ts
+│   │   │   └── services
+│   │   │       └── notifications.service.ts
+│   │   ├── profile
+│   │   │   ├── profile.controller.ts
+│   │   │   ├── profile.dto.ts
+│   │   │   ├── profile.routes.ts
+│   │   │   └── profile.service.ts
+│   │   ├── rbac
+│   │   │   ├── controllers
+│   │   │   │   ├── RbacExportController.ts
+│   │   │   │   ├── RbacReviewController.ts
+│   │   │   │   ├── RbacRoleController.ts
+│   │   │   │   ├── RbacStatsController.ts
+│   │   │   │   └── RbacVersionController.ts
+│   │   │   ├── events
+│   │   │   │   └── RbacEvents.ts
+│   │   │   ├── rbac.controller.ts
+│   │   │   ├── rbac.routes.ts
+│   │   │   ├── rbac.service.ts
+│   │   │   └── setup.routes.ts
+│   │   ├── states
+│   │   │   └── states.routes.ts
+│   │   ├── subscriptions
+│   │   │   ├── plans.controller.ts
+│   │   │   ├── plans.routes.ts
+│   │   │   ├── plans.service.ts
+│   │   │   ├── subscriptions.controller.ts
+│   │   │   ├── subscriptions.dto.ts
+│   │   │   ├── subscriptions.routes.ts
+│   │   │   └── subscriptions.service.ts
+│   │   ├── support
+│   │   │   ├── support.controller.ts
+│   │   │   ├── support.dto.ts
+│   │   │   └── support.routes.ts
+│   │   ├── tenders
+│   │   │   ├── tenderReports.controller.ts
+│   │   │   ├── tenders.controller.ts
+│   │   │   ├── tenders.dto.ts
+│   │   │   ├── tenders.routes.ts
+│   │   │   ├── tenders.service.ts
+│   │   │   └── TenderWorkflowService.ts
+│   │   └── webhooks
+│   │       ├── webhooks.controller.ts
+│   │       ├── webhooks.routes.ts
+│   │       └── webhooks.service.ts
+│   ├── search
+│   │   └── tender.search.ts
+│   ├── services
+│   │   ├── mock
+│   │   │   ├── email.mock.ts
+│   │   │   ├── paypal.mock.ts
+│   │   │   └── s3.mock.ts
+│   │   ├── paypal
+│   │   │   ├── paypal.client.ts
+│   │   │   ├── paypal.orders.ts
+│   │   │   ├── paypal.subscriptions.ts
+│   │   │   └── paypal.webhook.ts
+│   │   ├── cache.service.ts
+│   │   ├── email.service.ts
+│   │   ├── s3.service.ts
+│   │   └── token.service.ts
+│   ├── types
+│   │   ├── enums.ts
+│   │   └── express.d.ts
+│   └── utils
+│       ├── access.ts
+│       ├── domainEvents.ts
+│       ├── permissions.ts
+│       ├── slug.ts
+│       └── totp.ts
+├── tests
+│   ├── admin
+│   │   ├── category.test.ts
+│   │   ├── rbac.test.ts
+│   │   ├── setup.test.ts
+│   │   ├── state.test.ts
+│   │   ├── subscription_pricing.test.ts
+│   │   └── tender.test.ts
+│   ├── auth
+│   │   ├── auth.test.ts
+│   │   ├── securityBacklog.test.ts
+│   │   ├── securityLogsAndOauth.test.ts
+│   │   └── sessionManagement.test.ts
+│   ├── helpers
+│   │   ├── builders.ts
+│   │   ├── csrf.ts
+│   │   ├── db.ts
+│   │   └── time.ts
+│   ├── jest.env-setup.ts
+│   ├── jest.global-setup.ts
+│   ├── jest.global-teardown.ts
+│   ├── jest.setup.ts
+│   └── requestContext.test.ts
+├── .env
+├── .env.dev
+├── .env.development
+├── .env.docker
+├── .env.example
+├── .env.local
+├── .env.prod
+├── .env.production
+├── .env.staging
+├── .env.test
+├── .env.uat
+├── .gitignore
+├── ca.crt
+├── ca.key
+├── docker-compose.dev.yml
+├── docker-compose.prod.yml
+├── docker-compose.ssl.yml
+├── docker-compose.yml
+├── ecosystem.config.js
+├── jest.config.ts
+├── package-lock.json
+├── package.json
+├── structure.txt
+├── tree.ps1
+├── tsconfig.json
+└── tsconfig.test.json

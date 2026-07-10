@@ -1,4 +1,4 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { Tender } from '../../entities/Tender';
 import { TenderVersion } from '../../entities/TenderVersion';
 import { TenderDocument } from '../../entities/TenderDocument';
@@ -41,22 +41,22 @@ import type {
 } from './tenders.dto';
 import type { Request } from 'express';
 
-const tenderRepo = AppDataSource.getRepository(Tender);
-const versionRepo = AppDataSource.getRepository(TenderVersion);
-const documentRepo = AppDataSource.getRepository(TenderDocument);
-const reviewRepo = AppDataSource.getRepository(TenderReview);
-const assignmentRepo = AppDataSource.getRepository(TenderReviewAssignment);
-const commentRepo = AppDataSource.getRepository(TenderReviewComment);
-const committeeRepo = AppDataSource.getRepository(TenderCommittee);
-const participantRepo = AppDataSource.getRepository(TenderParticipant);
-const evaluationRepo = AppDataSource.getRepository(TenderEvaluation);
-const watcherRepo = AppDataSource.getRepository(TenderWatcher);
-const invitationRepo = AppDataSource.getRepository(TenderInvitation);
-const templateRepo = AppDataSource.getRepository(TenderTemplate);
-const questionRepo = AppDataSource.getRepository(TenderQuestion);
-const clarificationRepo = AppDataSource.getRepository(TenderClarification);
-const amendmentRepo = AppDataSource.getRepository(TenderAmendment);
-const downloadRepo = AppDataSource.getRepository(DownloadHistory);
+const tenderRepository = appDataSource.getRepository(Tender);
+const tenderVersionRepository = appDataSource.getRepository(TenderVersion);
+const tenderDocumentRepository = appDataSource.getRepository(TenderDocument);
+const tenderReviewRepository = appDataSource.getRepository(TenderReview);
+const tenderReviewAssignmentRepository = appDataSource.getRepository(TenderReviewAssignment);
+const tenderReviewCommentRepository = appDataSource.getRepository(TenderReviewComment);
+const tenderCommitteeRepository = appDataSource.getRepository(TenderCommittee);
+const tenderParticipantRepository = appDataSource.getRepository(TenderParticipant);
+const tenderEvaluationRepository = appDataSource.getRepository(TenderEvaluation);
+const tenderWatcherRepository = appDataSource.getRepository(TenderWatcher);
+const tenderInvitationRepository = appDataSource.getRepository(TenderInvitation);
+const tenderTemplateRepository = appDataSource.getRepository(TenderTemplate);
+const tenderQuestionRepository = appDataSource.getRepository(TenderQuestion);
+const tenderClarificationRepository = appDataSource.getRepository(TenderClarification);
+const tenderAmendmentRepository = appDataSource.getRepository(TenderAmendment);
+const downloadHistoryRepository = appDataSource.getRepository(DownloadHistory);
 
 // ─── Public: List Tenders ─────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ export async function listTenders(params: {
   const page = params.page ?? 1;
   const limit = params.limit ?? 20;
 
-  const qb = tenderRepo.createQueryBuilder('tender')
+  const qb = tenderRepository.createQueryBuilder('tender')
     .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
     .leftJoinAndSelect('activeVersion.category', 'category')
     .leftJoinAndSelect('activeVersion.state', 'state')
@@ -151,7 +151,7 @@ export async function getTenderBySlug(
 ): Promise<{ tender: any; hasAccess: boolean }> {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-  const qb = tenderRepo.createQueryBuilder('tender')
+  const qb = tenderRepository.createQueryBuilder('tender')
     .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
     .leftJoinAndSelect('activeVersion.category', 'category')
     .leftJoinAndSelect('activeVersion.state', 'state')
@@ -232,7 +232,7 @@ export async function getDownloadUrl(
   userId: string,
   req: Request,
 ): Promise<string> {
-  const doc = await documentRepo.findOne({
+  const doc = await tenderDocumentRepository.findOne({
     where: { id: documentId },
     relations: ['tenderVersion', 'tenderVersion.tender'],
   });
@@ -252,11 +252,11 @@ export async function getDownloadUrl(
 
   // Increment download counter
   doc.downloadCount += 1;
-  await documentRepo.save(doc);
+  await tenderDocumentRepository.save(doc);
 
   // Log download history (non-blocking)
   setImmediate(() => {
-    downloadRepo.save({
+    downloadHistoryRepository.save({
       userId,
       tenderId,
       fileName: doc.documentOriginalName,
@@ -274,19 +274,19 @@ export async function createTender(
   createdById: string,
 ): Promise<Tender> {
   // Generate sequence reference number
-  const [{ nextval }] = await AppDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
+  const [{ nextval }] = await appDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
   const referenceNo = `TDR-${new Date().getFullYear()}-${String(nextval).padStart(6, '0')}`;
 
-  const tender = tenderRepo.create({
+  const tender = tenderRepository.create({
     referenceNo,
     createdById,
     status: TenderLifecycleStatus.ACTIVE,
     publicationStatus: TenderPublicationStatus.SCHEDULED,
   });
 
-  const savedTender = await tenderRepo.save(tender);
+  const savedTender = await tenderRepository.save(tender);
 
-  const version = versionRepo.create({
+  const version = tenderVersionRepository.create({
     ...dto,
     tenderId: savedTender.id,
     version: 1,
@@ -294,10 +294,10 @@ export async function createTender(
     createdById,
   } as any) as unknown as TenderVersion;
 
-  const savedVersion = await versionRepo.save(version);
+  const savedVersion = await tenderVersionRepository.save(version);
 
   savedTender.activeVersionId = savedVersion.id;
-  await tenderRepo.save(savedTender);
+  await tenderRepository.save(savedTender);
 
   return savedTender;
 }
@@ -309,7 +309,7 @@ export async function updateTender(
   dto: UpdateTenderDto,
   createdById: string,
 ): Promise<Tender> {
-  const tender = await tenderRepo.findOne({
+  const tender = await tenderRepository.findOne({
     where: { id },
     relations: ['activeVersion'],
   });
@@ -331,7 +331,7 @@ export async function updateTender(
   // If the active version is not in DRAFT mode, we must spawn a new version draft
   if (active.status !== TenderVersionStatus.DRAFT) {
     const nextVerNum = active.version + 1;
-    const newVersion = versionRepo.create({
+    const newVersion = tenderVersionRepository.create({
       ...active,
       ...dto,
       id: undefined, // Let DB generate new UUID
@@ -341,28 +341,28 @@ export async function updateTender(
       createdAt: new Date(),
     } as any) as unknown as TenderVersion;
 
-    const savedVersion = await versionRepo.save(newVersion);
+    const savedVersion = await tenderVersionRepository.save(newVersion);
 
     // Copy documents to new version
-    const docs = await documentRepo.find({ where: { tenderVersionId: active.id } });
+    const docs = await tenderDocumentRepository.find({ where: { tenderVersionId: active.id } });
     for (const d of docs) {
-      const copiedDoc = documentRepo.create({
+      const copiedDoc = tenderDocumentRepository.create({
         ...d,
         id: undefined,
         tenderVersionId: savedVersion.id,
       });
-      await documentRepo.save(copiedDoc);
+      await tenderDocumentRepository.save(copiedDoc);
     }
 
     tender.activeVersionId = savedVersion.id;
-    await tenderRepo.save(tender);
+    await tenderRepository.save(tender);
 
     return tender;
   }
 
   // Otherwise, we edit the existing draft version
   Object.assign(active, dto);
-  await versionRepo.save(active);
+  await tenderVersionRepository.save(active);
 
   return tender;
 }
@@ -374,7 +374,7 @@ export async function updateTenderStatus(
   dto: UpdateTenderStatusDto,
   actorId: string,
 ): Promise<Tender> {
-  const tender = await tenderRepo.findOne({
+  const tender = await tenderRepository.findOne({
     where: { id },
     relations: ['activeVersion'],
   });
@@ -385,14 +385,14 @@ export async function updateTenderStatus(
 
   if (dto.status && tender.activeVersion) {
     tender.activeVersion.status = dto.status;
-    await versionRepo.save(tender.activeVersion);
+    await tenderVersionRepository.save(tender.activeVersion);
   }
 
   if (dto.publicationStatus) {
     tender.publicationStatus = dto.publicationStatus;
   }
 
-  const savedTender = await tenderRepo.save(tender);
+  const savedTender = await tenderRepository.save(tender);
 
   // Dispatch decoupled domain events
   if (dto.status === TenderVersionStatus.SUBMITTED) {
@@ -407,18 +407,18 @@ export async function updateTenderStatus(
 // ─── Admin: Statistics aggregations ──────────────────────────────────────────
 
 export async function getTenderStatistics(): Promise<any> {
-  const totalTenders = await tenderRepo.count();
-  const draftCount = await versionRepo.count({ where: { status: TenderVersionStatus.DRAFT } });
-  const reviewCount = await versionRepo.count({ where: { status: TenderVersionStatus.UNDER_REVIEW } });
-  const publishedCount = await tenderRepo.count({
+  const totalTenders = await tenderRepository.count();
+  const draftCount = await tenderVersionRepository.count({ where: { status: TenderVersionStatus.DRAFT } });
+  const reviewCount = await tenderVersionRepository.count({ where: { status: TenderVersionStatus.UNDER_REVIEW } });
+  const publishedCount = await tenderRepository.count({
     where: { publicationStatus: TenderPublicationStatus.PUBLISHED },
   });
 
-  const sumBudget = await versionRepo.createQueryBuilder('tv')
+  const sumBudget = await tenderVersionRepository.createQueryBuilder('tv')
     .select('SUM(tv.estimated_budget)', 'sum')
     .getRawOne();
 
-  const totalParticipants = await participantRepo.count();
+  const totalParticipants = await tenderParticipantRepository.count();
 
   return {
     totalTenders,
@@ -437,7 +437,7 @@ export async function registerDocument(
   dto: RegisterDocumentDto,
   userId: string,
 ): Promise<TenderDocument> {
-  const tender = await tenderRepo.findOne({
+  const tender = await tenderRepository.findOne({
     where: { id: tenderId },
     relations: ['activeVersion'],
   });
@@ -446,7 +446,7 @@ export async function registerDocument(
     throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
   }
 
-  const doc = documentRepo.create({
+  const doc = tenderDocumentRepository.create({
     tenderVersionId: tender.activeVersion.id,
     documentType: dto.documentType,
     documentS3Key: dto.s3Key,
@@ -460,13 +460,13 @@ export async function registerDocument(
     uploadedById: userId,
   });
 
-  const saved = await documentRepo.save(doc);
+  const saved = await tenderDocumentRepository.save(doc);
 
   // Stub background virus scanner simulation
   setImmediate(() => {
     setTimeout(async () => {
       saved.virusScanStatus = 'Clean';
-      await documentRepo.save(saved);
+      await tenderDocumentRepository.save(saved);
       logger.info({ docId: saved.id }, 'Mock malware virus scan complete: CLEAN');
     }, 5000);
   });
@@ -481,14 +481,14 @@ export async function askQuestion(
   dto: CreateQuestionDto,
   vendorId: string,
 ): Promise<TenderQuestion> {
-  const question = questionRepo.create({
+  const question = tenderQuestionRepository.create({
     tenderId,
     vendorId,
     questionText: dto.questionText,
     isPublic: false,
   });
 
-  return questionRepo.save(question);
+  return tenderQuestionRepository.save(question);
 }
 
 export async function answerQuestion(
@@ -496,7 +496,7 @@ export async function answerQuestion(
   dto: AnswerQuestionDto,
   answeredById: string,
 ): Promise<TenderQuestion> {
-  const question = await questionRepo.findOne({ where: { id: questionId } });
+  const question = await tenderQuestionRepository.findOne({ where: { id: questionId } });
   if (!question) {
     throw new AppError('Question not found', 404, 'NOT_FOUND');
   }
@@ -506,7 +506,7 @@ export async function answerQuestion(
   question.answeredById = answeredById;
   question.answeredAt = new Date();
 
-  return questionRepo.save(question);
+  return tenderQuestionRepository.save(question);
 }
 
 // ─── Clarifications ─────────────────────────────────────────────────────────
@@ -516,14 +516,14 @@ export async function createClarification(
   dto: CreateClarificationDto,
   createdById: string,
 ): Promise<TenderClarification> {
-  const clar = clarificationRepo.create({
+  const clar = tenderClarificationRepository.create({
     tenderId,
     title: dto.title,
     description: dto.description,
     createdById,
   });
 
-  return clarificationRepo.save(clar);
+  return tenderClarificationRepository.save(clar);
 }
 
 // ─── Amendments ─────────────────────────────────────────────────────────────
@@ -533,14 +533,14 @@ export async function createAmendment(
   dto: CreateAmendmentDto,
   createdById: string,
 ): Promise<TenderAmendment> {
-  const amend = amendmentRepo.create({
+  const amend = tenderAmendmentRepository.create({
     tenderId,
     amendmentNumber: dto.amendmentNumber,
     changedFields: dto.changedFields,
     publishedById: createdById,
   } as any) as unknown as TenderAmendment;
 
-  return amendmentRepo.save(amend);
+  return tenderAmendmentRepository.save(amend);
 }
 
 // ─── Committee Assignments ───────────────────────────────────────────────────
@@ -549,13 +549,13 @@ export async function assignCommitteeMember(
   tenderId: string,
   dto: TenderCommitteeDto,
 ): Promise<TenderCommittee> {
-  const comm = committeeRepo.create({
+  const comm = tenderCommitteeRepository.create({
     tenderId,
     userId: dto.userId,
     role: dto.role,
   });
 
-  return committeeRepo.save(comm);
+  return tenderCommitteeRepository.save(comm);
 }
 
 // ─── Bid Evaluations ──────────────────────────────────────────────────────────
@@ -565,19 +565,19 @@ export async function submitEvaluation(
   dto: SubmitEvaluationDto,
   evaluatedById: string,
 ): Promise<TenderEvaluation> {
-  const templateRepo = AppDataSource.getRepository(EvaluationTemplate);
-  let template = await templateRepo.findOne({ where: { name: dto.criteriaName } });
+  const evaluationTemplateRepository = appDataSource.getRepository(EvaluationTemplate);
+  let template = await evaluationTemplateRepository.findOne({ where: { name: dto.criteriaName } });
   if (!template) {
-    template = templateRepo.create({
+    template = evaluationTemplateRepository.create({
       name: dto.criteriaName,
       description: `Auto-generated template for ${dto.criteriaName}`,
       defaultWeight: dto.weight,
       maxScore: dto.maxScore,
     });
-    await templateRepo.save(template);
+    await evaluationTemplateRepository.save(template);
   }
 
-  const evalRow = evaluationRepo.create({
+  const evalRow = tenderEvaluationRepository.create({
     participantId,
     evaluationType: dto.evaluationType,
     evaluationTemplateId: template.id,
@@ -589,7 +589,7 @@ export async function submitEvaluation(
     evaluatedById,
   } as any) as unknown as TenderEvaluation;
 
-  return evaluationRepo.save(evalRow);
+  return tenderEvaluationRepository.save(evalRow);
 }
 
 // ─── Review Assignments & Review comments ───────────────────────────────────
@@ -598,7 +598,7 @@ export async function assignReviewers(
   tenderId: string,
   dto: AssignReviewerDto,
 ): Promise<TenderReview> {
-  const tender = await tenderRepo.findOne({
+  const tender = await tenderRepository.findOne({
     where: { id: tenderId },
     relations: ['activeVersion'],
   });
@@ -608,24 +608,24 @@ export async function assignReviewers(
   }
 
   // Create review session
-  const review = reviewRepo.create({
+  const review = tenderReviewRepository.create({
     tenderVersionId: tender.activeVersion.id,
     status: 'assigned',
   });
 
-  const savedReview = await reviewRepo.save(review);
+  const savedReview = await tenderReviewRepository.save(review);
 
   for (const reviewerId of dto.reviewerIds) {
-    const assign = assignmentRepo.create({
+    const assign = tenderReviewAssignmentRepository.create({
       reviewId: savedReview.id,
       reviewerId,
     });
-    await assignmentRepo.save(assign);
+    await tenderReviewAssignmentRepository.save(assign);
   }
 
   // Transition version status to REVIEW_ASSIGNED
   tender.activeVersion.status = TenderVersionStatus.REVIEW_ASSIGNED;
-  await versionRepo.save(tender.activeVersion);
+  await tenderVersionRepository.save(tender.activeVersion);
 
   return savedReview;
 }
@@ -635,7 +635,7 @@ export async function submitReviewComment(
   dto: SubmitReviewCommentDto,
   authorId: string,
 ): Promise<TenderReviewComment> {
-  const review = await reviewRepo.findOne({
+  const review = await tenderReviewRepository.findOne({
     where: { id: reviewId },
     relations: ['tenderVersion', 'tenderVersion.tender'],
   });
@@ -644,21 +644,21 @@ export async function submitReviewComment(
     throw new AppError('Review session not found', 404, 'NOT_FOUND');
   }
 
-  const comment = commentRepo.create({
+  const comment = tenderReviewCommentRepository.create({
     reviewId,
     authorId,
     commentText: dto.commentText,
   });
 
-  const savedComment = await commentRepo.save(comment);
+  const savedComment = await tenderReviewCommentRepository.save(comment);
 
   if (dto.status) {
     review.status = dto.status.toLowerCase();
-    await reviewRepo.save(review);
+    await tenderReviewRepository.save(review);
 
     // Update version status
     review.tenderVersion.status = dto.status;
-    await versionRepo.save(review.tenderVersion);
+    await tenderVersionRepository.save(review.tenderVersion);
   }
 
   return savedComment;
@@ -671,10 +671,10 @@ export async function toggleWatcher(
   userId: string,
   dto: TenderWatcherDto,
 ): Promise<any> {
-  const existing = await watcherRepo.findOne({ where: { tenderId, userId } });
+  const existing = await tenderWatcherRepository.findOne({ where: { tenderId, userId } });
 
   if (existing) {
-    await watcherRepo.remove(existing);
+    await tenderWatcherRepository.remove(existing);
     return { watching: false };
   }
 
@@ -683,13 +683,13 @@ export async function toggleWatcher(
   if (dto.notifyInApp) channels.push('IN_APP');
   if (dto.notifySms) channels.push('SMS');
 
-  const watcher = watcherRepo.create({
+  const watcher = tenderWatcherRepository.create({
     tenderId,
     userId,
     channels,
   } as any) as unknown as TenderWatcher;
 
-  await watcherRepo.save(watcher);
+  await tenderWatcherRepository.save(watcher);
   return { watching: true };
 }
 
@@ -702,14 +702,14 @@ export async function inviteVendor(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + dto.expiresDays);
 
-  const inv = invitationRepo.create({
+  const inv = tenderInvitationRepository.create({
     tenderId,
     email: dto.email,
     status: 'invited',
     expiresAt,
   });
 
-  return invitationRepo.save(inv);
+  return tenderInvitationRepository.save(inv);
 }
 
 // ─── Templates ──────────────────────────────────────────────────────────────
@@ -718,7 +718,7 @@ export async function createTemplate(
   dto: TenderTemplateDto,
   userId: string,
 ): Promise<TenderTemplate> {
-  const temp = templateRepo.create({
+  const tenderTemplate = tenderTemplateRepository.create({
     templateScope: dto.templateScope,
     departmentId: dto.departmentId || null,
     title: dto.title,
@@ -727,13 +727,13 @@ export async function createTemplate(
     createdById: userId,
   });
 
-  return templateRepo.save(temp);
+  return tenderTemplateRepository.save(tenderTemplate);
 }
 
 // ─── Diff / Version comparison ───────────────────────────────────────────────
 
 export async function getTenderVersions(tenderId: string): Promise<TenderVersion[]> {
-  return versionRepo.find({
+  return tenderVersionRepository.find({
     where: { tenderId },
     order: { version: 'DESC' },
   });

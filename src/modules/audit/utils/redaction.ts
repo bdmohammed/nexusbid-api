@@ -17,33 +17,33 @@ const SENSITIVE_KEYS = new Set([
 /**
  * Recursively scans an object and redacts keys that represent sensitive credentials.
  */
-export function redactSensitiveData(val: any): any {
-  if (val === null || val === undefined) {
-    return val;
+export function redactSensitiveData(value: any): any {
+  if (value === null || value === undefined) {
+    return value;
   }
 
-  if (Array.isArray(val)) {
-    return val.map((item) => redactSensitiveData(item));
+  if (Array.isArray(value)) {
+    return value.map((arrayElement) => redactSensitiveData(arrayElement));
   }
 
-  if (typeof val === 'object') {
+  if (typeof value === 'object') {
     const output: Record<string, any> = {};
-    for (const k of Object.keys(val)) {
-      const lowerKey = k.toLowerCase();
+    for (const key of Object.keys(value)) {
+      const lowerKey = key.toLowerCase();
       
       // Match key contains or matches sensitive keys
       const isSensitive = Array.from(SENSITIVE_KEYS).some(
-        (sk) => lowerKey === sk || lowerKey.includes(sk)
+        (sensitiveKey) => lowerKey === sensitiveKey || lowerKey.includes(sensitiveKey)
       );
 
       if (isSensitive) {
-        output[k] = '******';
+        output[key] = '******';
       } else {
-        output[k] = redactSensitiveData(val[k]);
+        output[key] = redactSensitiveData(value[key]);
       }
     }
     return output;
   }
 
-  return val;
+  return value;
 }

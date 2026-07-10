@@ -1,4 +1,4 @@
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { Plan } from '../../entities/Plan';
 import { PlanVersion } from '../../entities/PlanVersion';
 import { FeatureCatalog } from '../../entities/FeatureCatalog';
@@ -14,30 +14,30 @@ import { Transaction } from '../../entities/Transaction';
 import { AppError } from '../../core/AppError';
 import { logger } from '../../config/logger';
 
-const planRepo = AppDataSource.getRepository(Plan);
-const versionRepo = AppDataSource.getRepository(PlanVersion);
-const catalogRepo = AppDataSource.getRepository(FeatureCatalog);
-const featureRepo = AppDataSource.getRepository(PlanFeature);
-const countryPricingRepo = AppDataSource.getRepository(PlanCountryPricing);
-const categoryPricingRepo = AppDataSource.getRepository(PlanCategoryPricing);
-const couponRepo = AppDataSource.getRepository(Coupon);
-const reviewRepo = AppDataSource.getRepository(PlanReview);
-const commentRepo = AppDataSource.getRepository(PlanReviewComment);
-const migrationRepo = AppDataSource.getRepository(SubscriptionMigration);
-const subRepo = AppDataSource.getRepository(Subscription);
-const transactionRepo = AppDataSource.getRepository(Transaction);
+const planRepository = appDataSource.getRepository(Plan);
+const planVersionRepository = appDataSource.getRepository(PlanVersion);
+const featureCatalogRepository = appDataSource.getRepository(FeatureCatalog);
+const planFeatureRepository = appDataSource.getRepository(PlanFeature);
+const planCountryPricingRepository = appDataSource.getRepository(PlanCountryPricing);
+const planCategoryPricingRepository = appDataSource.getRepository(PlanCategoryPricing);
+const couponRepository = appDataSource.getRepository(Coupon);
+const planReviewRepository = appDataSource.getRepository(PlanReview);
+const planReviewCommentRepository = appDataSource.getRepository(PlanReviewComment);
+const subscriptionMigrationRepository = appDataSource.getRepository(SubscriptionMigration);
+const subscriptionRepository = appDataSource.getRepository(Subscription);
+const transactionRepository = appDataSource.getRepository(Transaction);
 
 // ─── Plan Workflows ─────────────────────────────────────────────────────────
 
 export async function listAllPlans(): Promise<Plan[]> {
-  return planRepo.find({
+  return planRepository.find({
     relations: ['activeVersion', 'activeVersion.features', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
     order: { createdAt: 'DESC' },
   });
 }
 
 export async function getPlanById(id: string): Promise<Plan> {
-  const plan = await planRepo.findOne({
+  const plan = await planRepository.findOne({
     where: { id },
     relations: [
       'versions',
@@ -61,7 +61,7 @@ export async function createPlan(
   dto: any,
   createdById: string
 ): Promise<Plan> {
-  return AppDataSource.transaction(async (manager) => {
+  return appDataSource.transaction(async (manager) => {
     const count = await manager.count(Plan);
     const referenceNo = `PLN-${(count + 1).toString().padStart(3, '0')}`;
 
@@ -97,38 +97,38 @@ export async function createPlan(
 
     // Save Features
     if (dto.features && Array.isArray(dto.features)) {
-      for (const f of dto.features) {
-        const pf = manager.create(PlanFeature, {
+      for (const featureItem of dto.features) {
+        const planFeature = manager.create(PlanFeature, {
           planVersionId: savedVersion.id,
-          featureKey: f.featureKey,
-          limitValue: f.limitValue,
+          featureKey: featureItem.featureKey,
+          limitValue: featureItem.limitValue,
         });
-        await manager.save(PlanFeature, pf);
+        await manager.save(PlanFeature, planFeature);
       }
     }
 
     // Save Country Pricing overrides
     if (dto.countryPricing && Array.isArray(dto.countryPricing)) {
-      for (const cp of dto.countryPricing) {
-        const planCp = manager.create(PlanCountryPricing, {
+      for (const countryPricingItem of dto.countryPricing) {
+        const planCountryPricing = manager.create(PlanCountryPricing, {
           planVersionId: savedVersion.id,
-          country: cp.country,
-          currency: cp.currency,
-          priceCents: cp.priceCents,
+          country: countryPricingItem.country,
+          currency: countryPricingItem.currency,
+          priceCents: countryPricingItem.priceCents,
         });
-        await manager.save(PlanCountryPricing, planCp);
+        await manager.save(PlanCountryPricing, planCountryPricing);
       }
     }
 
     // Save Category Pricing overrides
     if (dto.categoryPricing && Array.isArray(dto.categoryPricing)) {
-      for (const catP of dto.categoryPricing) {
-        const planCatP = manager.create(PlanCategoryPricing, {
+      for (const categoryPricingItem of dto.categoryPricing) {
+        const planCategoryPricing = manager.create(PlanCategoryPricing, {
           planVersionId: savedVersion.id,
-          categoryId: catP.categoryId,
-          priceCents: catP.priceCents,
+          categoryId: categoryPricingItem.categoryId,
+          priceCents: categoryPricingItem.priceCents,
         });
-        await manager.save(PlanCategoryPricing, planCatP);
+        await manager.save(PlanCategoryPricing, planCategoryPricing);
       }
     }
 
@@ -143,7 +143,7 @@ export async function createPlanVersionDraft(
   planId: string,
   createdById: string
 ): Promise<PlanVersion> {
-  const plan = await planRepo.findOne({
+  const plan = await planRepository.findOne({
     where: { id: planId },
     relations: ['versions', 'activeVersion'],
   });
@@ -157,7 +157,7 @@ export async function createPlanVersionDraft(
 
   const latestVersion = plan.versions.reduce((max, v) => (v.version > max ? v.version : max), 0);
 
-  return AppDataSource.transaction(async (manager) => {
+  return appDataSource.transaction(async (manager) => {
     const activeVer = plan.activeVersion;
     const baseVer = activeVer || plan.versions[0];
 
@@ -186,37 +186,37 @@ export async function createPlanVersionDraft(
     const savedDraft = await manager.save(PlanVersion, draft);
 
     // Copy features
-    const features = await featureRepo.find({ where: { planVersionId: baseVer.id } });
-    for (const f of features) {
-      const pf = manager.create(PlanFeature, {
+    const features = await planFeatureRepository.find({ where: { planVersionId: baseVer.id } });
+    for (const featureItem of features) {
+      const planFeature = manager.create(PlanFeature, {
         planVersionId: savedDraft.id,
-        featureKey: f.featureKey,
-        limitValue: f.limitValue,
+        featureKey: featureItem.featureKey,
+        limitValue: featureItem.limitValue,
       });
-      await manager.save(PlanFeature, pf);
+      await manager.save(PlanFeature, planFeature);
     }
 
     // Copy country pricing
-    const countryPricing = await countryPricingRepo.find({ where: { planVersionId: baseVer.id } });
-    for (const cp of countryPricing) {
-      const planCp = manager.create(PlanCountryPricing, {
+    const countryPricing = await planCountryPricingRepository.find({ where: { planVersionId: baseVer.id } });
+    for (const countryPricingItem of countryPricing) {
+      const planCountryPricing = manager.create(PlanCountryPricing, {
         planVersionId: savedDraft.id,
-        country: cp.country,
-        currency: cp.currency,
-        priceCents: cp.priceCents,
+        country: countryPricingItem.country,
+        currency: countryPricingItem.currency,
+        priceCents: countryPricingItem.priceCents,
       });
-      await manager.save(PlanCountryPricing, planCp);
+      await manager.save(PlanCountryPricing, planCountryPricing);
     }
 
     // Copy category pricing
-    const categoryPricing = await categoryPricingRepo.find({ where: { planVersionId: baseVer.id } });
-    for (const catP of categoryPricing) {
-      const planCatP = manager.create(PlanCategoryPricing, {
+    const categoryPricing = await planCategoryPricingRepository.find({ where: { planVersionId: baseVer.id } });
+    for (const categoryPricingItem of categoryPricing) {
+      const planCategoryPricing = manager.create(PlanCategoryPricing, {
         planVersionId: savedDraft.id,
-        categoryId: catP.categoryId,
-        priceCents: catP.priceCents,
+        categoryId: categoryPricingItem.categoryId,
+        priceCents: categoryPricingItem.priceCents,
       });
-      await manager.save(PlanCategoryPricing, planCatP);
+      await manager.save(PlanCategoryPricing, planCategoryPricing);
     }
 
     return savedDraft;
@@ -226,20 +226,20 @@ export async function createPlanVersionDraft(
 // ─── Plan Review Flows ──────────────────────────────────────────────────────
 
 export async function submitPlanForReview(versionId: string): Promise<PlanVersion> {
-  const version = await versionRepo.findOne({ where: { id: versionId } });
+  const version = await planVersionRepository.findOne({ where: { id: versionId } });
   if (!version) throw new AppError('Version not found', 404, 'NOT_FOUND');
   if (version.status !== 'DRAFT') {
     throw new AppError('Only draft versions can be submitted for review', 400, 'INVALID_STATUS');
   }
 
   version.status = 'SUBMITTED';
-  await versionRepo.save(version);
+  await planVersionRepository.save(version);
 
-  const review = reviewRepo.create({
+  const review = planReviewRepository.create({
     planVersionId: version.id,
     status: 'SUBMITTED',
   });
-  await reviewRepo.save(review);
+  await planReviewRepository.save(review);
 
   return version;
 }
@@ -248,7 +248,7 @@ export async function assignPlanReviewer(
   reviewId: string,
   reviewerId: string
 ): Promise<PlanReview> {
-  const review = await reviewRepo.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
+  const review = await planReviewRepository.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
   if (!review) throw new AppError('Review not found', 404, 'NOT_FOUND');
 
   // Enforce reviewer cannot approve their own plan changes
@@ -258,10 +258,10 @@ export async function assignPlanReviewer(
 
   review.assignedReviewerId = reviewerId;
   review.status = 'UNDER_REVIEW';
-  await reviewRepo.save(review);
+  await planReviewRepository.save(review);
 
   review.planVersion.status = 'UNDER_REVIEW';
-  await versionRepo.save(review.planVersion);
+  await planVersionRepository.save(review.planVersion);
 
   return review;
 }
@@ -272,14 +272,14 @@ export async function submitPlanReviewAction(
   commentText: string,
   action: 'APPROVE' | 'REQUEST_CHANGES'
 ): Promise<PlanReview> {
-  const review = await reviewRepo.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
+  const review = await planReviewRepository.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
   if (!review) throw new AppError('Review not found', 404, 'NOT_FOUND');
 
   if (review.assignedReviewerId !== authorId) {
     throw new AppError('You are not assigned to review this plan version', 403, 'FORBIDDEN');
   }
 
-  return AppDataSource.transaction(async (manager) => {
+  return appDataSource.transaction(async (manager) => {
     const comment = manager.create(PlanReviewComment, {
       planReviewId: reviewId,
       authorId,
@@ -304,13 +304,13 @@ export async function submitPlanReviewAction(
 }
 
 export async function publishPlanVersion(versionId: string): Promise<Plan> {
-  const version = await versionRepo.findOne({ where: { id: versionId }, relations: ['plan'] });
+  const version = await planVersionRepository.findOne({ where: { id: versionId }, relations: ['plan'] });
   if (!version) throw new AppError('Version not found', 404, 'NOT_FOUND');
   if (version.status !== 'APPROVED') {
     throw new AppError('Only approved plan versions can be published', 400, 'NOT_APPROVED');
   }
 
-  return AppDataSource.transaction(async (manager) => {
+  return appDataSource.transaction(async (manager) => {
     version.status = 'PUBLISHED';
     await manager.save(PlanVersion, version);
 
@@ -325,20 +325,20 @@ export async function publishPlanVersion(versionId: string): Promise<Plan> {
 // ─── Coupon Management ──────────────────────────────────────────────────────
 
 export async function createCoupon(dto: any): Promise<Coupon> {
-  const coupon = couponRepo.create(dto as any) as unknown as Coupon;
-  return couponRepo.save(coupon);
+  const coupon = couponRepository.create(dto as any) as unknown as Coupon;
+  return couponRepository.save(coupon);
 }
 
 export async function listCoupons(): Promise<Coupon[]> {
-  return couponRepo.find({ order: { createdAt: 'DESC' } });
+  return couponRepository.find({ order: { createdAt: 'DESC' } });
 }
 
 export async function toggleCouponStatus(id: string): Promise<Coupon> {
-  const coupon = await couponRepo.findOne({ where: { id } });
+  const coupon = await couponRepository.findOne({ where: { id } });
   if (!coupon) throw new AppError('Coupon not found', 404, 'NOT_FOUND');
 
   coupon.isActive = !coupon.isActive;
-  return couponRepo.save(coupon);
+  return couponRepository.save(coupon);
 }
 
 // ─── Subscription Migration Engine ──────────────────────────────────────────
@@ -348,13 +348,13 @@ export async function initiateSubscriptionMigration(
   targetPlanVersionId: string,
   createdById: string
 ): Promise<SubscriptionMigration> {
-  const migration = migrationRepo.create({
+  const migration = subscriptionMigrationRepository.create({
     sourcePlanVersionId,
     targetPlanVersionId,
     status: 'PENDING',
     createdById,
   });
-  await migrationRepo.save(migration);
+  await subscriptionMigrationRepository.save(migration);
 
   // Trigger migration immediately in background for dev/local
   setImmediate(async () => {
@@ -362,26 +362,26 @@ export async function initiateSubscriptionMigration(
       logger.info({ migrationId: migration.id }, 'Subscription migration background execution started');
       migration.status = 'RUNNING';
       migration.startedAt = new Date();
-      await migrationRepo.save(migration);
+      await subscriptionMigrationRepository.save(migration);
 
-      const affectedSubscriptions = await subRepo.find({
+      const affectedSubscriptions = await subscriptionRepository.find({
         where: { planVersionId: sourcePlanVersionId },
       });
 
-      for (const sub of affectedSubscriptions) {
-        sub.planVersionId = targetPlanVersionId;
-        await subRepo.save(sub);
+      for (const subscription of affectedSubscriptions) {
+        subscription.planVersionId = targetPlanVersionId;
+        await subscriptionRepository.save(subscription);
       }
 
       migration.status = 'COMPLETED';
       migration.completedAt = new Date();
-      await migrationRepo.save(migration);
+      await subscriptionMigrationRepository.save(migration);
       logger.info({ migrationId: migration.id, migratedCount: affectedSubscriptions.length }, 'Subscription migration completed successfully');
     } catch (err) {
       logger.error({ migrationId: migration.id, err }, 'Subscription migration execution failed');
       migration.status = 'FAILED';
       migration.completedAt = new Date();
-      await migrationRepo.save(migration);
+      await subscriptionMigrationRepository.save(migration);
     }
   });
 
@@ -391,24 +391,24 @@ export async function initiateSubscriptionMigration(
 // ─── Analytics & Catalog ────────────────────────────────────────────────────
 
 export async function getFeatureCatalog(): Promise<FeatureCatalog[]> {
-  return catalogRepo.find({ order: { name: 'ASC' } });
+  return featureCatalogRepository.find({ order: { name: 'ASC' } });
 }
 
 export async function createFeatureCatalogItem(dto: any): Promise<FeatureCatalog> {
-  const item = catalogRepo.create(dto as any) as unknown as FeatureCatalog;
-  return catalogRepo.save(item);
+  const featureCatalogItem = featureCatalogRepository.create(dto as any) as unknown as FeatureCatalog;
+  return featureCatalogRepository.save(featureCatalogItem);
 }
 
 export async function getSubscriptionsDashboardStats(): Promise<any> {
-  const totalRevenueRow = await transactionRepo
+  const totalRevenueRow = await transactionRepository
     .createQueryBuilder('t')
     .select('SUM(t.amountCents)', 'total')
     .where("t.status = 'success'")
     .getRawOne();
   const totalRevenue = totalRevenueRow ? parseInt(totalRevenueRow.total, 10) || 0 : 0;
 
-  const activeSubCount = await subRepo.count({ where: { status: 'active' as any } });
-  const expiredSubCount = await subRepo.count({ where: { status: 'expired' as any } });
+  const activeSubCount = await subscriptionRepository.count({ where: { status: 'active' as any } });
+  const expiredSubCount = await subscriptionRepository.count({ where: { status: 'expired' as any } });
 
   // Mock trend details for KPIs
   return {
@@ -423,6 +423,6 @@ export async function getSubscriptionsDashboardStats(): Promise<any> {
     churnRate: '4.2%',
     arpu: activeSubCount > 0 ? (totalRevenue / 100 / activeSubCount).toFixed(2) : 0,
     ltv: activeSubCount > 0 ? (totalRevenue / 100 / activeSubCount * 18).toFixed(2) : 0,
-    failedPayments: await transactionRepo.count({ where: { status: 'failed' as any } }),
+    failedPayments: await transactionRepository.count({ where: { status: 'failed' as any } }),
   };
 }

@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { AppDataSource } from '../../config/database';
+import { appDataSource } from '../../config/database';
 import { User } from '../../entities/User';
 import { PasswordHistory } from '../../entities/PasswordHistory';
 import { UserDevice } from '../../entities/UserDevice';
@@ -8,8 +8,8 @@ import { AppError } from '../../core/AppError';
 import { env } from '../../config/env';
 import { sendLoginNotificationEmail } from '../../services/email.service';
 
-const passwordHistoryRepo = AppDataSource.getRepository(PasswordHistory);
-const userDeviceRepo = AppDataSource.getRepository(UserDevice);
+const passwordHistoryRepository = appDataSource.getRepository(PasswordHistory);
+const userDeviceRepository = appDataSource.getRepository(UserDevice);
 
 /**
  * Validates a CAPTCHA response token with Cloudflare Turnstile verification.
@@ -42,8 +42,8 @@ export async function verifyCaptcha(token: string | undefined): Promise<void> {
       return;
     }
 
-    const data: any = await response.json();
-    if (!data.success) {
+    const turnstileResponse: any = await response.json();
+    if (!turnstileResponse.success) {
       throw new AppError('CAPTCHA verification failed. Please try again.', 400, 'CAPTCHA_FAILED');
     }
   } catch (err: any) {
@@ -97,7 +97,7 @@ export async function verifyPasswordBreach(password: string): Promise<void> {
  * Validates that the new password does not match any of the last 5 password hashes.
  */
 export async function checkPasswordHistory(userId: string, newPassword: string): Promise<void> {
-  const history = await passwordHistoryRepo.find({
+  const history = await passwordHistoryRepository.find({
     where: { userId },
     order: { createdAt: 'DESC' },
     take: 5,
@@ -115,20 +115,20 @@ export async function checkPasswordHistory(userId: string, newPassword: string):
  * Records the new password hash in the user's password history, keeping the log size capped at 5.
  */
 export async function savePasswordToHistory(userId: string, passwordHash: string): Promise<void> {
-  const entry = passwordHistoryRepo.create({
+  const entry = passwordHistoryRepository.create({
     userId,
     passwordHash,
   });
-  await passwordHistoryRepo.save(entry);
+  await passwordHistoryRepository.save(entry);
 
-  const history = await passwordHistoryRepo.find({
+  const history = await passwordHistoryRepository.find({
     where: { userId },
     order: { createdAt: 'DESC' },
   });
 
   if (history.length > 5) {
     const toDelete = history.slice(5);
-    await passwordHistoryRepo.remove(toDelete);
+    await passwordHistoryRepository.remove(toDelete);
   }
 }
 
@@ -168,7 +168,7 @@ export async function trackDeviceAndDetectSuspicious(
 ): Promise<boolean> {
   const deviceHash = computeDeviceHash(userAgent, ipAddress);
 
-  let device = await userDeviceRepo.findOne({
+  let device = await userDeviceRepository.findOne({
     where: { userId: user.id, deviceHash },
   });
 
@@ -176,13 +176,13 @@ export async function trackDeviceAndDetectSuspicious(
 
   if (!device) {
     // Check if the user already has devices. If they do, this new device is suspicious.
-    const hasDevices = await userDeviceRepo.count({ where: { userId: user.id } });
+    const hasDevices = await userDeviceRepository.count({ where: { userId: user.id } });
     if (hasDevices > 0) {
       isSuspicious = true;
     }
 
     // Register new device
-    device = userDeviceRepo.create({
+    device = userDeviceRepository.create({
       userId: user.id,
       deviceHash,
       userAgent: userAgent ? userAgent.substring(0, 255) : null,
@@ -190,7 +190,7 @@ export async function trackDeviceAndDetectSuspicious(
       isTrusted: false,
       lastActiveAt: new Date(),
     });
-    await userDeviceRepo.save(device);
+    await userDeviceRepository.save(device);
 
     // Trigger Login Notification Email
     if (isSuspicious) {
@@ -207,7 +207,7 @@ export async function trackDeviceAndDetectSuspicious(
     // If device is registered, update last active
     device.lastActiveAt = new Date();
     device.lastIpAddress = ipAddress ? ipAddress.substring(0, 45) : null;
-    await userDeviceRepo.save(device);
+    await userDeviceRepository.save(device);
   }
 
   return isSuspicious;

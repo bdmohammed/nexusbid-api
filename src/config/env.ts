@@ -88,14 +88,14 @@ export const isProdEnv = (): boolean => process.env['NODE_ENV'] === 'prod';
 export const isTestEnv = (): boolean => process.env['NODE_ENV'] === 'test';
 
 function validateEnv(): AppEnv {
-  const result = envSchema.safeParse(process.env);
-  if (!result.success) {
-    const formatted = result.error.issues
+  const validationResult = envSchema.safeParse(process.env);
+  if (!validationResult.success) {
+    const formatted = validationResult.error.issues
       .map((issue) => `  ${issue.path.join('.')}: ${issue.message}`)
       .join('\n');
     throw new Error(`❌ Environment validation failed:\n${formatted}`);
   }
-  return result.data;
+  return validationResult.data;
 }
 
 export const env = validateEnv();
