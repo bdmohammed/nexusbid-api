@@ -1,20 +1,22 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
+  PrimaryGeneratedColumn,
   VersionColumn,
 } from 'typeorm';
+
 import { TenderVersionStatus } from '../types/enums';
-import { Tender } from './Tender';
+
 import { Category } from './Category';
 import { State } from './State';
-import { User } from './User';
+import { Tender } from './Tender';
 import { TenderDocument } from './TenderDocument';
 import { TenderReview } from './TenderReview';
+import { User } from './User';
 
 @Entity('tender_versions')
 export class TenderVersion {
@@ -53,10 +55,15 @@ export class TenderVersion {
   @Column({ length: 50, default: 'Medium' })
   priority: string;
 
-  @Column({ name: 'estimated_budget', type: 'bigint', nullable: true, transformer: {
-    to: (val: number | null) => val,
-    from: (val: string | null) => val ? parseInt(val, 10) : null
-  }})
+  @Column({
+    name: 'estimated_budget',
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (val: number | null) => val,
+      from: (val: string | null) => (val ? parseInt(val, 10) : null),
+    },
+  })
   estimatedBudget: number | null;
 
   @Column({ length: 10, default: 'USD' })
@@ -107,16 +114,26 @@ export class TenderVersion {
   @Column({ name: 'project_duration', type: 'varchar', length: 100, nullable: true })
   projectDuration: string | null;
 
-  @Column({ name: 'emd_amount', type: 'bigint', nullable: true, transformer: {
-    to: (val: number | null) => val,
-    from: (val: string | null) => val ? parseInt(val, 10) : null
-  }})
+  @Column({
+    name: 'emd_amount',
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (val: number | null) => val,
+      from: (val: string | null) => (val ? parseInt(val, 10) : null),
+    },
+  })
   emdAmount: number | null;
 
-  @Column({ name: 'security_deposit', type: 'bigint', nullable: true, transformer: {
-    to: (val: number | null) => val,
-    from: (val: string | null) => val ? parseInt(val, 10) : null
-  }})
+  @Column({
+    name: 'security_deposit',
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (val: number | null) => val,
+      from: (val: string | null) => (val ? parseInt(val, 10) : null),
+    },
+  })
   securityDeposit: number | null;
 
   @Column({ name: 'payment_terms', type: 'text', nullable: true })

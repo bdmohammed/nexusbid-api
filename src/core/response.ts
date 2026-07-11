@@ -1,12 +1,13 @@
-import { Response } from 'express';
 import { getTraceId } from '../config/requestContext';
+
+import type { Response } from 'express';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
-  data?: T;
-  meta?: Record<string, unknown>;
-  traceId?: string;
+  data?: T | undefined;
+  meta?: Record<string, unknown> | undefined;
+  traceId?: string | undefined;
 }
 
 /**
@@ -31,11 +32,7 @@ export function sendOk<T>(
 /**
  * Sends a 201 Created response.
  */
-export function sendCreated<T>(
-  res: Response,
-  data: T,
-  message = 'Created successfully',
-): Response {
+export function sendCreated<T>(res: Response, data: T, message = 'Created successfully'): Response {
   return res.status(201).json({
     success: true,
     message,

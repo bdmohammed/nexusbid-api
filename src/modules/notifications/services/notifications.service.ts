@@ -1,13 +1,13 @@
-import { Response } from 'express';
-import { AppDataSource } from '../../../config/database';
+import { appDataSource } from '../../../config/database';
+import { logger } from '../../../config/logger';
 import { Notification } from '../../../entities/Notification';
-import { NotificationRecipient } from '../../../entities/NotificationRecipient';
 import { NotificationAction } from '../../../entities/NotificationAction';
-import { User } from '../../../entities/User';
+import { NotificationRecipient } from '../../../entities/NotificationRecipient';
 import { UserRole } from '../../../entities/UserRole';
 import { domainEvents, TENDER_EVENTS } from '../../../utils/domainEvents';
 import { rbacEventEmitter } from '../../rbac/events/RbacEvents';
-import { logger } from '../../../config/logger';
+
+import type { Response } from 'express';
 
 // ─── SSE Client Registry ──────────────────────────────────────────────────────
 export interface SSEClient {
@@ -44,8 +44,8 @@ export function broadcastToUser(userId: string, eventName: string, data: any) {
 }
 
 export async function broadcastNotification(notificationId: string) {
-  const notifRepo = AppDataSource.getRepository(Notification);
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const notifRepo = appDataSource.getRepository(Notification);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
 
   const notif = await notifRepo.findOne({
     where: { id: notificationId },
@@ -91,9 +91,15 @@ export async function createNotification(params: {
   expiresAt?: Date | null;
   metadata?: any | null;
   recipients: Array<{ userId?: string; roleId?: string; groupName?: string }>;
-  actions?: Array<{ label: string; type: string; payload?: any; permission?: string; btnOrder?: number }>;
+  actions?: Array<{
+    label: string;
+    type: string;
+    payload?: any;
+    permission?: string;
+    btnOrder?: number;
+  }>;
 }): Promise<Notification> {
-  return AppDataSource.transaction(async (manager) => {
+  return appDataSource.transaction(async (manager) => {
     const notif = manager.create(Notification, {
       category: params.category,
       severity: params.severity,
@@ -154,7 +160,7 @@ export function setupNotificationListeners() {
   // 1. Tender submitted (Needs Review)
   domainEvents.on(TENDER_EVENTS.SUBMITTED, async (event: any) => {
     try {
-      const tender = event.tender;
+      const { tender } = event;
       const title = 'Tender Submitted';
       const message = `Tender Reference ${tender.referenceNo} is pending approval review.`;
 
@@ -194,7 +200,7 @@ export function setupNotificationListeners() {
   // 2. Tender approved
   domainEvents.on(TENDER_EVENTS.APPROVED, async (event: any) => {
     try {
-      const tender = event.tender;
+      const { tender } = event;
       const title = 'Tender Approved';
       const message = `Tender Reference ${tender.referenceNo} has been successfully approved and scheduled/published.`;
 

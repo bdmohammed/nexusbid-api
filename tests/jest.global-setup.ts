@@ -19,17 +19,17 @@ export default async function globalSetup(): Promise<void> {
   dotenv.config({ path: path.resolve(process.cwd(), '.env.test'), override: true });
 
   // Dynamic import so env.ts sees the correct process.env above
-  const { AppDataSource } = await import('../src/config/database');
+  const { appDataSource } = await import('../src/config/database');
 
-  if (!AppDataSource.isInitialized) {
-    await AppDataSource.initialize();
+  if (!appDataSource.isInitialized) {
+    await appDataSource.initialize();
     console.log('[globalSetup] Test database initialized');
   }
 
-  await AppDataSource.runMigrations();
+  await appDataSource.runMigrations();
   console.log('[globalSetup] Migrations applied to test database');
 
   // Release pool before test workers spawn (each worker re-connects)
-  await AppDataSource.destroy();
+  await appDataSource.destroy();
   console.log('[globalSetup] Connection pool released');
 }

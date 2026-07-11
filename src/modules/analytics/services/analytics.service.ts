@@ -1,16 +1,19 @@
-import { AppDataSource } from '../../../config/database';
+import { appDataSource } from '../../../config/database';
+import { AppError } from '../../../core/AppError';
+import { AnalyticsAlert } from '../../../entities/AnalyticsAlert';
+import { ExportJob } from '../../../entities/ExportJob';
+import { ScheduledReport } from '../../../entities/ScheduledReport';
 import { TenderDailyMetrics } from '../../../entities/TenderDailyMetrics';
 import { UserDailyMetrics } from '../../../entities/UserDailyMetrics';
-import { SubscriptionDailyMetrics } from '../../../entities/SubscriptionDailyMetrics';
-import { TrafficDailyMetrics } from '../../../entities/TrafficDailyMetrics';
 import { UserDashboardLayout } from '../../../entities/UserDashboardLayout';
-import { AnalyticsAlert } from '../../../entities/AnalyticsAlert';
-import { ScheduledReport } from '../../../entities/ScheduledReport';
-import { ExportJob } from '../../../entities/ExportJob';
-import { MetricFormulas } from '../metrics/formulas';
 import { getFromCache, setToCache } from '../cache/redis';
-import { AppError } from '../../../core/AppError';
-import type { AnalyticsQueryDto, SaveDashboardLayoutDto, CreateScheduledReportDto } from '../dto/analytics.dto';
+import { MetricFormulas } from '../metrics/formulas';
+
+import type {
+  AnalyticsQueryDto,
+  CreateScheduledReportDto,
+  SaveDashboardLayoutDto,
+} from '../dto/analytics.dto';
 
 // ─── Overview metrics ────────────────────────────────────────────────────────
 
@@ -19,8 +22,9 @@ export async function getOverviewStats(dto: AnalyticsQueryDto): Promise<any> {
   const cached = await getFromCache(cacheKey);
   if (cached) return cached;
 
-  const tenderMetrics = AppDataSource.getRepository(TenderDailyMetrics);
-  const qb = tenderMetrics.createQueryBuilder('m')
+  const tenderMetrics = appDataSource.getRepository(TenderDailyMetrics);
+  const qb = tenderMetrics
+    .createQueryBuilder('m')
     .select('SUM(m.created_count)', 'created')
     .addSelect('SUM(m.published_count)', 'published')
     .addSelect('SUM(m.awarded_count)', 'awarded')
@@ -38,15 +42,15 @@ export async function getOverviewStats(dto: AnalyticsQueryDto): Promise<any> {
     totalRevenue: 245000, // mock revenue sum
     activeMonthlyRevenueCents: 12500000,
     uniqueVisitors: 45000,
-    bidsSubmitted: parseInt(raw.bids || '0', 10),
-    bidsAwarded: parseInt(raw.awarded || '0', 10),
+    bidsSubmitted: parseInt(raw.bids ?? '0', 10),
+    bidsAwarded: parseInt(raw.awarded ?? '0', 10),
     activeSubscribers: 420,
     cancelledThisMonth: 12,
     activeUsers: 850,
     revenueCents: 24500000,
-    tendersCreated: parseInt(raw.created || '0', 10),
-    tendersPublished: parseInt(raw.published || '0', 10),
-    totalBudget: parseFloat(raw.totalBudget || '0.00'),
+    tendersCreated: parseInt(raw.created ?? '0', 10),
+    tendersPublished: parseInt(raw.published ?? '0', 10),
+    totalBudget: parseFloat(raw.totalBudget ?? '0.00'),
   };
 
   const results = {
@@ -74,7 +78,8 @@ export async function getTenderAnalytics(dto: AnalyticsQueryDto): Promise<any[]>
   const cached = await getFromCache(cacheKey);
   if (cached) return cached;
 
-  const results = await AppDataSource.query(`
+  const results = await appDataSource.query(
+    `
     SELECT
       date,
       SUM(created_count)::int AS created,
@@ -86,7 +91,9 @@ export async function getTenderAnalytics(dto: AnalyticsQueryDto): Promise<any[]>
       AND date <= COALESCE($2, CURRENT_DATE)
     GROUP BY date
     ORDER BY date ASC
-  `, [dto.from || null, dto.to || null]);
+  `,
+    [dto.from ?? null, dto.to ?? null],
+  );
 
   await setToCache(cacheKey, results, 300);
   return results;
@@ -95,11 +102,11 @@ export async function getTenderAnalytics(dto: AnalyticsQueryDto): Promise<any[]>
 // ─── User analytics ──────────────────────────────────────────────────────────
 
 export async function getUserAnalytics(dto: AnalyticsQueryDto): Promise<any[]> {
-  const results = await AppDataSource.getRepository(UserDailyMetrics).find({
+  const results = await appDataSource.getRepository(UserDailyMetrics).find({
     where: {
-      date: dto.from // simple filter wrapper
+      date: dto.from, // simple filter wrapper
     },
-    order: { date: 'ASC' }
+    order: { date: 'ASC' },
   });
   return results;
 }
@@ -111,7 +118,8 @@ export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<any> 
   const cached = await getFromCache(cacheKey);
   if (cached) return cached;
 
-  const results = await AppDataSource.query(`
+  const results = await appDataSource.query(
+    `
     SELECT
       date,
       SUM(revenue_cents)::bigint AS revenue_cents,
@@ -120,7 +128,9 @@ export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<any> 
     WHERE date >= COALESCE($1, CURRENT_DATE - INTERVAL '30 days')
     GROUP BY date
     ORDER BY date ASC
-  `, [dto.from || null]);
+  `,
+    [dto.from ?? null],
+  );
 
   await setToCache(cacheKey, results, 900); // 15 minutes TTL
   return results;
@@ -129,7 +139,7 @@ export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<any> 
 // ─── Category distribution ───────────────────────────────────────────────────
 
 export async function getCategoryAnalytics(): Promise<any[]> {
-  return AppDataSource.query(`
+  return appDataSource.query(`
     SELECT
       c.name,
       COUNT(t.id)::int AS tender_count,
@@ -168,21 +178,24 @@ export async function getSystemPerformanceMetrics(): Promise<any> {
 // ─── Alerts & Dashboard Personalization ──────────────────────────────────────
 
 export async function getDashboardLayout(userId: string): Promise<UserDashboardLayout> {
-  const layoutRepo = AppDataSource.getRepository(UserDashboardLayout);
+  const layoutRepo = appDataSource.getRepository(UserDashboardLayout);
   let layout = await layoutRepo.findOne({ where: { userId } });
   if (!layout) {
     layout = layoutRepo.create({
       userId,
       widgets: ['totalTenders', 'openTenders', 'conversionRate', 'bidSuccessRate', 'mrr'],
-      theme: 'default'
+      theme: 'default',
     });
     await layoutRepo.save(layout);
   }
   return layout;
 }
 
-export async function saveDashboardLayout(userId: string, dto: SaveDashboardLayoutDto): Promise<UserDashboardLayout> {
-  const layoutRepo = AppDataSource.getRepository(UserDashboardLayout);
+export async function saveDashboardLayout(
+  userId: string,
+  dto: SaveDashboardLayoutDto,
+): Promise<UserDashboardLayout> {
+  const layoutRepo = appDataSource.getRepository(UserDashboardLayout);
   let layout = await layoutRepo.findOne({ where: { userId } });
   if (!layout) {
     layout = layoutRepo.create({ userId, ...dto });
@@ -196,14 +209,14 @@ export async function saveDashboardLayout(userId: string, dto: SaveDashboardLayo
 }
 
 export async function listActiveAlerts(): Promise<AnalyticsAlert[]> {
-  return AppDataSource.getRepository(AnalyticsAlert).find({
+  return appDataSource.getRepository(AnalyticsAlert).find({
     where: { resolved: false },
-    order: { createdAt: 'DESC' }
+    order: { createdAt: 'DESC' },
   });
 }
 
 export async function resolveAlert(alertId: string, resolvedBy: string): Promise<AnalyticsAlert> {
-  const alertRepo = AppDataSource.getRepository(AnalyticsAlert);
+  const alertRepo = appDataSource.getRepository(AnalyticsAlert);
   const alert = await alertRepo.findOne({ where: { id: alertId } });
   if (!alert) throw new AppError('Alert not found', 404, 'NOT_FOUND');
 
@@ -216,7 +229,7 @@ export async function resolveAlert(alertId: string, resolvedBy: string): Promise
 // ─── Export requests & Scheduled reports ─────────────────────────────────────
 
 export async function createExportJob(userId: string, type: string): Promise<ExportJob> {
-  const exportRepo = AppDataSource.getRepository(ExportJob);
+  const exportRepo = appDataSource.getRepository(ExportJob);
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24); // link active for 24 hours
 
@@ -232,20 +245,22 @@ export async function createExportJob(userId: string, type: string): Promise<Exp
 }
 
 export async function getExportJobsList(userId: string): Promise<ExportJob[]> {
-  return AppDataSource.getRepository(ExportJob).find({
+  return appDataSource.getRepository(ExportJob).find({
     where: { userId },
-    order: { createdAt: 'DESC' }
+    order: { createdAt: 'DESC' },
   });
 }
 
-export async function createScheduledReport(dto: CreateScheduledReportDto): Promise<ScheduledReport> {
-  const reportRepo = AppDataSource.getRepository(ScheduledReport);
+export async function createScheduledReport(
+  dto: CreateScheduledReportDto,
+): Promise<ScheduledReport> {
+  const reportRepo = appDataSource.getRepository(ScheduledReport);
   const report = reportRepo.create(dto as any) as unknown as ScheduledReport;
   return reportRepo.save(report);
 }
 
 export async function listScheduledReports(): Promise<ScheduledReport[]> {
-  return AppDataSource.getRepository(ScheduledReport).find({
-    order: { createdAt: 'DESC' }
+  return appDataSource.getRepository(ScheduledReport).find({
+    order: { createdAt: 'DESC' },
   });
 }

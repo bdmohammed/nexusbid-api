@@ -1,12 +1,13 @@
+import path from 'node:path';
+
 import dotenv from 'dotenv';
-import path from 'path';
 import { z } from 'zod';
 
 // ─── Step 1: Load global defaults (.env) ─────────────────────────────────────
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // ─── Step 2: Load environment-specific overrides (.env.local / .env.dev / etc) ─
-const nodeEnv = process.env['NODE_ENV'] || 'local';
+const nodeEnv = process.env['NODE_ENV'] ?? 'local';
 dotenv.config({
   path: path.resolve(process.cwd(), `.env.${nodeEnv}`),
   override: true,
@@ -15,10 +16,7 @@ dotenv.config({
 // ─── Step 3: If running inside Docker Compose (DOCKER=true), swap DB host ────
 // This allows a single .env.local / .env.dev to work both natively and in Docker.
 if (process.env['DOCKER'] === 'true' && process.env['DATABASE_URL']) {
-  process.env['DATABASE_URL'] = process.env['DATABASE_URL'].replace(
-    /@localhost:/,
-    '@db:',
-  );
+  process.env['DATABASE_URL'] = process.env['DATABASE_URL'].replace(/@localhost:/, '@db:');
 }
 
 // ─── Zod Schema ──────────────────────────────────────────────────────────────
@@ -31,6 +29,7 @@ const envSchema = z.object({
   FRONTEND_CUSTOMER_URL: z.string().url(),
   FRONTEND_ADMIN_URL: z.string().url(),
   DOCKER: z.coerce.boolean().default(false),
+  npm_package_version: z.string().default('1.0.0'),
 
   // Database
   DATABASE_URL: z.string().min(1),

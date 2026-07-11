@@ -1,6 +1,4 @@
-import {
-  Entity, PrimaryGeneratedColumn, Column, UpdateDateColumn,
-} from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 @Entity('static_pages')
 export class StaticPage {

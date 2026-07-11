@@ -1,28 +1,31 @@
-import { Request, Response } from 'express';
-import { asyncHandler } from '../../core/asyncHandler';
-import { sendOk, sendCreated, paginationMeta } from '../../core/response';
-import { AppError } from '../../core/AppError';
-import * as service from './admin.service';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
+
+import { AppError } from '../../core/AppError';
+import { asyncHandler } from '../../core/asyncHandler';
+import { paginationMeta, sendCreated, sendOk } from '../../core/response';
+
 import { BatchCategoryDto, BatchStateDto } from './admin.dto';
+import * as service from './admin.service';
+
 import type {
-  BlockUserDto,
-  ListUsersQueryDto,
-  CreateAdminDto,
-  CreatePlanDto,
-  UpdatePlanDto,
   AnalyticsQueryDto,
-  CreateCategoryDto,
-  UpdateCategoryDto,
+  BlockUserDto,
   CategoryQueryDto,
+  CreateAdminDto,
+  CreateCategoryDto,
+  CreatePlanDto,
   CreateStateDto,
-  UpdateStateDto,
-  StateQueryDto,
   CreateUserNoteDto,
-  UpdateUserDetailDto,
   ImpersonateUserDto,
+  ListUsersQueryDto,
+  StateQueryDto,
+  UpdateCategoryDto,
+  UpdatePlanDto,
+  UpdateStateDto,
+  UpdateUserDetailDto,
 } from './admin.dto';
+import type { Request, Response } from 'express';
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
@@ -70,8 +73,8 @@ export const getUserDevices = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getUserActivity = asyncHandler(async (req: Request, res: Response) => {
-  const page = Math.max(1, parseInt(req.query['page'] as string || '1', 10));
-  const limit = Math.max(1, parseInt(req.query['limit'] as string || '20', 10));
+  const page = Math.max(1, parseInt((req.query['page'] as string) ?? '1', 10));
+  const limit = Math.max(1, parseInt((req.query['limit'] as string) ?? '20', 10));
   const { activities, total } = await service.getUserActivity(req.params['id']!, page, limit);
   return sendOk(res, activities, 'OK', paginationMeta(total, page, limit));
 });
@@ -82,8 +85,8 @@ export const getUserTimeline = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getUserAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-  const page = Math.max(1, parseInt(req.query['page'] as string || '1', 10));
-  const limit = Math.max(1, parseInt(req.query['limit'] as string || '20', 10));
+  const page = Math.max(1, parseInt((req.query['page'] as string) ?? '1', 10));
+  const limit = Math.max(1, parseInt((req.query['limit'] as string) ?? '20', 10));
   const { logs, total } = await service.getUserAuditLogs(req.params['id']!, page, limit);
   return sendOk(res, logs, 'OK', paginationMeta(total, page, limit));
 });
@@ -106,7 +109,7 @@ export const createUserNote = asyncHandler(async (req: Request, res: Response) =
 
 export const updateUserDetail = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.validated as UpdateUserDetailDto;
-  
+
   const before = await service.getUserOverview(req.params['id']!);
   res.locals.auditBefore = before;
 
@@ -194,12 +197,18 @@ export const getUserRoles = asyncHandler(async (req: Request, res: Response) => 
 
 export const assignUserRoles = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const body = z.object({
-    assignments: z.array(z.object({
-      roleId: z.string().uuid(),
-      expiresAt: z.string().nullable().optional(),
-    })).min(1, 'At least one role assignment is required'),
-  }).parse(req.body);
+  const body = z
+    .object({
+      assignments: z
+        .array(
+          z.object({
+            roleId: z.string().uuid(),
+            expiresAt: z.string().nullable().optional(),
+          }),
+        )
+        .min(1, 'At least one role assignment is required'),
+    })
+    .parse(req.body);
 
   const beforeState = await service.getUserRoles(id);
   res.locals.auditBefore = beforeState.assigned;
@@ -245,8 +254,8 @@ export const updatePlan = asyncHandler(async (req: Request, res: Response) => {
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
 export const listSubscriptions = asyncHandler(async (req: Request, res: Response) => {
-  const page = parseInt(req.query['page'] as string) || 1;
-  const limit = parseInt(req.query['limit'] as string) || 20;
+  const page = parseInt(req.query['page'] as string) ?? 1;
+  const limit = parseInt(req.query['limit'] as string) ?? 20;
   const { subscriptions, total } = await service.listAllSubscriptions({ page, limit });
   return sendOk(res, subscriptions, 'OK', paginationMeta(total, page, limit));
 });
@@ -276,7 +285,12 @@ export const listCategories = asyncHandler(async (req: Request, res: Response) =
   const query = req.validated as CategoryQueryDto;
   const { categories, total } = await service.listAllCategories(query);
   const stats = await service.getCategoryStats();
-  return sendOk(res, { categories, total, stats }, 'OK', paginationMeta(total, query.page, query.limit));
+  return sendOk(
+    res,
+    { categories, total, stats },
+    'OK',
+    paginationMeta(total, query.page, query.limit),
+  );
 });
 
 export const getCategoryHistory = asyncHandler(async (req: Request, res: Response) => {
@@ -298,7 +312,7 @@ export const updateCategory = asyncHandler(async (req: Request, res: Response) =
     name: before.name,
     slug: before.slug,
     description: before.description,
-    isActive: before.isActive
+    isActive: before.isActive,
   };
   const category = await service.updateCategory(req.params['id']!, dto, req.user!.userId);
   return sendOk(res, category, 'Category updated');
@@ -311,7 +325,7 @@ export const deleteCategory = asyncHandler(async (req: Request, res: Response) =
     name: before.name,
     slug: before.slug,
     description: before.description,
-    isActive: before.isActive
+    isActive: before.isActive,
   };
   await service.deleteCategory(req.params['id']!, req.user!.userId);
   return sendOk(res, null, 'Category deleted');
@@ -319,10 +333,10 @@ export const deleteCategory = asyncHandler(async (req: Request, res: Response) =
 
 export const batchCategories = asyncHandler(async (req: Request, res: Response) => {
   let items: any[] = [];
-  const contentType = req.headers['content-type'] || '';
+  const contentType = req.headers['content-type'] ?? '';
 
-  if (contentType.includes('text/csv') || contentType.includes('text/plain')) {
-    if (typeof req.body !== 'string' || !req.body.trim()) {
+  if (contentType.includes('text/csv') ?? contentType.includes('text/plain')) {
+    if (typeof req.body !== 'string' ?? !req.body.trim()) {
       throw new AppError('Empty or invalid CSV body', 400, 'INVALID_BATCH_BODY');
     }
 
@@ -334,16 +348,19 @@ export const batchCategories = asyncHandler(async (req: Request, res: Response) 
       });
 
       items = records.map((record: any) => {
-        const rawAction = record.action || 'upsert';
+        const rawAction = record.action ?? 'upsert';
         const action = rawAction.toLowerCase();
-        
+
         return {
           action: ['upsert', 'delete'].includes(action) ? action : 'upsert',
           code: record.code ? String(record.code).trim() : '',
           name: record.name ? String(record.name).trim() : undefined,
           slug: record.slug ? String(record.slug).trim() : undefined,
           description: record.description ? String(record.description).trim() : undefined,
-          isActive: record.is_active !== undefined ? (record.is_active === 'true' || record.is_active === '1') : undefined,
+          isActive:
+            record.is_active !== undefined
+              ? (record.is_active === 'true' ?? record.is_active === '1')
+              : undefined,
         };
       });
     } catch (err: any) {
@@ -354,7 +371,7 @@ export const batchCategories = asyncHandler(async (req: Request, res: Response) 
       throw new AppError('JSON body must be an array of batch items', 400, 'INVALID_BATCH_BODY');
     }
     items = req.body.map((item: any) => ({
-      action: item.action || 'upsert',
+      action: item.action ?? 'upsert',
       code: item.code ? String(item.code).trim() : '',
       name: item.name ? String(item.name).trim() : undefined,
       slug: item.slug ? String(item.slug).trim() : undefined,
@@ -362,12 +379,20 @@ export const batchCategories = asyncHandler(async (req: Request, res: Response) 
       isActive: item.isActive !== undefined ? Boolean(item.isActive) : undefined,
     }));
   } else {
-    throw new AppError('Unsupported Content-Type. Use application/json or text/csv', 415, 'UNSUPPORTED_MEDIA_TYPE');
+    throw new AppError(
+      'Unsupported Content-Type. Use application/json or text/csv',
+      415,
+      'UNSUPPORTED_MEDIA_TYPE',
+    );
   }
 
   const MAX_BATCH_SIZE = 500;
   if (items.length > MAX_BATCH_SIZE) {
-    throw new AppError(`Batch size exceeds maximum limit of ${MAX_BATCH_SIZE} items`, 400, 'BATCH_SIZE_EXCEEDED');
+    throw new AppError(
+      `Batch size exceeds maximum limit of ${MAX_BATCH_SIZE} items`,
+      400,
+      'BATCH_SIZE_EXCEEDED',
+    );
   }
 
   if (items.length === 0) {
@@ -376,11 +401,7 @@ export const batchCategories = asyncHandler(async (req: Request, res: Response) 
 
   const validationResult = BatchCategoryDto.safeParse(items);
   if (!validationResult.success) {
-    throw new AppError(
-      'Validation failed for batch items',
-      422,
-      'VALIDATION_ERROR',
-    );
+    throw new AppError('Validation failed for batch items', 422, 'VALIDATION_ERROR');
   }
 
   const result = await service.processBatchCategories(validationResult.data, req.user!.userId);
@@ -409,24 +430,36 @@ export const createState = asyncHandler(async (req: Request, res: Response) => {
 export const updateState = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.validated as UpdateStateDto;
   const before = await service.getStateById(req.params['id']!);
-  res.locals['auditBefore'] = { code: before.code, name: before.name, slug: before.slug, type: before.type, country: before.country };
+  res.locals['auditBefore'] = {
+    code: before.code,
+    name: before.name,
+    slug: before.slug,
+    type: before.type,
+    country: before.country,
+  };
   const state = await service.updateState(req.params['id']!, dto, req.user!.userId);
   return sendOk(res, state, 'State updated');
 });
 
 export const deleteState = asyncHandler(async (req: Request, res: Response) => {
   const before = await service.getStateById(req.params['id']!);
-  res.locals['auditBefore'] = { code: before.code, name: before.name, slug: before.slug, type: before.type, country: before.country };
+  res.locals['auditBefore'] = {
+    code: before.code,
+    name: before.name,
+    slug: before.slug,
+    type: before.type,
+    country: before.country,
+  };
   await service.deleteState(req.params['id']!, req.user!.userId);
   return sendOk(res, null, 'State deleted');
 });
 
 export const batchStates = asyncHandler(async (req: Request, res: Response) => {
   let items: any[] = [];
-  const contentType = req.headers['content-type'] || '';
+  const contentType = req.headers['content-type'] ?? '';
 
-  if (contentType.includes('text/csv') || contentType.includes('text/plain')) {
-    if (typeof req.body !== 'string' || !req.body.trim()) {
+  if (contentType.includes('text/csv') ?? contentType.includes('text/plain')) {
+    if (typeof req.body !== 'string' ?? !req.body.trim()) {
       throw new AppError('Empty or invalid CSV body', 400, 'INVALID_BATCH_BODY');
     }
 
@@ -438,9 +471,9 @@ export const batchStates = asyncHandler(async (req: Request, res: Response) => {
       });
 
       items = records.map((record: any) => {
-        const rawAction = record.action || 'upsert';
+        const rawAction = record.action ?? 'upsert';
         const action = rawAction.toLowerCase();
-        
+
         return {
           action: ['upsert', 'delete'].includes(action) ? action : 'upsert',
           code: record.code ? String(record.code).trim() : '',
@@ -458,7 +491,7 @@ export const batchStates = asyncHandler(async (req: Request, res: Response) => {
       throw new AppError('JSON body must be an array of batch items', 400, 'INVALID_BATCH_BODY');
     }
     items = req.body.map((item: any) => ({
-      action: item.action || 'upsert',
+      action: item.action ?? 'upsert',
       code: item.code ? String(item.code).trim() : '',
       name: item.name ? String(item.name).trim() : undefined,
       slug: item.slug ? String(item.slug).trim() : undefined,
@@ -466,12 +499,20 @@ export const batchStates = asyncHandler(async (req: Request, res: Response) => {
       country: item.country ? String(item.country).trim() : undefined,
     }));
   } else {
-    throw new AppError('Unsupported Content-Type. Use application/json or text/csv', 415, 'UNSUPPORTED_MEDIA_TYPE');
+    throw new AppError(
+      'Unsupported Content-Type. Use application/json or text/csv',
+      415,
+      'UNSUPPORTED_MEDIA_TYPE',
+    );
   }
 
   const MAX_BATCH_SIZE = 500;
   if (items.length > MAX_BATCH_SIZE) {
-    throw new AppError(`Batch size exceeds maximum limit of ${MAX_BATCH_SIZE} items`, 400, 'BATCH_SIZE_EXCEEDED');
+    throw new AppError(
+      `Batch size exceeds maximum limit of ${MAX_BATCH_SIZE} items`,
+      400,
+      'BATCH_SIZE_EXCEEDED',
+    );
   }
 
   if (items.length === 0) {
@@ -480,11 +521,7 @@ export const batchStates = asyncHandler(async (req: Request, res: Response) => {
 
   const validationResult = BatchStateDto.safeParse(items);
   if (!validationResult.success) {
-    throw new AppError(
-      'Validation failed for batch items',
-      422,
-      'VALIDATION_ERROR',
-    );
+    throw new AppError('Validation failed for batch items', 422, 'VALIDATION_ERROR');
   }
 
   const result = await service.processBatchStates(validationResult.data, req.user!.userId);
@@ -510,5 +547,3 @@ export const rejectAdmin = asyncHandler(async (req: Request, res: Response) => {
   await service.rejectAdminUser(id, req.user!.userId, reason);
   return sendOk(res, null, 'Administrator request rejected successfully');
 });
-
-

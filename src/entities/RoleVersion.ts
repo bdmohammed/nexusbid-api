@@ -1,17 +1,18 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
   OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+
 import { Role } from './Role';
-import { User } from './User';
-import { RoleVersionPermission } from './RoleVersionPermission';
 import { RoleReview } from './RoleReview';
+import { RoleVersionPermission } from './RoleVersionPermission';
+import { User } from './User';
 
 export enum RoleVersionStatus {
   DRAFT = 'DRAFT',

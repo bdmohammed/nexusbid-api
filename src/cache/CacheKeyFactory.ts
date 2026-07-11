@@ -1,8 +1,8 @@
 // src/cache/CacheKeyFactory.ts
 
 export const PERMISSION_CACHE = {
-  PREFIX: "permissions",
-  VERSION: "1",
+  PREFIX: 'permissions',
+  VERSION: '1',
 } as const;
 
 /**
@@ -10,7 +10,7 @@ export const PERMISSION_CACHE = {
  * Ensures consistent prefix names, versioning, and structure to prevent key collisions.
  */
 export class CacheKeyFactory {
-  private static readonly VERSION = "1";
+  private static readonly VERSION = '1';
 
   /**
    * Generates cache key for user effective permissions.

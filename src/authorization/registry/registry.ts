@@ -1,14 +1,13 @@
-// src/authorization/registry/registry.ts
-
-import { RegistryDefinition } from "./types";
 import {
-  MODULES,
   ALL_PERMISSIONS,
   MODULE_MAP,
+  MODULES,
   PERMISSION_MAP,
   SYSTEM_MODULES,
   SYSTEM_PERMISSIONS,
-} from "./modules";
+} from './modules';
+
+import type { RegistryDefinition } from './types';
 
 /**
  * Registry Version
@@ -27,7 +26,7 @@ import {
  * - Audit logs
  * - Permission review
  */
-export const REGISTRY_VERSION = "1.0.0";
+export const REGISTRY_VERSION = '1.0.0';
 
 /**
  * Registry Metadata
@@ -35,7 +34,7 @@ export const REGISTRY_VERSION = "1.0.0";
 export const PERMISSION_REGISTRY: RegistryDefinition = {
   version: REGISTRY_VERSION,
 
-  author: "NexusBid",
+  author: 'NexusBid',
 
   modules: MODULES,
 };
@@ -120,14 +119,14 @@ export function getModulePermissions(moduleSlug: string) {
  * Returns all permission keys.
  */
 export function getPermissionKeys(): string[] {
-  return ALL_PERMISSIONS.map(permission => permission.key);
+  return ALL_PERMISSIONS.map((permission) => permission.key);
 }
 
 /**
  * Returns only system permissions.
  */
 export function getSystemPermissionKeys(): string[] {
-  return SYSTEM_PERMISSIONS.map(permission => permission.key);
+  return SYSTEM_PERMISSIONS.map((permission) => permission.key);
 }
 
 /**
@@ -138,7 +137,5 @@ export function getSystemPermissionKeys(): string[] {
  * - Upgrade Wizard
  * */
 export function getPermissionsIntroducedIn(version: string) {
-  return ALL_PERMISSIONS.filter(
-    permission => permission.introducedIn === version,
-  );
+  return ALL_PERMISSIONS.filter((permission) => permission.introducedIn === version);
 }

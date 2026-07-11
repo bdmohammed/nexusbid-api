@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { User } from '../../src/entities/User';
 import { UserDevice } from '../../src/entities/UserDevice';
 import { PasswordHistory } from '../../src/entities/PasswordHistory';
@@ -16,12 +16,18 @@ import {
   sendLoginNotificationEmail,
 } from '../../src/services/email.service';
 
-const mockSendEmailChangeVerification = sendEmailChangeVerificationEmail as jest.MockedFunction<typeof sendEmailChangeVerificationEmail>;
-const mockSendEmailChangeAlert = sendEmailChangeAlertEmail as jest.MockedFunction<typeof sendEmailChangeAlertEmail>;
-const mockSendLoginNotification = sendLoginNotificationEmail as jest.MockedFunction<typeof sendLoginNotificationEmail>;
+const mockSendEmailChangeVerification = sendEmailChangeVerificationEmail as jest.MockedFunction<
+  typeof sendEmailChangeVerificationEmail
+>;
+const mockSendEmailChangeAlert = sendEmailChangeAlertEmail as jest.MockedFunction<
+  typeof sendEmailChangeAlertEmail
+>;
+const mockSendLoginNotification = sendLoginNotificationEmail as jest.MockedFunction<
+  typeof sendLoginNotificationEmail
+>;
 
-const userRepo = () => AppDataSource.getRepository(User);
-const deviceRepo = () => AppDataSource.getRepository(UserDevice);
+const userRepo = () => appDataSource.getRepository(User);
+const deviceRepo = () => appDataSource.getRepository(UserDevice);
 
 describe('Security Backlog Integration Tests', () => {
   let agent: ReturnType<typeof request.agent>;
@@ -103,7 +109,7 @@ describe('Security Backlog Integration Tests', () => {
 
       expect(mockSendLoginNotification).toHaveBeenCalledTimes(1);
       expect(mockSendLoginNotification).toHaveBeenCalledWith(
-        expect.objectContaining({ to: user.email, userAgent: 'Mozilla/SuspiciousDevice' })
+        expect.objectContaining({ to: user.email, userAgent: 'Mozilla/SuspiciousDevice' }),
       );
 
       // 3. Get user devices list
@@ -111,7 +117,7 @@ describe('Security Backlog Integration Tests', () => {
       expect(devicesRes.body.data.length).toBe(2);
 
       const untrustedDevice = devicesRes.body.data.find(
-        (d: any) => d.userAgent === 'Mozilla/SuspiciousDevice'
+        (d: any) => d.userAgent === 'Mozilla/SuspiciousDevice',
       );
       expect(untrustedDevice).toBeDefined();
       expect(untrustedDevice.isTrusted).toBe(false);
@@ -124,9 +130,7 @@ describe('Security Backlog Integration Tests', () => {
         .expect(200);
 
       const devicesRes2 = await agent.get('/api/v1/auth/devices').expect(200);
-      const trustedDevice = devicesRes2.body.data.find(
-        (d: any) => d.id === untrustedDevice.id
-      );
+      const trustedDevice = devicesRes2.body.data.find((d: any) => d.id === untrustedDevice.id);
       expect(trustedDevice.isTrusted).toBe(true);
 
       // 5. Revoke/delete device

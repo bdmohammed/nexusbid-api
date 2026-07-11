@@ -1,14 +1,15 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
   OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { TenderParticipant } from './TenderParticipant';
+
 import { TenderEvaluation } from './TenderEvaluation';
+import { TenderParticipant } from './TenderParticipant';
 
 @Entity('tender_submissions')
 export class TenderSubmission {
@@ -25,10 +26,14 @@ export class TenderSubmission {
   @Column({ name: 'document_version', type: 'int', default: 1 })
   documentVersion: number;
 
-  @Column({ name: 'bid_amount_cents', type: 'bigint', transformer: {
-    to: (val: number | null) => val,
-    from: (val: string | null) => val ? parseInt(val, 10) : null
-  }})
+  @Column({
+    name: 'bid_amount_cents',
+    type: 'bigint',
+    transformer: {
+      to: (val: number | null) => val,
+      from: (val: string | null) => (val ? parseInt(val, 10) : null),
+    },
+  })
   bidAmountCents: number;
 
   @Column({ name: 'technical_proposal_url', type: 'text', nullable: true })

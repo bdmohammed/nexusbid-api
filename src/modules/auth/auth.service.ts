@@ -1,41 +1,48 @@
+import crypto from 'node:crypto';
+
 import * as bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import { MoreThan } from 'typeorm';
+
 import { appDataSource } from '../../config/database';
-import { User } from '../../entities/User';
-import { UserSession } from '../../entities/UserSession';
-import { EmailToken } from '../../entities/EmailToken';
-import { Role, RoleStatus } from '../../entities/Role';
-import { UserRole } from '../../entities/UserRole';
-import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
+import { env } from '../../config/env';
 import { AppError } from '../../core/AppError';
 import { BCRYPT_ROUNDS, JWT_COOKIE_NAME } from '../../core/constants';
-import { AccountType, EmailTokenType, UserStatus } from '../../types/enums';
-import { createEmailToken, verifyAndConsumeToken, getValidTokenDetails } from '../../services/token.service';
+import { EmailToken } from '../../entities/EmailToken';
+import { Role, RoleStatus } from '../../entities/Role';
+import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
+import { User } from '../../entities/User';
+import { UserDevice } from '../../entities/UserDevice';
+import { UserRole } from '../../entities/UserRole';
+import { UserSession } from '../../entities/UserSession';
 import {
-  sendVerificationEmail,
-  sendAdminVerificationEmail,
-  sendPasswordResetEmail,
-  sendEmailChangeVerificationEmail,
-  sendEmailChangeAlertEmail,
-  sendAdminRegistrationNotification,
   sendAdminApprovalStatusEmail,
-  sendAdminBootstrapNotification,
-  sendAdminBootstrapNotification as sendAdminBootstrapNotificationAlias, // keep imports aligned if needed, but not needed
+  sendAdminBootstrapNotification, // keep imports aligned if needed, but not needed
+  sendAdminRegistrationNotification,
+  sendAdminVerificationEmail,
+  sendEmailChangeAlertEmail,
+  sendEmailChangeVerificationEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
 } from '../../services/email.service';
 import {
-  verifyCaptcha,
-  verifyPasswordBreach,
+  createEmailToken,
+  getValidTokenDetails,
+  verifyAndConsumeToken,
+} from '../../services/token.service';
+import { AccountType, EmailTokenType, UserStatus } from '../../types/enums';
+
+import {
   checkPasswordHistory,
   savePasswordToHistory,
   trackDeviceAndDetectSuspicious,
+  verifyCaptcha,
+  verifyPasswordBreach,
 } from './security.service';
 import { logSecurityEvent } from './securityLog.service';
-import { UserDevice } from '../../entities/UserDevice';
-import { env } from '../../config/env';
+
 import type { JwtPayload } from '../../types/express.d';
-import type { RegisterDto, LoginDto } from './auth.dto';
+import type { LoginDto, RegisterDto } from './auth.dto';
 import type { Response } from 'express';
 
 const userRepository = appDataSource.getRepository(User);
@@ -57,8 +64,9 @@ const REFRESH_EXPIRY = {
 /**
  * Strips sensitive fields from a user object before returning to client.
  */
-function sanitizeUser(user: User): Omit<User, 'passwordHash' | 'tokenVersion' | 'failedLoginAttempts' | 'lockoutUntil'> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+function sanitizeUser(
+  user: User,
+): Omit<User, 'passwordHash' | 'tokenVersion' | 'failedLoginAttempts' | 'lockoutUntil'> {
   const { passwordHash, tokenVersion, failedLoginAttempts, lockoutUntil, ...safe } = user;
   return safe;
 }
@@ -70,7 +78,7 @@ function sanitizeUser(user: User): Omit<User, 'passwordHash' | 'tokenVersion' | 
 async function generateAndSetTokens(
   res: Response,
   user: User,
-  connectionContext: { userAgent: string | null; ipAddress: string | null; rememberMe?: boolean }
+  connectionContext: { userAgent: string | null; ipAddress: string | null; rememberMe?: boolean },
 ): Promise<void> {
   const isAdmin = user.accountType === AccountType.ADMIN;
 
@@ -116,7 +124,7 @@ async function generateAndSetTokens(
   // 4. Set Access Token Cookie
   res.cookie(JWT_COOKIE_NAME, accessToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
+    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
     sameSite: 'lax',
     maxAge: ACCESS_COOKIE_MAX_AGE,
   });
@@ -124,7 +132,7 @@ async function generateAndSetTokens(
   // 5. Set Refresh Token Cookie (scoped to /api/v1/auth)
   res.cookie(REFRESH_COOKIE_NAME, rawRefreshToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
+    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
     sameSite: 'lax',
     maxAge: refreshTtl,
     path: '/api/v1/auth',
@@ -135,7 +143,7 @@ async function generateAndSetTokens(
 
 export async function registerUser(
   dto: RegisterDto,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const exists = await userRepository.findOne({
     where: { email: dto.email },
@@ -192,7 +200,7 @@ export async function verifyEmail(token: string): Promise<void> {
 
 export async function resendVerification(
   email: string,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const user = await userRepository.findOne({ where: { email } });
 
@@ -231,7 +239,7 @@ export async function resendVerification(
 export async function loginUser(
   dto: LoginDto & { rememberMe?: boolean; captchaToken?: string },
   res: Response,
-  connectionContext: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<ReturnType<typeof sanitizeUser>> {
   const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
 
@@ -263,7 +271,7 @@ export async function loginUser(
     throw new AppError(
       `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`,
       403,
-      'ACCOUNT_LOCKED'
+      'ACCOUNT_LOCKED',
     );
   }
 
@@ -339,7 +347,7 @@ export async function loginUser(
     throw new AppError(
       'Please verify your email address before logging in',
       403,
-      'EMAIL_NOT_VERIFIED'
+      'EMAIL_NOT_VERIFIED',
     );
   }
 
@@ -365,7 +373,11 @@ export async function loginUser(
   });
 
   // Track device & detect suspicious logins
-  await trackDeviceAndDetectSuspicious(user, connectionContext.userAgent, connectionContext.ipAddress);
+  await trackDeviceAndDetectSuspicious(
+    user,
+    connectionContext.userAgent,
+    connectionContext.ipAddress,
+  );
 
   // Generate tokens, store session, set cookies
   await generateAndSetTokens(res, user, {
@@ -384,7 +396,7 @@ export async function loginUser(
 export async function refreshSession(
   reqToken: string | undefined,
   res: Response,
-  connectionContext: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   if (!reqToken) {
     throw new AppError('Refresh token required', 401, 'REFRESH_TOKEN_REQUIRED');
@@ -408,7 +420,7 @@ export async function refreshSession(
     throw new AppError(
       'Potential refresh token reuse detected. All sessions revoked for safety.',
       401,
-      'REPLAY_DETECTED'
+      'REPLAY_DETECTED',
     );
   }
 
@@ -417,8 +429,8 @@ export async function refreshSession(
     throw new AppError('Refresh token expired', 401, 'REFRESH_TOKEN_EXPIRED');
   }
 
-  const user = session.user;
-  if (!user || user.isBlocked) {
+  const { user } = session;
+  if (!user ?? user.isBlocked) {
     throw new AppError('User not found or suspended', 401, 'UNAUTHORIZED');
   }
 
@@ -438,7 +450,7 @@ export async function refreshSession(
 export async function logoutUser(
   res: Response,
   rawRefreshToken: string | undefined,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   let userId: string | null = null;
   let email: string | null = null;
@@ -452,24 +464,24 @@ export async function logoutUser(
     if (session) {
       await userSessionRepository.update(session.id, { isRevoked: true });
       userId = session.userId;
-      email = session.user?.email || null;
+      email = session.user?.email ?? null;
     }
   }
 
   res.clearCookie(JWT_COOKIE_NAME, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
+    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
     sameSite: 'lax',
   });
 
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
+    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
     sameSite: 'lax',
     path: '/api/v1/auth',
   });
 
-  if (userId || email) {
+  if (userId ?? email) {
     await logSecurityEvent({
       userId,
       email,
@@ -502,7 +514,7 @@ export async function forgotPassword(email: string): Promise<void> {
 export async function resetPassword(
   token: string,
   newPassword: string,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.PASSWORD_RESET);
 
@@ -539,7 +551,10 @@ export async function resetPassword(
 /**
  * Returns all active (non-revoked, non-expired) sessions for the user.
  */
-export async function getUserSessions(userId: string, currentRawRefreshToken?: string): Promise<any[]> {
+export async function getUserSessions(
+  userId: string,
+  currentRawRefreshToken?: string,
+): Promise<any[]> {
   const sessions = await userSessionRepository.find({
     where: { userId, isRevoked: false, expiresAt: MoreThan(new Date()) },
     order: { createdAt: 'DESC' },
@@ -594,7 +609,7 @@ export async function changeUserPassword(
   userId: string,
   currentPassword: string,
   newPassword: string,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
@@ -651,7 +666,7 @@ export async function changeUserPassword(
 export async function requestEmailChange(
   userId: string,
   newEmail: string,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
@@ -701,7 +716,7 @@ export async function requestEmailChange(
  */
 export async function verifyEmailChange(
   token: string,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_CHANGE);
 
@@ -715,7 +730,10 @@ export async function verifyEmailChange(
   }
 
   // Final check to make sure pending email wasn't registered in the meantime
-  const exists = await userRepository.findOne({ where: { email: user.pendingEmail }, select: ['id'] });
+  const exists = await userRepository.findOne({
+    where: { email: user.pendingEmail },
+    select: ['id'],
+  });
   if (exists) {
     throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
   }
@@ -790,10 +808,14 @@ export async function revokeDeviceById(userId: string, deviceId: string): Promis
 export async function establishOAuthSession(
   res: Response,
   user: User,
-  connectionContext: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   // Track device & detect suspicious logins
-  await trackDeviceAndDetectSuspicious(user, connectionContext.userAgent, connectionContext.ipAddress);
+  await trackDeviceAndDetectSuspicious(
+    user,
+    connectionContext.userAgent,
+    connectionContext.ipAddress,
+  );
 
   // Generate tokens, store session, set cookies
   await generateAndSetTokens(res, user, {
@@ -805,7 +827,7 @@ export async function establishOAuthSession(
 
 export async function registerAdmin(
   dto: RegisterDto,
-  connectionContext?: { userAgent: string | null; ipAddress: string | null }
+  connectionContext?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   const exists = await userRepository.findOne({
     where: { email: dto.email },
@@ -855,7 +877,9 @@ export async function registerAdmin(
   });
 }
 
-export async function verifyAdminEmail(token: string): Promise<{ superAdminExists: boolean; user: User }> {
+export async function verifyAdminEmail(
+  token: string,
+): Promise<{ superAdminExists: boolean; user: User }> {
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_VERIFICATION);
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
@@ -869,10 +893,10 @@ export async function verifyAdminEmail(token: string): Promise<{ superAdminExist
   const superAdminCount = await userRoleRepository.count({
     where: {
       role: {
-        slug: 'super-admin'
-      }
+        slug: 'super-admin',
+      },
     },
-    relations: ['role']
+    relations: ['role'],
   });
 
   const superAdminExists = superAdminCount > 0;
@@ -882,10 +906,10 @@ export async function verifyAdminEmail(token: string): Promise<{ superAdminExist
     const superAdmins = await userRoleRepository.find({
       where: {
         role: {
-          slug: 'super-admin'
-        }
+          slug: 'super-admin',
+        },
       },
-      relations: ['user', 'role']
+      relations: ['user', 'role'],
     });
 
     for (const sa of superAdmins) {
@@ -914,18 +938,24 @@ export async function verifyAdminEmail(token: string): Promise<{ superAdminExist
   return { superAdminExists, user };
 }
 
-export async function verifyBootstrapToken(token: string): Promise<{ name: string; email: string }> {
+export async function verifyBootstrapToken(
+  token: string,
+): Promise<{ name: string; email: string }> {
   // Check if a Super Admin already exists in the system
   const userRoleRepository = appDataSource.getRepository(UserRole);
   const superAdminCount = await userRoleRepository.count({
     where: {
-      role: { slug: 'super-admin' }
+      role: { slug: 'super-admin' },
     },
-    relations: ['role']
+    relations: ['role'],
   });
 
   if (superAdminCount > 0) {
-    throw new AppError('Bootstrap is disabled because a Super Admin already exists.', 400, 'BOOTSTRAP_DISABLED');
+    throw new AppError(
+      'Bootstrap is disabled because a Super Admin already exists.',
+      400,
+      'BOOTSTRAP_DISABLED',
+    );
   }
 
   // Get token details without consuming
@@ -936,18 +966,25 @@ export async function verifyBootstrapToken(token: string): Promise<{ name: strin
   };
 }
 
-export async function approveBootstrapAdmin(token: string, action: 'approve' | 'reject' = 'approve'): Promise<void> {
+export async function approveBootstrapAdmin(
+  token: string,
+  action: 'approve' | 'reject' = 'approve',
+): Promise<void> {
   // Check if a Super Admin already exists in the system
   const userRoleRepository = appDataSource.getRepository(UserRole);
   const superAdminCount = await userRoleRepository.count({
     where: {
-      role: { slug: 'super-admin' }
+      role: { slug: 'super-admin' },
     },
-    relations: ['role']
+    relations: ['role'],
   });
 
   if (superAdminCount > 0) {
-    throw new AppError('Bootstrap is disabled because a Super Admin already exists.', 400, 'BOOTSTRAP_DISABLED');
+    throw new AppError(
+      'Bootstrap is disabled because a Super Admin already exists.',
+      400,
+      'BOOTSTRAP_DISABLED',
+    );
   }
 
   // Verify and consume the token
@@ -1086,7 +1123,7 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
 export async function loginAdmin(
   dto: LoginDto & { captchaToken?: string },
   res: Response,
-  connectionContext: { userAgent: string | null; ipAddress: string | null }
+  connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<ReturnType<typeof sanitizeUser>> {
   const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
 
@@ -1107,7 +1144,7 @@ export async function loginAdmin(
     throw new AppError(
       `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`,
       403,
-      'ACCOUNT_LOCKED'
+      'ACCOUNT_LOCKED',
     );
   }
 
@@ -1144,7 +1181,7 @@ export async function loginAdmin(
     throw new AppError(
       'Please verify your email address before logging in',
       403,
-      'EMAIL_NOT_VERIFIED'
+      'EMAIL_NOT_VERIFIED',
     );
   }
 
@@ -1162,7 +1199,11 @@ export async function loginAdmin(
   }
 
   if (user.status === UserStatus.SUSPENDED) {
-    throw new AppError('Your account has been suspended. Contact the system administrator.', 403, 'ACCOUNT_BLOCKED');
+    throw new AppError(
+      'Your account has been suspended. Contact the system administrator.',
+      403,
+      'ACCOUNT_BLOCKED',
+    );
   }
 
   // Generate tokens & set cookies
@@ -1174,5 +1215,3 @@ export async function loginAdmin(
 
   return sanitizeUser(user);
 }
-
-

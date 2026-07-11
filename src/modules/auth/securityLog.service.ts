@@ -1,6 +1,6 @@
 import { appDataSource } from '../../config/database';
-import { SecurityLog } from '../../entities/SecurityLog';
 import { logger } from '../../config/logger';
+import { SecurityLog } from '../../entities/SecurityLog';
 
 const securityLogRepository = appDataSource.getRepository(SecurityLog);
 
@@ -14,14 +14,14 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
     return 'Unknown';
   }
 
-  const cleanIp = ip.trim().split(',')[0] || ''; // Handle potential proxy headers
-  
+  const cleanIp = ip.trim().split(',')[0] ?? ''; // Handle potential proxy headers
+
   if (
-    cleanIp === '127.0.0.1' ||
-    cleanIp === '::1' ||
-    cleanIp.startsWith('192.168.') ||
-    cleanIp.startsWith('10.') ||
-    cleanIp.startsWith('172.16.') ||
+    cleanIp === '127.0.0.1' ??
+    cleanIp === '::1' ??
+    cleanIp.startsWith('192.168.') ??
+    cleanIp.startsWith('10.') ??
+    cleanIp.startsWith('172.16.') ??
     cleanIp.startsWith('::ffff:127.0.0.1')
   ) {
     return 'Localhost';
@@ -31,9 +31,12 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-    const response = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,regionName,city`, {
-      signal: controller.signal,
-    });
+    const response = await fetch(
+      `http://ip-api.com/json/${cleanIp}?fields=status,country,regionName,city`,
+      {
+        signal: controller.signal,
+      },
+    );
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -42,8 +45,12 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
 
     const geolocationData: any = await response.json();
     if (geolocationData.status === 'success') {
-      const parts = [geolocationData.city, geolocationData.regionName, geolocationData.country].filter(Boolean);
-      return parts.join(', ') || 'Unknown';
+      const parts = [
+        geolocationData.city,
+        geolocationData.regionName,
+        geolocationData.country,
+      ].filter(Boolean);
+      return parts.join(', ') ?? 'Unknown';
     }
   } catch (err) {
     logger.warn({ err, ip: cleanIp }, 'IP geolocation lookup failed or timed out');
@@ -79,12 +86,18 @@ export async function logSecurityEvent(options: {
         });
 
         await securityLogRepository.save(securityLog);
-        logger.info({ event: options.event, email: options.email, location }, 'Security event logged');
+        logger.info(
+          { event: options.event, email: options.email, location },
+          'Security event logged',
+        );
       } catch (err) {
         logger.error({ err, event: options.event }, 'Failed to save security log record');
       }
     })
     .catch((err) => {
-      logger.error({ err, event: options.event }, 'Error occurred during security log background resolution');
+      logger.error(
+        { err, event: options.event },
+        'Error occurred during security log background resolution',
+      );
     });
 }

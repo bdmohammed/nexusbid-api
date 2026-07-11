@@ -1,9 +1,9 @@
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
+import { logger } from '../config/logger';
 import { Tender } from '../entities/Tender';
 import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
-import { logger } from '../config/logger';
 
-const tenderRepo = AppDataSource.getRepository(Tender);
+const tenderRepo = appDataSource.getRepository(Tender);
 
 /**
  * Expire/Close Tenders Job — runs hourly.
@@ -15,7 +15,11 @@ export async function expireTendersJob(): Promise<void> {
     .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
     .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
     .andWhere('tender.publicationStatus IN (:...pubStatuses)', {
-      pubStatuses: [TenderPublicationStatus.PUBLISHED, TenderPublicationStatus.OPEN, TenderPublicationStatus.CLOSING],
+      pubStatuses: [
+        TenderPublicationStatus.PUBLISHED,
+        TenderPublicationStatus.OPEN,
+        TenderPublicationStatus.CLOSING,
+      ],
     })
     .andWhere('activeVersion.closingDate < :now', { now: new Date() })
     .getMany();

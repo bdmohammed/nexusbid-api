@@ -1,4 +1,6 @@
-import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey } from 'typeorm';
+import { TableColumn, TableForeignKey } from 'typeorm';
+
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddAuditAndCountryToStates1700000000009 implements MigrationInterface {
   name = 'AddAuditAndCountryToStates1700000000009';
@@ -57,8 +59,12 @@ export class AddAuditAndCountryToStates1700000000009 implements MigrationInterfa
   public async down(queryRunner: QueryRunner): Promise<void> {
     const table = await queryRunner.getTable('states');
     if (table) {
-      const createdByFk = table.foreignKeys.find((fk) => fk.columnNames.indexOf('created_by') !== -1);
-      const updatedByFk = table.foreignKeys.find((fk) => fk.columnNames.indexOf('updated_by') !== -1);
+      const createdByFk = table.foreignKeys.find(
+        (fk) => fk.columnNames.indexOf('created_by') !== -1,
+      );
+      const updatedByFk = table.foreignKeys.find(
+        (fk) => fk.columnNames.indexOf('updated_by') !== -1,
+      );
       if (createdByFk) await queryRunner.dropForeignKey('states', createdByFk);
       if (updatedByFk) await queryRunner.dropForeignKey('states', updatedByFk);
     }

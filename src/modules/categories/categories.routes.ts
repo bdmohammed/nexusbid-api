@@ -1,11 +1,12 @@
 import express, { Router } from 'express';
+
+import { auditLogger } from '../../middleware/auditLogger';
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission, requireRole } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
-import { auditLogger } from '../../middleware/auditLogger';
 import { AccountType, PermissionKey } from '../../types/enums';
-import { CreateCategoryDto, UpdateCategoryDto, CategoryQueryDto } from '../admin/admin.dto';
 import * as controller from '../admin/admin.controller';
+import { CategoryQueryDto, CreateCategoryDto, UpdateCategoryDto } from '../admin/admin.dto';
 
 const router = Router();
 

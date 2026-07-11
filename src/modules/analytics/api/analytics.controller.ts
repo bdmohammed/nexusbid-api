@@ -1,13 +1,20 @@
-import { Request, Response, NextFunction } from 'express';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as analyticsService from '../services/analytics.service';
-import { AnalyticsQuerySchema, SaveDashboardLayoutSchema, CreateScheduledReportSchema, RequestExportSchema } from '../dto/analytics.dto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import { AppError } from '../../../core/AppError';
+import {
+  AnalyticsQuerySchema,
+  CreateScheduledReportSchema,
+  RequestExportSchema,
+  SaveDashboardLayoutSchema,
+} from '../dto/analytics.dto';
+import * as analyticsService from '../services/analytics.service';
+
+import type { NextFunction, Request, Response } from 'express';
 
 // Helper to check user permission
 function ensurePermission(req: Request, permission: string): void {
-  const userPermissions = (req as any).user?.permissions || [];
+  const userPermissions = (req as any).user?.permissions ?? [];
   if (!userPermissions.includes(permission)) {
     throw new AppError('Unauthorized access to metrics', 403, 'FORBIDDEN');
   }
@@ -35,7 +42,11 @@ export async function getTenders(req: Request, res: Response, next: NextFunction
   }
 }
 
-export async function getUsersMetrics(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getUsersMetrics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.users');
     const filters = AnalyticsQuerySchema.parse(req.query);
@@ -46,7 +57,11 @@ export async function getUsersMetrics(req: Request, res: Response, next: NextFun
   }
 }
 
-export async function getRevenueMetrics(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getRevenueMetrics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.financial');
     const filters = AnalyticsQuerySchema.parse(req.query);
@@ -57,7 +72,11 @@ export async function getRevenueMetrics(req: Request, res: Response, next: NextF
   }
 }
 
-export async function getCategoriesMetrics(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getCategoriesMetrics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.view');
     const data = await analyticsService.getCategoryAnalytics();
@@ -67,7 +86,11 @@ export async function getCategoriesMetrics(req: Request, res: Response, next: Ne
   }
 }
 
-export async function getSystemMetrics(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getSystemMetrics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.system');
     const data = await analyticsService.getSystemPerformanceMetrics();
@@ -92,7 +115,11 @@ export async function getDashboard(req: Request, res: Response, next: NextFuncti
   }
 }
 
-export async function saveDashboard(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function saveDashboard(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.view');
     const userId = (req as any).user?.id;
@@ -106,7 +133,11 @@ export async function saveDashboard(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function getAlertsList(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getAlertsList(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.view');
     const data = await analyticsService.listActiveAlerts();
@@ -116,7 +147,11 @@ export async function getAlertsList(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function resolveAlertTrigger(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function resolveAlertTrigger(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.view');
     const userId = (req as any).user?.id;
@@ -132,7 +167,11 @@ export async function resolveAlertTrigger(req: Request, res: Response, next: Nex
 
 // ─── Asynchronous Exports & Download ────────────────────────────────────────
 
-export async function requestDataExport(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requestDataExport(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.export');
     const userId = (req as any).user?.id;
@@ -146,7 +185,11 @@ export async function requestDataExport(req: Request, res: Response, next: NextF
   }
 }
 
-export async function getExportJobs(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getExportJobs(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.export');
     const userId = (req as any).user?.id;
@@ -159,7 +202,11 @@ export async function getExportJobs(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function downloadExportFile(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function downloadExportFile(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const { filename } = req.params;
     const exportDir = path.join(__dirname, '..', '..', '..', '..', 'exports');
@@ -177,7 +224,11 @@ export async function downloadExportFile(req: Request, res: Response, next: Next
 
 // ─── Scheduled Reports ───────────────────────────────────────────────────────
 
-export async function createReportSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function createReportSchedule(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.reports');
     const dto = CreateScheduledReportSchema.parse(req.body);
@@ -188,7 +239,11 @@ export async function createReportSchedule(req: Request, res: Response, next: Ne
   }
 }
 
-export async function listReportSchedules(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function listReportSchedules(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     ensurePermission(req, 'analytics.reports');
     const data = await analyticsService.listScheduledReports();

@@ -1,8 +1,9 @@
-import { Request, Response, NextFunction } from 'express';
-import { asyncHandler } from '../../../core/asyncHandler';
 import { AppError } from '../../../core/AppError';
-import * as dashboardService from '../services/dashboard.service';
+import { asyncHandler } from '../../../core/asyncHandler';
 import { PatchLayoutSchema } from '../dto/dashboard.dto';
+import * as dashboardService from '../services/dashboard.service';
+
+import type { NextFunction, Request, Response } from 'express';
 
 // ─── Config & Layout ──────────────────────────────────────────────────────────
 
@@ -14,7 +15,7 @@ export const getConfig = asyncHandler(async (req: Request, res: Response) => {
   const config = await dashboardService.getDashboardConfig(
     req.user.userId,
     req.roles ?? [],
-    req.permissions ?? []
+    req.permissions ?? [],
   );
 
   res.json({
@@ -36,7 +37,7 @@ export const updateLayout = asyncHandler(async (req: Request, res: Response) => 
   const layout = await dashboardService.updateDashboardLayout(
     req.user.userId,
     result.data.widgets,
-    result.data.theme
+    result.data.theme,
   );
 
   res.json({
@@ -114,7 +115,7 @@ export const streamDashboardUpdates = (req: Request, res: Response, next: NextFu
   res.flushHeaders();
 
   const clientId = `client_${Date.now()}`;
-  
+
   dashboardService.addSSEClient({
     id: clientId,
     res,

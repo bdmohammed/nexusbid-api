@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class EnhanceAuditLogs1772490000000 implements MigrationInterface {
   name = 'EnhanceAuditLogs1772490000000';
@@ -42,16 +42,16 @@ export class EnhanceAuditLogs1772490000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "audit_retention_policies"`);
-    
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_entity_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_request_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_correlation_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_severity"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_module"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_target_user_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_actor_user_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_audit_logs_created_at"`);
+    await queryRunner.query('DROP TABLE IF EXISTS "audit_retention_policies"');
+
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_entity_id"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_request_id"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_correlation_id"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_severity"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_module"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_target_user_id"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_actor_user_id"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_audit_logs_created_at"');
 
     await queryRunner.query(`
       ALTER TABLE "audit_logs"

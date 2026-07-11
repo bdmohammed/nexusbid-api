@@ -76,9 +76,7 @@ export async function createSubscription(
 export async function getSubscriptionDetails(
   subscriptionId: string,
 ): Promise<PayPalSubscriptionDetails> {
-  return paypalRequest<PayPalSubscriptionDetails>(
-    `/v1/billing/subscriptions/${subscriptionId}`,
-  );
+  return paypalRequest<PayPalSubscriptionDetails>(`/v1/billing/subscriptions/${subscriptionId}`);
 }
 
 /**

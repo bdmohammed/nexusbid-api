@@ -1,36 +1,39 @@
-import 'reflect-metadata';
-import express, { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import compression from 'compression';
-import { requestLogger } from '../middleware/requestLogger';
-import { traceContext } from '../middleware/traceContext';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import express from 'express';
+import helmet from 'helmet';
 
-import { env } from './env';
-import { logger } from './logger';
-import { globalLimiter } from '../middleware/rateLimits';
 import { doubleCsrfProtection } from '../middleware/csrf';
 import { errorHandler } from '../middleware/errorHandler';
-import { AppDataSource } from './database';
-import { swaggerMiddleware, swaggerSpec } from './swagger';
-
-// ─── Route imports ────────────────────────────────────────────────────────────
-import { authRouter } from '../modules/auth/auth.routes';
-import { tendersRouter } from '../modules/tenders/tenders.routes';
-import { subscriptionsRouter } from '../modules/subscriptions/subscriptions.routes';
-import { plansRouter } from '../modules/subscriptions/plans.routes';
+import { globalLimiter } from '../middleware/rateLimits';
+import { requestLogger } from '../middleware/requestLogger';
+import { traceContext } from '../middleware/traceContext';
 import { adminRouter } from '../modules/admin/admin.routes';
-import { webhooksRouter } from '../modules/webhooks/webhooks.routes';
-import { supportRouter } from '../modules/support/support.routes';
-import { categoriesRouter } from '../modules/categories/categories.routes';
-import { statesRouter } from '../modules/states/states.routes';
-import rbacRouter from '../modules/rbac/rbac.routes';
-import { profileRouter } from '../modules/profile/profile.routes';
 import { analyticsRouter } from '../modules/analytics/api/analytics.routes';
 import { auditRouter } from '../modules/audit/api/audit.routes';
+// ─── Route imports ────────────────────────────────────────────────────────────
+import { authRouter } from '../modules/auth/auth.routes';
+import { categoriesRouter } from '../modules/categories/categories.routes';
 import { dashboardRouter } from '../modules/dashboard/api/dashboard.routes';
 import { notificationsRouter } from '../modules/notifications/api/notifications.routes';
+import { profileRouter } from '../modules/profile/profile.routes';
+import rbacRouter from '../modules/rbac/rbac.routes';
+import { statesRouter } from '../modules/states/states.routes';
+import { plansRouter } from '../modules/subscriptions/plans.routes';
+import { subscriptionsRouter } from '../modules/subscriptions/subscriptions.routes';
+import { supportRouter } from '../modules/support/support.routes';
+import { tendersRouter } from '../modules/tenders/tenders.routes';
+import { webhooksRouter } from '../modules/webhooks/webhooks.routes';
+
+import { appDataSource } from './database';
+import { env } from './env';
+import { logger } from './logger';
+import { swaggerMiddleware, swaggerSpec } from './swagger';
+
+import type { NextFunction, Request, Response } from 'express';
+
+import 'reflect-metadata';
 
 const app = express();
 
@@ -66,10 +69,7 @@ app.use(
       if (!origin) return callback(null, true);
 
       // Allow the specific frontend URLs
-      const allowedOrigins = [
-        env.FRONTEND_CUSTOMER_URL,
-        env.FRONTEND_ADMIN_URL
-      ];
+      const allowedOrigins = [env.FRONTEND_CUSTOMER_URL, env.FRONTEND_ADMIN_URL];
 
       if (
         allowedOrigins.includes(origin) ||
@@ -81,7 +81,7 @@ app.use(
         callback(new Error('Not allowed by CORS'), false);
       }
     },
-    credentials: true,           // Required for HTTP-only cookies
+    credentials: true, // Required for HTTP-only cookies
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'x-csrf-token'],
   }),
@@ -96,8 +96,6 @@ app.use(cookieParser());
 
 // ── Compression ───────────────────────────────────────────────────────────────
 app.use(compression());
-
-
 
 // ── Global rate limit ─────────────────────────────────────────────────────────
 app.use('/api/', globalLimiter);
@@ -163,13 +161,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
  *                   type: string
  */
 app.get('/api/v1/health', async (_req: Request, res: Response) => {
-  let dbOk = false;
-  try {
-    await AppDataSource.query('SELECT 1');
-    dbOk = true;
-  } catch {
-    dbOk = false;
-  }
+  const dbOk = await (async (): Promise<boolean> => {
+    try {
+      await appDataSource.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  })();
   res.status(dbOk ? 200 : 503).json({
     status: dbOk ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),

@@ -1,19 +1,21 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
+
 import { SubscriptionStatus } from '../types/enums';
-import { User } from './User';
+
+import { Category } from './Category';
+import { Coupon } from './Coupon';
 import { Plan } from './Plan';
 import { PlanVersion } from './PlanVersion';
-import { Coupon } from './Coupon';
 import { State } from './State';
-import { Category } from './Category';
+import { User } from './User';
 
 @Entity('subscriptions')
 @Index('idx_subs_user_status', ['userId', 'status'])

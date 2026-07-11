@@ -1,8 +1,8 @@
-import { AppDataSource } from '../config/database';
-import { TenderInvitation } from '../entities/TenderInvitation';
+import { appDataSource } from '../config/database';
 import { logger } from '../config/logger';
+import { TenderInvitation } from '../entities/TenderInvitation';
 
-const invitationRepo = AppDataSource.getRepository(TenderInvitation);
+const invitationRepo = appDataSource.getRepository(TenderInvitation);
 
 export async function cleanupInvitationsJob(): Promise<void> {
   const expiredCount = await invitationRepo
@@ -13,5 +13,5 @@ export async function cleanupInvitationsJob(): Promise<void> {
     .andWhere("status = 'PENDING'")
     .execute();
 
-  logger.info({ affected: expiredCount.affected || 0 }, 'Cleanup expired invitations job complete');
+  logger.info({ affected: expiredCount.affected ?? 0 }, 'Cleanup expired invitations job complete');
 }

@@ -1,19 +1,19 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppDataSource } from '../../../config/database';
-import { Notification } from '../../../entities/Notification';
-import { NotificationRecipient } from '../../../entities/NotificationRecipient';
-import { NotificationAction } from '../../../entities/NotificationAction';
-import { UserRole } from '../../../entities/UserRole';
-import { RoleReview } from '../../../entities/RoleReview';
+import { appDataSource } from '../../../config/database';
 import { AppError } from '../../../core/AppError';
-import { registerSSEClient, unregisterSSEClient } from '../services/notifications.service';
-import { updateTenderStatus } from '../../tenders/tenders.service';
-import { RbacService } from '../../rbac/rbac.service';
+import { NotificationAction } from '../../../entities/NotificationAction';
+import { NotificationRecipient } from '../../../entities/NotificationRecipient';
+import { RoleReview } from '../../../entities/RoleReview';
+import { UserRole } from '../../../entities/UserRole';
 import { TenderVersionStatus } from '../../../types/enums';
+import { RbacService } from '../../rbac/rbac.service';
+import { updateTenderStatus } from '../../tenders/tenders.service';
+import { registerSSEClient, unregisterSSEClient } from '../services/notifications.service';
+
+import type { NextFunction, Request, Response } from 'express';
 
 // Helpers to get user role IDs
 async function getUserRoleIds(userId: string): Promise<string[]> {
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
   const userRoles = await userRoleRepo.find({ where: { userId } });
   return userRoles.map((ur) => ur.roleId);
 }
@@ -23,24 +23,29 @@ export async function getNotifications(req: Request, res: Response, next: NextFu
   try {
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
 
-    const page = parseInt(req.query['page'] as string || '1', 10);
-    const limit = parseInt(req.query['limit'] as string || '20', 10);
+    const page = parseInt((req.query['page'] as string) ?? '1', 10);
+    const limit = parseInt((req.query['limit'] as string) ?? '20', 10);
     const status = req.query['status'] as string; // UNREAD, READ, ARCHIVED, DISMISSED
     const category = req.query['category'] as string;
     const severity = req.query['severity'] as string;
 
     const roleIds = await getUserRoleIds(req.user.userId);
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
 
-    const qb = recipRepo.createQueryBuilder('recipient')
+    const qb = recipRepo
+      .createQueryBuilder('recipient')
       .leftJoinAndSelect('recipient.notification', 'notification')
       .leftJoinAndSelect('notification.actions', 'actions')
-      .where('(recipient.userId = :userId OR recipient.groupName = :everyone' +
-             (roleIds.length > 0 ? ' OR recipient.roleId IN (:...roleIds)' : '') + ')', {
-               userId: req.user.userId,
-               everyone: 'everyone',
-               roleIds,
-             });
+      .where(
+        `(recipient.userId = :userId OR recipient.groupName = :everyone${
+          roleIds.length > 0 ? ' OR recipient.roleId IN (:...roleIds)' : ''
+        })`,
+        {
+          userId: req.user.userId,
+          everyone: 'everyone',
+          roleIds,
+        },
+      );
 
     if (status) {
       qb.andWhere('recipient.status = :status', { status });
@@ -57,17 +62,20 @@ export async function getNotifications(req: Request, res: Response, next: NextFu
     }
 
     // Enterprise Priority Queue Sorting using addSelect aliases to bypass TypeORM parser
-    qb.addSelect(`CASE 
+    qb.addSelect(
+      `CASE 
       WHEN notification.severity = 'critical' THEN 1 
       WHEN notification.severity = 'high' THEN 2 
       WHEN notification.severity = 'medium' THEN 3
       WHEN notification.severity = 'low' THEN 4
       ELSE 5 
-    END`, 'severity_priority')
-    .addSelect(`CASE WHEN recipient.status = 'UNREAD' THEN 1 ELSE 2 END`, 'status_priority')
-    .orderBy('severity_priority', 'ASC')
-    .addOrderBy('status_priority', 'ASC')
-    .addOrderBy('notification.createdAt', 'DESC');
+    END`,
+      'severity_priority',
+    )
+      .addSelect("CASE WHEN recipient.status = 'UNREAD' THEN 1 ELSE 2 END", 'status_priority')
+      .orderBy('severity_priority', 'ASC')
+      .addOrderBy('status_priority', 'ASC')
+      .addOrderBy('notification.createdAt', 'DESC');
 
     const [recipients, total] = await qb
       .skip((page - 1) * limit)
@@ -110,16 +118,21 @@ export async function getStatistics(req: Request, res: Response, next: NextFunct
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
 
     const roleIds = await getUserRoleIds(req.user.userId);
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
 
-    const qb = recipRepo.createQueryBuilder('recipient')
+    const qb = recipRepo
+      .createQueryBuilder('recipient')
       .leftJoin('recipient.notification', 'notification')
-      .where('(recipient.userId = :userId OR recipient.groupName = :everyone' +
-             (roleIds.length > 0 ? ' OR recipient.roleId IN (:...roleIds)' : '') + ')', {
-               userId: req.user.userId,
-               everyone: 'everyone',
-               roleIds,
-             });
+      .where(
+        `(recipient.userId = :userId OR recipient.groupName = :everyone${
+          roleIds.length > 0 ? ' OR recipient.roleId IN (:...roleIds)' : ''
+        })`,
+        {
+          userId: req.user.userId,
+          everyone: 'everyone',
+          roleIds,
+        },
+      );
 
     const counts = await qb
       .select('recipient.status', 'status')
@@ -141,7 +154,7 @@ export async function getStatistics(req: Request, res: Response, next: NextFunct
       }
       if (c.severity === 'critical') {
         criticalCount += count;
-      } else if (c.severity === 'high' || c.severity === 'medium') {
+      } else if (c.severity === 'high' ?? c.severity === 'medium') {
         warningCount += count;
       } else {
         infoCount += count;
@@ -165,7 +178,7 @@ export async function markAsRead(req: Request, res: Response, next: NextFunction
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
     const { id } = req.params;
 
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
     const recipient = await recipRepo.findOne({
       where: { notificationId: id, userId: req.user.userId },
     });
@@ -186,7 +199,7 @@ export async function markAllAsRead(req: Request, res: Response, next: NextFunct
   try {
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
 
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
     await recipRepo.update(
       { userId: req.user.userId, status: 'UNREAD' },
       { status: 'READ', readAt: new Date() },
@@ -203,7 +216,7 @@ export async function archiveNotification(req: Request, res: Response, next: Nex
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
     const { id } = req.params;
 
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
     const recipient = await recipRepo.findOne({
       where: { notificationId: id, userId: req.user.userId },
     });
@@ -224,7 +237,7 @@ export async function dismissNotification(req: Request, res: Response, next: Nex
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
     const { id } = req.params;
 
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
     const recipient = await recipRepo.findOne({
       where: { notificationId: id, userId: req.user.userId },
     });
@@ -246,8 +259,8 @@ export async function executeAction(req: Request, res: Response, next: NextFunct
     if (!req.user) throw new AppError('Unauthorized', 401, 'UNAUTHORIZED');
     const { id, actionId } = req.params;
 
-    const actionRepo = AppDataSource.getRepository(NotificationAction);
-    const recipRepo = AppDataSource.getRepository(NotificationRecipient);
+    const actionRepo = appDataSource.getRepository(NotificationAction);
+    const recipRepo = appDataSource.getRepository(NotificationRecipient);
 
     const action = await actionRepo.findOne({
       where: { id: actionId, notificationId: id },
@@ -260,33 +273,55 @@ export async function executeAction(req: Request, res: Response, next: NextFunct
 
     // Re-check action validation permissions
     if (action.permission) {
-      const userPermissions = req.permissions || [];
+      const userPermissions = req.permissions ?? [];
       if (!userPermissions.includes(action.permission)) {
-        throw new AppError('Access Denied: Insufficient privilege to execute action.', 403, 'FORBIDDEN');
+        throw new AppError(
+          'Access Denied: Insufficient privilege to execute action.',
+          403,
+          'FORBIDDEN',
+        );
       }
     }
 
-    const payload = action.payload || {};
+    const payload = action.payload ?? {};
 
     // Decoupled delegation boundary
     if (action.type === 'TENDER_APPROVE') {
-      await updateTenderStatus(payload.tenderId, { status: TenderVersionStatus.APPROVED }, req.user.userId);
+      await updateTenderStatus(
+        payload.tenderId,
+        { status: TenderVersionStatus.APPROVED },
+        req.user.userId,
+      );
     } else if (action.type === 'TENDER_REJECT') {
-      await updateTenderStatus(payload.tenderId, { status: TenderVersionStatus.REJECTED }, req.user.userId);
+      await updateTenderStatus(
+        payload.tenderId,
+        { status: TenderVersionStatus.REJECTED },
+        req.user.userId,
+      );
     } else if (action.type === 'ROLE_APPROVE') {
-      const reviewRepo = AppDataSource.getRepository(RoleReview);
+      const reviewRepo = appDataSource.getRepository(RoleReview);
       const review = await reviewRepo.findOne({
         where: { roleId: payload.roleId, roleVersion: { version: payload.version } },
       });
       if (!review) throw new AppError('Role review workflow not found', 404, 'NOT_FOUND');
-      await RbacService.reviewRoleVersion(review.id, 'APPROVED', 'Approved via quick action.', req.user.userId);
+      await RbacService.reviewRoleVersion(
+        review.id,
+        'APPROVED',
+        'Approved via quick action.',
+        req.user.userId,
+      );
     } else if (action.type === 'ROLE_REJECT') {
-      const reviewRepo = AppDataSource.getRepository(RoleReview);
+      const reviewRepo = appDataSource.getRepository(RoleReview);
       const review = await reviewRepo.findOne({
         where: { roleId: payload.roleId, roleVersion: { version: payload.version } },
       });
       if (!review) throw new AppError('Role review workflow not found', 404, 'NOT_FOUND');
-      await RbacService.reviewRoleVersion(review.id, 'REJECTED', 'Rejected via quick action.', req.user.userId);
+      await RbacService.reviewRoleVersion(
+        review.id,
+        'REJECTED',
+        'Rejected via quick action.',
+        req.user.userId,
+      );
     } else {
       throw new AppError('Unsupported action execution type', 400, 'BAD_REQUEST');
     }
@@ -315,7 +350,7 @@ export async function initializeNotificationStream(req: Request, res: Response) 
     return;
   }
 
-  const userId = req.user.userId;
+  const { userId } = req.user;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

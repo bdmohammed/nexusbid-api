@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class Remove2FAColumns1772459000000 implements MigrationInterface {
   name = 'Remove2FAColumns1772459000000';

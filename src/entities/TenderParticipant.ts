@@ -1,15 +1,16 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
+
 import { Tender } from './Tender';
-import { User } from './User';
 import { TenderEvaluation } from './TenderEvaluation';
+import { User } from './User';
 
 @Entity('tender_participants')
 export class TenderParticipant {

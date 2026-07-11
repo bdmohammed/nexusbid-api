@@ -1,12 +1,15 @@
+import crypto from 'node:crypto';
+
 import * as bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+
 import { appDataSource } from '../../config/database';
-import { User } from '../../entities/User';
+import { env } from '../../config/env';
+import { AppError } from '../../core/AppError';
 import { PasswordHistory } from '../../entities/PasswordHistory';
 import { UserDevice } from '../../entities/UserDevice';
-import { AppError } from '../../core/AppError';
-import { env } from '../../config/env';
 import { sendLoginNotificationEmail } from '../../services/email.service';
+
+import type { User } from '../../entities/User';
 
 const passwordHistoryRepository = appDataSource.getRepository(PasswordHistory);
 const userDeviceRepository = appDataSource.getRepository(UserDevice);
@@ -17,9 +20,9 @@ const userDeviceRepository = appDataSource.getRepository(UserDevice);
  * Skipped in local/test environments or if mock secret is configured.
  */
 export async function verifyCaptcha(token: string | undefined): Promise<void> {
-  const secretKey = env.TURNSTILE_SECRET_KEY || 'mock';
+  const secretKey = env.TURNSTILE_SECRET_KEY ?? 'mock';
 
-  if (env.NODE_ENV === 'local' || env.NODE_ENV === 'test' || secretKey === 'mock') {
+  if (env.NODE_ENV === 'local' ?? env.NODE_ENV === 'test' ?? secretKey === 'mock') {
     return;
   }
 
@@ -58,7 +61,7 @@ export async function verifyCaptcha(token: string | undefined): Promise<void> {
  * Fails open if HaveIBeenPwned API is offline or throws a network error.
  */
 export async function verifyPasswordBreach(password: string): Promise<void> {
-  if (env.NODE_ENV === 'local' || env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'local' ?? env.NODE_ENV === 'test') {
     return;
   }
 
@@ -77,12 +80,12 @@ export async function verifyPasswordBreach(password: string): Promise<void> {
     for (const line of lines) {
       const [hashSuffix, countStr] = line.trim().split(':');
       if (hashSuffix === suffix) {
-        const count = parseInt(countStr || '0', 10);
+        const count = parseInt(countStr ?? '0', 10);
         if (count > 0) {
           throw new AppError(
             'This password has been exposed in a data breach. Please choose a different password.',
             400,
-            'PASSWORD_BREACHED'
+            'PASSWORD_BREACHED',
           );
         }
       }
@@ -106,7 +109,11 @@ export async function checkPasswordHistory(userId: string, newPassword: string):
   for (const entry of history) {
     const isMatch = await bcrypt.compare(newPassword, entry.passwordHash);
     if (isMatch) {
-      throw new AppError('New password cannot be one of your recently used passwords', 400, 'PASSWORD_REUSED');
+      throw new AppError(
+        'New password cannot be one of your recently used passwords',
+        400,
+        'PASSWORD_REUSED',
+      );
     }
   }
 }
@@ -137,8 +144,8 @@ export async function savePasswordToHistory(userId: string, passwordHash: string
  * Uses a Class-C subnet mask (24-bit for IPv4, 64-bit for IPv6) to allow small IP shifts.
  */
 function computeDeviceHash(userAgent: string | null, ipAddress: string | null): string {
-  const agent = userAgent || '';
-  const rawIp = ipAddress || '';
+  const agent = userAgent ?? '';
+  const rawIp = ipAddress ?? '';
   let ipSubnet = rawIp;
 
   if (rawIp.includes('.')) {
@@ -164,7 +171,7 @@ function computeDeviceHash(userAgent: string | null, ipAddress: string | null): 
 export async function trackDeviceAndDetectSuspicious(
   user: User,
   userAgent: string | null,
-  ipAddress: string | null
+  ipAddress: string | null,
 ): Promise<boolean> {
   const deviceHash = computeDeviceHash(userAgent, ipAddress);
 

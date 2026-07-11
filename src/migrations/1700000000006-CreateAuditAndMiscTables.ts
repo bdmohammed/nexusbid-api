@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface {
   name = 'CreateAuditAndMiscTables1700000000006';
@@ -23,7 +23,9 @@ export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")',
+    );
 
     // Support tickets
     await queryRunner.query(`
@@ -70,8 +72,12 @@ export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface
         "created_at"   TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_audit_actor_date" ON "audit_logs" ("actor_id", "created_at")`);
-    await queryRunner.query(`CREATE INDEX "idx_audit_entity"     ON "audit_logs" ("entity_type", "entity_id")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_audit_actor_date" ON "audit_logs" ("actor_id", "created_at")',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "idx_audit_entity"     ON "audit_logs" ("entity_type", "entity_id")',
+    );
 
     // Webhook events (idempotency store)
     await queryRunner.query(`
@@ -123,16 +129,16 @@ export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "email_tokens"`);
-    await queryRunner.query(`DROP TYPE "public"."email_tokens_type_enum"`);
-    await queryRunner.query(`DROP TABLE "feature_flags"`);
-    await queryRunner.query(`DROP TABLE "webhook_events"`);
-    await queryRunner.query(`DROP TYPE "public"."webhook_events_status_enum"`);
-    await queryRunner.query(`DROP TABLE "audit_logs"`);
-    await queryRunner.query(`DROP TABLE "static_pages"`);
-    await queryRunner.query(`DROP TABLE "support_tickets"`);
-    await queryRunner.query(`DROP TYPE "public"."support_tickets_status_enum"`);
-    await queryRunner.query(`DROP TABLE "notifications"`);
-    await queryRunner.query(`DROP TYPE "public"."notifications_type_enum"`);
+    await queryRunner.query('DROP TABLE "email_tokens"');
+    await queryRunner.query('DROP TYPE "public"."email_tokens_type_enum"');
+    await queryRunner.query('DROP TABLE "feature_flags"');
+    await queryRunner.query('DROP TABLE "webhook_events"');
+    await queryRunner.query('DROP TYPE "public"."webhook_events_status_enum"');
+    await queryRunner.query('DROP TABLE "audit_logs"');
+    await queryRunner.query('DROP TABLE "static_pages"');
+    await queryRunner.query('DROP TABLE "support_tickets"');
+    await queryRunner.query('DROP TYPE "public"."support_tickets_status_enum"');
+    await queryRunner.query('DROP TABLE "notifications"');
+    await queryRunner.query('DROP TYPE "public"."notifications_type_enum"');
   }
 }

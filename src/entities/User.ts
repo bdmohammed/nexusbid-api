@@ -1,19 +1,21 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
-  ManyToOne,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+
 import { AccountType, UserStatus } from '../types/enums';
+
+import { Role } from './Role';
 import { Subscription } from './Subscription';
 import { Transaction } from './Transaction';
 import { UserRole } from './UserRole';
-import { Role } from './Role';
 
 @Entity('users')
 @Index(['email'])

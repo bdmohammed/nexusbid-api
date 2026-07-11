@@ -1,6 +1,8 @@
 import { Router } from 'express';
+
 import { authenticate } from '../../middleware/authenticate';
 import { requireSuperAdmin } from '../../middleware/permissions';
+
 import * as controller from './plans.controller';
 
 const router = Router();
@@ -67,7 +69,12 @@ const router = Router();
  *       200:
  *         description: Dashboard stats resolved
  */
-router.get('/dashboard', authenticate, requireSuperAdmin(), controller.getSubscriptionsDashboardStats);
+router.get(
+  '/dashboard',
+  authenticate,
+  requireSuperAdmin(),
+  controller.getSubscriptionsDashboardStats,
+);
 
 /**
  * @swagger
@@ -177,7 +184,12 @@ router.post('/coupons', authenticate, requireSuperAdmin(), controller.createCoup
  *       200:
  *         description: Status toggled successfully
  */
-router.post('/coupons/:id/toggle', authenticate, requireSuperAdmin(), controller.toggleCouponStatus);
+router.post(
+  '/coupons/:id/toggle',
+  authenticate,
+  requireSuperAdmin(),
+  controller.toggleCouponStatus,
+);
 
 // ─── Subscription Migrations ─────────────────────────────────────────────────
 
@@ -208,7 +220,12 @@ router.post('/coupons/:id/toggle', authenticate, requireSuperAdmin(), controller
  *       200:
  *         description: Migration sequence initiated
  */
-router.post('/migrations', authenticate, requireSuperAdmin(), controller.initiateSubscriptionMigration);
+router.post(
+  '/migrations',
+  authenticate,
+  requireSuperAdmin(),
+  controller.initiateSubscriptionMigration,
+);
 
 // ─── Plan Core CRUD & Versioning ──────────────────────────────────────────────
 
@@ -343,7 +360,12 @@ router.post('/:id/versions', authenticate, requireSuperAdmin(), controller.creat
  *       200:
  *         description: Plan version submitted for review
  */
-router.post('/versions/:versionId/submit', authenticate, requireSuperAdmin(), controller.submitPlanForReview);
+router.post(
+  '/versions/:versionId/submit',
+  authenticate,
+  requireSuperAdmin(),
+  controller.submitPlanForReview,
+);
 
 /**
  * @swagger
@@ -376,7 +398,12 @@ router.post('/versions/:versionId/submit', authenticate, requireSuperAdmin(), co
  *       200:
  *         description: Reviewer assigned
  */
-router.post('/reviews/:reviewId/assign', authenticate, requireSuperAdmin(), controller.assignPlanReviewer);
+router.post(
+  '/reviews/:reviewId/assign',
+  authenticate,
+  requireSuperAdmin(),
+  controller.assignPlanReviewer,
+);
 
 /**
  * @swagger
@@ -410,7 +437,12 @@ router.post('/reviews/:reviewId/assign', authenticate, requireSuperAdmin(), cont
  *       200:
  *         description: Review decision recorded
  */
-router.post('/reviews/:reviewId/action', authenticate, requireSuperAdmin(), controller.submitPlanReviewAction);
+router.post(
+  '/reviews/:reviewId/action',
+  authenticate,
+  requireSuperAdmin(),
+  controller.submitPlanReviewAction,
+);
 
 /**
  * @swagger
@@ -434,6 +466,11 @@ router.post('/reviews/:reviewId/action', authenticate, requireSuperAdmin(), cont
  *       200:
  *         description: Version published successfully
  */
-router.post('/versions/:versionId/publish', authenticate, requireSuperAdmin(), controller.publishPlanVersion);
+router.post(
+  '/versions/:versionId/publish',
+  authenticate,
+  requireSuperAdmin(),
+  controller.publishPlanVersion,
+);
 
 export { router as plansRouter };

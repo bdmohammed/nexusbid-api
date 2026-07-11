@@ -1,13 +1,14 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  Entity,
   Index,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from './User';
+
 import { Tender } from './Tender';
+import { User } from './User';
 
 /**
  * Immutable audit log of every PDF download.

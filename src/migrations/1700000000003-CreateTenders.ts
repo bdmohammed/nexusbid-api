@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateTenders1700000000003 implements MigrationInterface {
   name = 'CreateTenders1700000000003';
@@ -44,16 +44,20 @@ export class CreateTenders1700000000003 implements MigrationInterface {
         CONSTRAINT "chk_tenders_price_positive" CHECK ("price_cents" >= 0)
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_tenders_status_cat"   ON "tenders" ("status", "category_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_tenders_status_state" ON "tenders" ("status", "state_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_tenders_deadline"     ON "tenders" ("deadline")`);
-    await queryRunner.query(`CREATE INDEX "idx_tenders_featured"     ON "tenders" ("is_featured")`);
-    await queryRunner.query(`CREATE UNIQUE INDEX "idx_tenders_slug"  ON "tenders" ("slug")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_tenders_status_cat"   ON "tenders" ("status", "category_id")',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "idx_tenders_status_state" ON "tenders" ("status", "state_id")',
+    );
+    await queryRunner.query('CREATE INDEX "idx_tenders_deadline"     ON "tenders" ("deadline")');
+    await queryRunner.query('CREATE INDEX "idx_tenders_featured"     ON "tenders" ("is_featured")');
+    await queryRunner.query('CREATE UNIQUE INDEX "idx_tenders_slug"  ON "tenders" ("slug")');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "tenders"`);
-    await queryRunner.query(`DROP TYPE "public"."tenders_submission_type_enum"`);
-    await queryRunner.query(`DROP TYPE "public"."tenders_status_enum"`);
+    await queryRunner.query('DROP TABLE "tenders"');
+    await queryRunner.query('DROP TYPE "public"."tenders_submission_type_enum"');
+    await queryRunner.query('DROP TYPE "public"."tenders_status_enum"');
   }
 }

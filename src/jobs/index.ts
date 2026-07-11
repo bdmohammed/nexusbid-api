@@ -1,17 +1,25 @@
+import {
+  cleanupExpiredExportFiles,
+  processNextExportJob,
+} from '../modules/analytics/jobs/export.job';
+import { cleanupAnalyticsData, runDailyRollups } from '../modules/analytics/jobs/rollup.job';
+import { processScheduledReports } from '../modules/analytics/reports/reports.job';
+import {
+  processAuditExports,
+  runAuditArchival,
+  runSecurityAlertScanner,
+} from '../modules/audit/jobs';
+
+import { cleanupInvitationsJob } from './cleanupInvitations.job';
 import { CronManager } from './CronManager';
-import { expireTendersJob } from './expireTenders.job';
-import { expireSubscriptionsJob } from './expireSubscriptions.job';
-import { sendAlertDigestJob } from './sendAlertDigest.job';
 import { deadlineRemindersJob } from './deadlineReminders.job';
+import { expireSubscriptionsJob } from './expireSubscriptions.job';
+import { expireTendersJob } from './expireTenders.job';
+import { exportGenerationJob } from './exportGeneration.job';
 import { publishTendersJob } from './publishTenders.job';
 import { retryNotificationsJob } from './retryNotifications.job';
+import { sendAlertDigestJob } from './sendAlertDigest.job';
 import { virusScanningJob } from './virusScanning.job';
-import { exportGenerationJob } from './exportGeneration.job';
-import { cleanupInvitationsJob } from './cleanupInvitations.job';
-import { runDailyRollups, cleanupAnalyticsData } from '../modules/analytics/jobs/rollup.job';
-import { processNextExportJob, cleanupExpiredExportFiles } from '../modules/analytics/jobs/export.job';
-import { processScheduledReports } from '../modules/analytics/reports/reports.job';
-import { runAuditArchival, processAuditExports, runSecurityAlertScanner } from '../modules/audit/jobs';
 
 /**
  * Registers all cron jobs and starts them.

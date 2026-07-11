@@ -1,4 +1,4 @@
-import { AccountType } from './enums';
+import type { AccountType } from './enums';
 
 export interface JwtPayload {
   sub: string;
@@ -6,7 +6,7 @@ export interface JwtPayload {
   email: string;
   accountType: AccountType;
   role: AccountType; // Backward compatibility alias for accountType
-  adminRole: any | null; // Backward compatibility placeholder
+  adminRole: unknown | null; // Backward compatibility placeholder
   tokenVersion: number;
   iat?: number;
   exp?: number;
@@ -28,5 +28,3 @@ declare global {
     }
   }
 }
-
-export {};

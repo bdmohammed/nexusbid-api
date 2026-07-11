@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateBIAnalyticsTables1772480000000 implements MigrationInterface {
   name = 'CreateBIAnalyticsTables1772480000000';
@@ -165,15 +165,15 @@ export class CreateBIAnalyticsTables1772480000000 implements MigrationInterface 
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS "traffic_daily_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "subscription_daily_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "user_daily_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "tender_daily_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "scheduled_reports"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "analytics_alerts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "export_jobs"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "user_dashboard_layouts"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "analytics_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "analytics_events"`);
+    await queryRunner.query('DROP TABLE IF EXISTS "traffic_daily_metrics"');
+    await queryRunner.query('DROP TABLE IF EXISTS "subscription_daily_metrics"');
+    await queryRunner.query('DROP TABLE IF EXISTS "user_daily_metrics"');
+    await queryRunner.query('DROP TABLE IF EXISTS "tender_daily_metrics"');
+    await queryRunner.query('DROP TABLE IF EXISTS "scheduled_reports"');
+    await queryRunner.query('DROP TABLE IF EXISTS "analytics_alerts"');
+    await queryRunner.query('DROP TABLE IF EXISTS "export_jobs"');
+    await queryRunner.query('DROP TABLE IF EXISTS "user_dashboard_layouts"');
+    await queryRunner.query('DROP TABLE IF EXISTS "analytics_metrics"');
+    await queryRunner.query('DROP TABLE IF EXISTS "analytics_events"');
   }
 }

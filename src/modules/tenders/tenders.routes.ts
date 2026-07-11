@@ -1,29 +1,31 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
+
 import { authenticate } from '../../middleware/authenticate';
 import { requirePermission, requireRole } from '../../middleware/authorize';
+import { validate } from '../../middleware/validate';
 import { AccountType, PermissionKey } from '../../types/enums';
+
+import * as reportsController from './tenderReports.controller';
+import * as controller from './tenders.controller';
 import {
-  TenderSearchQueryDto,
+  AnswerQuestionDto,
+  AssignReviewerDto,
+  CreateAmendmentDto,
+  CreateClarificationDto,
+  CreateQuestionDto,
   CreateTenderDto,
+  RegisterDocumentDto,
+  SubmitEvaluationDto,
+  SubmitReviewCommentDto,
+  TenderCommitteeDto,
+  TenderInvitationDto,
+  TenderSearchQueryDto,
+  TenderTemplateDto,
+  TenderWatcherDto,
   UpdateTenderDto,
   UpdateTenderStatusDto,
   UploadUrlDto,
-  RegisterDocumentDto,
-  CreateQuestionDto,
-  AnswerQuestionDto,
-  CreateClarificationDto,
-  CreateAmendmentDto,
-  AssignReviewerDto,
-  SubmitReviewCommentDto,
-  TenderCommitteeDto,
-  SubmitEvaluationDto,
-  TenderWatcherDto,
-  TenderInvitationDto,
-  TenderTemplateDto,
 } from './tenders.dto';
-import * as controller from './tenders.controller';
-import * as reportsController from './tenderReports.controller';
 
 const router = Router();
 
@@ -588,12 +590,7 @@ adminRouter.post(
  *       200:
  *         description: Comparison resolved
  */
-adminRouter.get(
-  '/:id/diff',
-  authenticate,
-  requireRole(AccountType.ADMIN),
-  controller.getDiff,
-);
+adminRouter.get('/:id/diff', authenticate, requireRole(AccountType.ADMIN), controller.getDiff);
 
 /**
  * @swagger

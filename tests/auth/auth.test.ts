@@ -15,7 +15,7 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { User } from '../../src/entities/User';
 import { JWT_COOKIE_NAME, EMAIL_TOKEN_TTL } from '../../src/core/constants';
 import { clearAuthTables } from '../helpers/db';
@@ -29,16 +29,17 @@ import { withFakeTime } from '../helpers/time';
 jest.mock('../../src/services/email.service');
 
 // Typed references to the mocked functions
-import {
-  sendVerificationEmail,
-  sendPasswordResetEmail,
-} from '../../src/services/email.service';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../../src/services/email.service';
 
-const mockSendVerificationEmail = sendVerificationEmail as jest.MockedFunction<typeof sendVerificationEmail>;
-const mockSendPasswordResetEmail = sendPasswordResetEmail as jest.MockedFunction<typeof sendPasswordResetEmail>;
+const mockSendVerificationEmail = sendVerificationEmail as jest.MockedFunction<
+  typeof sendVerificationEmail
+>;
+const mockSendPasswordResetEmail = sendPasswordResetEmail as jest.MockedFunction<
+  typeof sendPasswordResetEmail
+>;
 
 // â”€â”€ Repositories (direct DB access for test assertions) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const userRepo = () => AppDataSource.getRepository(User);
+const userRepo = () => appDataSource.getRepository(User);
 
 // â”€â”€ Valid registration payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const VALID_REGISTER = {
@@ -124,10 +125,7 @@ describe('POST /api/v1/auth/register', () => {
   });
 
   it('403 CSRF_INVALID when x-csrf-token header is missing', async () => {
-    const res = await agent
-      .post('/api/v1/auth/register')
-      .send(VALID_REGISTER)
-      .expect(403);
+    const res = await agent.post('/api/v1/auth/register').send(VALID_REGISTER).expect(403);
 
     expect(res.body.code).toBe('CSRF_INVALID');
   });
@@ -252,7 +250,11 @@ describe('POST /api/v1/auth/login', () => {
 
     // Cookie assertions (Issue #10)
     const rawCookies = res.headers['set-cookie'];
-    const cookies: string[] = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
+    const cookies: string[] = Array.isArray(rawCookies)
+      ? rawCookies
+      : rawCookies
+        ? [rawCookies]
+        : [];
     expect(cookies).toBeDefined();
     const jwtCookie = cookies.find((c) => c.startsWith(JWT_COOKIE_NAME));
     expect(jwtCookie).toBeDefined();
@@ -386,7 +388,7 @@ describe('GET /api/v1/auth/me', () => {
     await loginAgent(user.email, password);
 
     // Simulate tokenVersion increment (e.g., after password reset)
-    await AppDataSource.getRepository(User).update(user.id, {
+    await appDataSource.getRepository(User).update(user.id, {
       tokenVersion: user.tokenVersion + 1,
     });
 
@@ -399,7 +401,7 @@ describe('GET /api/v1/auth/me', () => {
     await loginAgent(user.email, password);
 
     // Admin blocks the account after the JWT was issued
-    await AppDataSource.getRepository(User).update(user.id, { isBlocked: true });
+    await appDataSource.getRepository(User).update(user.id, { isBlocked: true });
 
     const res = await agent.get('/api/v1/auth/me').expect(403);
     expect(res.body.code).toBe('ACCOUNT_BLOCKED');
@@ -441,22 +443,21 @@ describe('POST /api/v1/auth/logout', () => {
 
     // Cookie must be cleared: Max-Age=0 or Expires in the past
     const rawCookies = res.headers['set-cookie'];
-    const cookies: string[] = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
+    const cookies: string[] = Array.isArray(rawCookies)
+      ? rawCookies
+      : rawCookies
+        ? [rawCookies]
+        : [];
     const cleared = cookies?.find((c) => c.startsWith(JWT_COOKIE_NAME));
     expect(cleared).toBeDefined();
-    const isCleared =
-      /Max-Age=0/i.test(cleared!) ||
-      /Expires=Thu, 01 Jan 1970/i.test(cleared!);
+    const isCleared = /Max-Age=0/i.test(cleared!) ?? /Expires=Thu, 01 Jan 1970/i.test(cleared!);
     expect(isCleared).toBe(true);
   });
 
   it('401 UNAUTHENTICATED when trying to logout without a cookie', async () => {
     const fresh = request.agent(app);
     const csrf = await getCsrf(fresh);
-    const res = await fresh
-      .post('/api/v1/auth/logout')
-      .set('x-csrf-token', csrf.token)
-      .expect(401);
+    const res = await fresh.post('/api/v1/auth/logout').set('x-csrf-token', csrf.token).expect(401);
 
     expect(res.body.code).toBe('UNAUTHENTICATED');
   });
@@ -683,7 +684,3 @@ describe('GET /api/v1/auth/csrf-token', () => {
     expect(res.body.success).toBe(true);
   });
 });
-
-
-
-

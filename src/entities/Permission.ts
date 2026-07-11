@@ -1,15 +1,15 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
   DeleteDateColumn,
-  ManyToOne,
-  OneToMany,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+
 import { PermissionModule } from './PermissionModule';
 
 @Entity('permissions')
@@ -35,14 +35,14 @@ export class Permission {
 
   @Column({
     name: 'display_order',
-    type: "integer",
+    type: 'integer',
     default: 0,
   })
   displayOrder: number;
 
   @Column({
     name: 'is_active',
-    type: "boolean",
+    type: 'boolean',
     default: false,
   })
   isActive: boolean;

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateUsers1700000000001 implements MigrationInterface {
   name = 'CreateUsers1700000000001';
@@ -30,13 +30,13 @@ export class CreateUsers1700000000001 implements MigrationInterface {
         "updated_at"      TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_users_email" ON "users" ("email")`);
-    await queryRunner.query(`CREATE INDEX "idx_users_role" ON "users" ("role")`);
+    await queryRunner.query('CREATE INDEX "idx_users_email" ON "users" ("email")');
+    await queryRunner.query('CREATE INDEX "idx_users_role" ON "users" ("role")');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "users"`);
-    await queryRunner.query(`DROP TYPE "public"."users_admin_role_enum"`);
-    await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
+    await queryRunner.query('DROP TABLE "users"');
+    await queryRunner.query('DROP TYPE "public"."users_admin_role_enum"');
+    await queryRunner.query('DROP TYPE "public"."users_role_enum"');
   }
 }

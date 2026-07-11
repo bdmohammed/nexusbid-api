@@ -2,8 +2,8 @@ import { logger } from '../config/logger';
 
 // Custom zero-dependency LRU Cache to maintain bounded memory usage
 class LRUCache<K, V> {
-  private max: number;
-  private cache: Map<K, V>;
+  private readonly max: number;
+  private readonly cache: Map<K, V>;
 
   constructor(max = 1000) {
     this.max = max;
@@ -43,13 +43,15 @@ class LRUCache<K, V> {
 }
 
 // Bounded L1 in-process memory cache
-const l1Cache = new LRUCache<string, { data: any; expiresAt: number }>(1000);
+const l1Cache = new LRUCache<string, { data: unknown; expiresAt: number }>(1000);
 
 // Initialize optional L2 Redis client dynamically
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let redisClient: any = null;
 
 try {
   // Try importing ioredis. If not installed, we fallback to memory-only
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const Redis = require('ioredis');
   const redisUrl = process.env.REDIS_URL;
   if (redisUrl) {
@@ -57,12 +59,15 @@ try {
       maxRetriesPerRequest: 1,
       connectTimeout: 2000,
     });
-    redisClient.on('error', (error: any) => {
+    redisClient.on('error', (error: unknown) => {
       logger.warn({ err: error }, 'Redis connection error. Falling back to memory cache.');
     });
   }
-} catch (error) {
-  logger.info('ioredis package not found or environment not configured. Cache fallback enabled.');
+} catch (error: unknown) {
+  logger.info({
+    message: 'ioredis package not found or environment not configured. Cache fallback enabled.',
+    error,
+  });
 }
 
 export class CacheService {
@@ -102,9 +107,9 @@ export class CacheService {
   /**
    * Cache a value in L1 memory and L2 Redis.
    */
-  public static async set(key: string, value: any, ttlSeconds = 300): Promise<void> {
+  public static async set(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
     const expiresAt = Date.now() + ttlSeconds * 1000;
-    
+
     // Set L1
     l1Cache.set(key, { data: value, expiresAt });
 

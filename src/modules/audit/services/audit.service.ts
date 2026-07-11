@@ -1,14 +1,14 @@
-import { AppDataSource } from '../../../config/database';
+import { appDataSource } from '../../../config/database';
+import { AppError } from '../../../core/AppError';
 import { AuditLog } from '../../../entities/AuditLog';
 import { AuditRetentionPolicy } from '../../../entities/AuditRetentionPolicy';
-import { SecurityLog } from '../../../entities/SecurityLog';
 import { ExportJob } from '../../../entities/ExportJob';
-import { AppError } from '../../../core/AppError';
-import type { AuditQueryDto, UpdateRetentionDto, RequestAuditExportDto } from '../dto/audit.dto';
-import { redactSensitiveData } from '../utils/redaction';
+import { SecurityLog } from '../../../entities/SecurityLog';
+
+import type { AuditQueryDto, RequestAuditExportDto, UpdateRetentionDto } from '../dto/audit.dto';
 
 export async function searchLogs(dto: AuditQueryDto): Promise<{ logs: AuditLog[]; total: number }> {
-  const repo = AppDataSource.getRepository(AuditLog);
+  const repo = appDataSource.getRepository(AuditLog);
   const qb = repo.createQueryBuilder('log');
 
   if (dto.from) {
@@ -68,7 +68,7 @@ export async function searchLogs(dto: AuditQueryDto): Promise<{ logs: AuditLog[]
   if (dto.search) {
     qb.andWhere(
       '(log.action ILIKE :search OR log.actorEmail ILIKE :search OR log.entityType ILIKE :search OR log.entityId ILIKE :search)',
-      { search: `%${dto.search}%` }
+      { search: `%${dto.search}%` },
     );
   }
 
@@ -81,44 +81,44 @@ export async function searchLogs(dto: AuditQueryDto): Promise<{ logs: AuditLog[]
 }
 
 export async function getStatistics(): Promise<any> {
-  const auditRepo = AppDataSource.getRepository(AuditLog);
-  const securityRepo = AppDataSource.getRepository(SecurityLog);
-  const exportRepo = AppDataSource.getRepository(ExportJob);
+  const auditRepo = appDataSource.getRepository(AuditLog);
+  const securityRepo = appDataSource.getRepository(SecurityLog);
+  const exportRepo = appDataSource.getRepository(ExportJob);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const totalEvents = await auditRepo.count();
   const todayEvents = await auditRepo.count({
-    where: { createdAt: today } // simple date filter comparison mock approximation
+    where: { createdAt: today }, // simple date filter comparison mock approximation
   });
 
   const securityEvents = await auditRepo.count({ where: { module: 'AUTH' } });
-  
+
   // Failed logins query
   const failedLogins = await securityRepo.count({
-    where: { event: 'LOGIN_FAILED' }
+    where: { event: 'LOGIN_FAILED' },
   });
 
   // Role and Permission changes
   const roleChanges = await auditRepo.count({
-    where: { module: 'RBAC', action: 'UPDATE' }
+    where: { module: 'RBAC', action: 'UPDATE' },
   });
   const permissionChanges = await auditRepo.count({
-    where: { module: 'RBAC', action: 'UPDATE' } // approximate for summary stats
+    where: { module: 'RBAC', action: 'UPDATE' }, // approximate for summary stats
   });
 
   const criticalEvents = await auditRepo.count({
-    where: { severity: 'CRITICAL' }
+    where: { severity: 'CRITICAL' },
   });
 
   const exportedReports = await exportRepo.count({
-    where: { exportType: 'CSV' } // simple counter
+    where: { exportType: 'CSV' }, // simple counter
   });
 
-  const activeSessions = await AppDataSource.query(
-    'SELECT COUNT(id)::int AS count FROM user_sessions'
-  ).then((res) => res[0]?.count ?? 0);
+  const activeSessions = await appDataSource
+    .query('SELECT COUNT(id)::int AS count FROM user_sessions')
+    .then((res) => res[0]?.count ?? 0);
 
   // Return formatted BI analytics indicators
   return {
@@ -138,7 +138,7 @@ export async function getStatistics(): Promise<any> {
 }
 
 export async function getLogDetails(id: string): Promise<AuditLog> {
-  const repo = AppDataSource.getRepository(AuditLog);
+  const repo = appDataSource.getRepository(AuditLog);
   const log = await repo.findOne({ where: { id } });
   if (!log) {
     throw new AppError('Audit record not found', 404, 'NOT_FOUND');
@@ -147,23 +147,26 @@ export async function getLogDetails(id: string): Promise<AuditLog> {
 }
 
 export async function getCorrelationTimeline(correlationId: string): Promise<AuditLog[]> {
-  const repo = AppDataSource.getRepository(AuditLog);
+  const repo = appDataSource.getRepository(AuditLog);
   return repo.find({
     where: { correlationId },
-    order: { createdAt: 'ASC' }
+    order: { createdAt: 'ASC' },
   });
 }
 
 export async function getRequestTimeline(requestId: string): Promise<AuditLog[]> {
-  const repo = AppDataSource.getRepository(AuditLog);
+  const repo = appDataSource.getRepository(AuditLog);
   return repo.find({
     where: { requestId },
-    order: { createdAt: 'ASC' }
+    order: { createdAt: 'ASC' },
   });
 }
 
-export async function getSecurityEvents(page: number = 1, limit: number = 20): Promise<{ logs: SecurityLog[]; total: number }> {
-  const repo = AppDataSource.getRepository(SecurityLog);
+export async function getSecurityEvents(
+  page: number = 1,
+  limit: number = 20,
+): Promise<{ logs: SecurityLog[]; total: number }> {
+  const repo = appDataSource.getRepository(SecurityLog);
   const skip = (page - 1) * limit;
   const [logs, total] = await repo.findAndCount({
     order: { createdAt: 'DESC' },
@@ -174,7 +177,7 @@ export async function getSecurityEvents(page: number = 1, limit: number = 20): P
 }
 
 export async function getRetentionPolicies(): Promise<AuditRetentionPolicy[]> {
-  const repo = AppDataSource.getRepository(AuditRetentionPolicy);
+  const repo = appDataSource.getRepository(AuditRetentionPolicy);
   let policies = await repo.find();
   if (policies.length === 0) {
     // Seed default retention rules
@@ -188,8 +191,10 @@ export async function getRetentionPolicies(): Promise<AuditRetentionPolicy[]> {
   return policies;
 }
 
-export async function updateRetentionPolicy(dto: UpdateRetentionDto): Promise<AuditRetentionPolicy> {
-  const repo = AppDataSource.getRepository(AuditRetentionPolicy);
+export async function updateRetentionPolicy(
+  dto: UpdateRetentionDto,
+): Promise<AuditRetentionPolicy> {
+  const repo = appDataSource.getRepository(AuditRetentionPolicy);
   let policy = await repo.findOne({ where: { category: dto.category } });
   if (!policy) {
     policy = repo.create({ category: dto.category, retentionDays: dto.retentionDays });
@@ -199,8 +204,11 @@ export async function updateRetentionPolicy(dto: UpdateRetentionDto): Promise<Au
   return repo.save(policy);
 }
 
-export async function queueExportJob(userId: string, dto: RequestAuditExportDto): Promise<ExportJob> {
-  const repo = AppDataSource.getRepository(ExportJob);
+export async function queueExportJob(
+  userId: string,
+  dto: RequestAuditExportDto,
+): Promise<ExportJob> {
+  const repo = appDataSource.getRepository(ExportJob);
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
 

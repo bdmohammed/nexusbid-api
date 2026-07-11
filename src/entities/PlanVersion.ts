@@ -1,21 +1,22 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
+  Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { Plan } from './Plan';
-import { State } from './State';
+
 import { Category } from './Category';
-import { User } from './User';
-import { PlanFeature } from './PlanFeature';
-import { PlanCountryPricing } from './PlanCountryPricing';
+import { Plan } from './Plan';
 import { PlanCategoryPricing } from './PlanCategoryPricing';
+import { PlanCountryPricing } from './PlanCountryPricing';
+import { PlanFeature } from './PlanFeature';
 import { PlanReview } from './PlanReview';
+import { State } from './State';
+import { User } from './User';
 
 @Entity('plan_versions')
 export class PlanVersion {

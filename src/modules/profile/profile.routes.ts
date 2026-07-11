@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
+
 import { authenticate } from '../../middleware/authenticate';
+import { validate } from '../../middleware/validate';
+
 import * as controller from './profile.controller';
 import {
-  UpdateProfileDto,
-  UpdateAvatarDto,
   ChangePasswordDto,
-  UpdatePreferencesDto,
   RequestChangeDto,
+  UpdateAvatarDto,
+  UpdatePreferencesDto,
+  UpdateProfileDto,
 } from './profile.dto';
 
 const router = Router();

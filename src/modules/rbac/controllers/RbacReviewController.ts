@@ -1,9 +1,11 @@
-import { Request, Response } from 'express';
-import { RbacService } from '../rbac.service';
-import { AppDataSource } from '../../../config/database';
-import { RoleReview } from '../../../entities/RoleReview';
-import { asyncHandler } from '../../../core/asyncHandler';
 import { z } from 'zod';
+
+import { appDataSource } from '../../../config/database';
+import { asyncHandler } from '../../../core/asyncHandler';
+import { RoleReview } from '../../../entities/RoleReview';
+import { RbacService } from '../rbac.service';
+
+import type { Request, Response } from 'express';
 
 const SubmitReviewSchema = z.object({
   reviewerIds: z.array(z.string().uuid()).min(1, 'At least one reviewer is required'),
@@ -18,7 +20,11 @@ export class RbacReviewController {
   public static submitVersion = asyncHandler(async (req: Request, res: Response) => {
     const { versionId } = req.params;
     const body = SubmitReviewSchema.parse(req.body);
-    const review = await RbacService.submitRoleVersion(versionId!, body.reviewerIds, req.user!.userId);
+    const review = await RbacService.submitRoleVersion(
+      versionId!,
+      body.reviewerIds,
+      req.user!.userId,
+    );
     res.status(201).json({ success: true, data: review });
   });
 
@@ -31,7 +37,7 @@ export class RbacReviewController {
 
   public static getReviewDetails = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const review = await AppDataSource.getRepository(RoleReview).findOne({
+    const review = await appDataSource.getRepository(RoleReview).findOne({
       where: { id },
       relations: [
         'assignments',

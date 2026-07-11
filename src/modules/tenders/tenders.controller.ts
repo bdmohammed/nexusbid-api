@@ -1,32 +1,34 @@
-import { Request, Response } from 'express';
-import { asyncHandler } from '../../core/asyncHandler';
-import { sendOk, sendCreated, sendNoContent, paginationMeta } from '../../core/response';
-import { generateUploadUrl } from '../../services/s3.service';
-import * as service from './tenders.service';
 import { appDataSource } from '../../config/database';
+import { asyncHandler } from '../../core/asyncHandler';
+import { paginationMeta, sendCreated, sendNoContent, sendOk } from '../../core/response';
 import { Tender } from '../../entities/Tender';
 import { TenderVersion } from '../../entities/TenderVersion';
+import { generateUploadUrl } from '../../services/s3.service';
+import { TenderLifecycleStatus, TenderPublicationStatus } from '../../types/enums';
+
+import * as service from './tenders.service';
 import { TenderWorkflowService } from './TenderWorkflowService';
-import { TenderLifecycleStatus, TenderPublicationStatus, TenderVersionStatus } from '../../types/enums';
+
 import type {
-  TenderSearchQueryDto,
+  AnswerQuestionDto,
+  AssignReviewerDto,
+  CreateAmendmentDto,
+  CreateClarificationDto,
+  CreateQuestionDto,
   CreateTenderDto,
+  RegisterDocumentDto,
+  SubmitEvaluationDto,
+  SubmitReviewCommentDto,
+  TenderCommitteeDto,
+  TenderInvitationDto,
+  TenderSearchQueryDto,
+  TenderTemplateDto,
+  TenderWatcherDto,
   UpdateTenderDto,
   UpdateTenderStatusDto,
   UploadUrlDto,
-  RegisterDocumentDto,
-  CreateQuestionDto,
-  AnswerQuestionDto,
-  CreateClarificationDto,
-  CreateAmendmentDto,
-  AssignReviewerDto,
-  SubmitReviewCommentDto,
-  TenderCommitteeDto,
-  SubmitEvaluationDto,
-  TenderWatcherDto,
-  TenderInvitationDto,
-  TenderTemplateDto,
 } from './tenders.dto';
+import type { Request, Response } from 'express';
 
 // ─── Public ───────────────────────────────────────────────────────────────────
 
@@ -52,12 +54,13 @@ export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) =
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export const adminList = asyncHandler(async (req: Request, res: Response) => {
-  const page = parseInt(req.query['page'] as string) || 1;
-  const limit = parseInt(req.query['limit'] as string) || 20;
+  const page = parseInt(req.query['page'] as string) ?? 1;
+  const limit = parseInt(req.query['limit'] as string) ?? 20;
   const status = req.query['status'] as string | undefined;
 
   // For admin panel listing, load all including versions
-  const qb = appDataSource.getRepository(TenderVersion)
+  const qb = appDataSource
+    .getRepository(TenderVersion)
     .createQueryBuilder('tv')
     .leftJoinAndSelect('tv.tender', 'tender')
     .leftJoinAndSelect('tv.category', 'category')
@@ -130,7 +133,11 @@ export const getStatistics = asyncHandler(async (req: Request, res: Response) =>
 
 export const cancelTender = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const tender = await service.updateTenderStatus(id, { publicationStatus: TenderPublicationStatus.CLOSED }, req.user!.userId);
+  const tender = await service.updateTenderStatus(
+    id,
+    { publicationStatus: TenderPublicationStatus.CLOSED },
+    req.user!.userId,
+  );
   tender.status = TenderLifecycleStatus.CANCELLED;
   await appDataSource.getRepository(Tender).save(tender);
   return sendOk(res, tender, 'Tender cancelled');
@@ -142,42 +149,42 @@ export const duplicateTender = asyncHandler(async (req: Request, res: Response) 
     where: { id },
     relations: ['activeVersion'],
   });
-  if (!original || !original.activeVersion) {
+  if (!original?.activeVersion) {
     return res.status(404).json({ success: false, message: 'Tender not found' });
   }
 
   const dto: CreateTenderDto = {
     title: `Copy of ${original.activeVersion.title}`,
     description: original.activeVersion.description,
-    procurementType: original.activeVersion.procurementType || undefined,
+    procurementType: original.activeVersion.procurementType ?? undefined,
     priority: original.activeVersion.priority,
-    estimatedBudget: original.activeVersion.estimatedBudget || undefined,
+    estimatedBudget: original.activeVersion.estimatedBudget ?? undefined,
     currency: original.activeVersion.currency,
-    department: original.activeVersion.department || undefined,
-    placeId: original.activeVersion.placeId || undefined,
-    formattedAddress: original.activeVersion.formattedAddress || undefined,
+    department: original.activeVersion.department ?? undefined,
+    placeId: original.activeVersion.placeId ?? undefined,
+    formattedAddress: original.activeVersion.formattedAddress ?? undefined,
     siteVisitRequired: original.activeVersion.siteVisitRequired,
-    siteVisitDate: original.activeVersion.siteVisitDate?.toISOString() || null,
-    siteVisitInstructions: original.activeVersion.siteVisitInstructions || undefined,
-    contactPerson: original.activeVersion.contactPerson || undefined,
-    contactDesignation: original.activeVersion.contactDesignation || undefined,
-    contactEmail: original.activeVersion.contactEmail || undefined,
-    contactPhone: original.activeVersion.contactPhone || undefined,
-    contactAlternative: original.activeVersion.contactAlternative || undefined,
-    openingDate: original.activeVersion.openingDate?.toISOString() || null,
-    closingDate: original.activeVersion.closingDate?.toISOString() || null,
-    bidValidity: original.activeVersion.bidValidity || undefined,
-    projectDuration: original.activeVersion.projectDuration || undefined,
-    emdAmount: original.activeVersion.emdAmount || undefined,
-    securityDeposit: original.activeVersion.securityDeposit || undefined,
-    paymentTerms: original.activeVersion.paymentTerms || undefined,
+    siteVisitDate: original.activeVersion.siteVisitDate?.toISOString() ?? null,
+    siteVisitInstructions: original.activeVersion.siteVisitInstructions ?? undefined,
+    contactPerson: original.activeVersion.contactPerson ?? undefined,
+    contactDesignation: original.activeVersion.contactDesignation ?? undefined,
+    contactEmail: original.activeVersion.contactEmail ?? undefined,
+    contactPhone: original.activeVersion.contactPhone ?? undefined,
+    contactAlternative: original.activeVersion.contactAlternative ?? undefined,
+    openingDate: original.activeVersion.openingDate?.toISOString() ?? null,
+    closingDate: original.activeVersion.closingDate?.toISOString() ?? null,
+    bidValidity: original.activeVersion.bidValidity ?? undefined,
+    projectDuration: original.activeVersion.projectDuration ?? undefined,
+    emdAmount: original.activeVersion.emdAmount ?? undefined,
+    securityDeposit: original.activeVersion.securityDeposit ?? undefined,
+    paymentTerms: original.activeVersion.paymentTerms ?? undefined,
     visibility: original.activeVersion.visibility,
-    evaluationMethod: original.activeVersion.evaluationMethod || undefined,
-    submissionMethod: original.activeVersion.submissionMethod || undefined,
-    contractType: original.activeVersion.contractType || undefined,
-    procurementMethod: original.activeVersion.procurementMethod || undefined,
-    eligibilityCriteria: original.activeVersion.eligibilityCriteria || undefined,
-    specialConditions: original.activeVersion.specialConditions || undefined,
+    evaluationMethod: original.activeVersion.evaluationMethod ?? undefined,
+    submissionMethod: original.activeVersion.submissionMethod ?? undefined,
+    contractType: original.activeVersion.contractType ?? undefined,
+    procurementMethod: original.activeVersion.procurementMethod ?? undefined,
+    eligibilityCriteria: original.activeVersion.eligibilityCriteria ?? undefined,
+    specialConditions: original.activeVersion.specialConditions ?? undefined,
     categoryId: original.activeVersion.categoryId,
     stateId: original.activeVersion.stateId,
   };
@@ -205,7 +212,11 @@ export const getHistory = asyncHandler(async (req: Request, res: Response) => {
 export const scheduleTender = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const { publicationDate } = req.body;
-  const tender = await service.updateTenderStatus(id, { publicationStatus: TenderPublicationStatus.SCHEDULED }, req.user!.userId);
+  const tender = await service.updateTenderStatus(
+    id,
+    { publicationStatus: TenderPublicationStatus.SCHEDULED },
+    req.user!.userId,
+  );
   return sendOk(res, tender, `Tender scheduled for ${publicationDate}`);
 });
 

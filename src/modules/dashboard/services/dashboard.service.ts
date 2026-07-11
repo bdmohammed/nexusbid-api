@@ -1,13 +1,20 @@
-import { AppDataSource } from '../../../config/database';
-import { UserDashboardLayout } from '../../../entities/UserDashboardLayout';
+import * as os from 'node:os';
+
+import { appDataSource } from '../../../config/database';
+import { AuditLog } from '../../../entities/AuditLog';
+import { Subscription } from '../../../entities/Subscription';
 import { Tender } from '../../../entities/Tender';
 import { TenderVersion } from '../../../entities/TenderVersion';
-import { Subscription } from '../../../entities/Subscription';
 import { User } from '../../../entities/User';
-import { AuditLog } from '../../../entities/AuditLog';
-import { TenderLifecycleStatus, TenderVersionStatus, TenderPublicationStatus, AccountType } from '../../../types/enums';
-import { Response } from 'express';
-import * as os from 'os';
+import { UserDashboardLayout } from '../../../entities/UserDashboardLayout';
+import {
+  AccountType,
+  TenderLifecycleStatus,
+  TenderPublicationStatus,
+  TenderVersionStatus,
+} from '../../../types/enums';
+
+import type { Response } from 'express';
 
 // ─── Widget Registry ─────────────────────────────────────────────────────────
 
@@ -98,10 +105,19 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
 // ─── Role Defaults ───────────────────────────────────────────────────────────
 
 const ROLE_DEFAULT_LAYOUTS: Record<string, string[]> = {
-  'super-admin': ['mrr_arr', 'tender_workflow', 'users', 'system_health', 'critical_alerts', 'recent_activity', 'quick_actions', 'notifications'],
-  'finance': ['mrr_arr', 'quick_actions', 'notifications'],
-  'reviewer': ['tender_workflow', 'review_queue', 'recent_activity', 'notifications'],
-  'support': ['users', 'critical_alerts', 'notifications'],
+  'super-admin': [
+    'mrr_arr',
+    'tender_workflow',
+    'users',
+    'system_health',
+    'critical_alerts',
+    'recent_activity',
+    'quick_actions',
+    'notifications',
+  ],
+  finance: ['mrr_arr', 'quick_actions', 'notifications'],
+  reviewer: ['tender_workflow', 'review_queue', 'recent_activity', 'notifications'],
+  support: ['users', 'critical_alerts', 'notifications'],
 };
 
 // ─── SSE Client Connections Registry ─────────────────────────────────────────
@@ -118,7 +134,7 @@ let sseClients: SSEClient[] = [];
 
 export function addSSEClient(client: SSEClient) {
   sseClients.push(client);
-  
+
   // Heartbeat keep-alive every 15 seconds
   const interval = setInterval(() => {
     client.res.write(':\n\n');
@@ -133,7 +149,11 @@ export function addSSEClient(client: SSEClient) {
 export function broadcastSSE(event: string, data: any, requiredPermission?: string) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   sseClients.forEach((client) => {
-    if (!requiredPermission || client.permissions.includes(requiredPermission) || client.roles.includes('super-admin')) {
+    if (
+      !requiredPermission ??
+      client.permissions.includes(requiredPermission) ??
+      client.roles.includes('super-admin')
+    ) {
       client.res.write(payload);
     }
   });
@@ -141,9 +161,13 @@ export function broadcastSSE(event: string, data: any, requiredPermission?: stri
 
 // ─── Services Orchestrator ────────────────────────────────────────────────────
 
-const layoutRepo = AppDataSource.getRepository(UserDashboardLayout);
+const layoutRepo = appDataSource.getRepository(UserDashboardLayout);
 
-export async function getDashboardConfig(userId: string, roles: string[], userPermissions: string[]) {
+export async function getDashboardConfig(
+  userId: string,
+  roles: string[],
+  userPermissions: string[],
+) {
   let layout = await layoutRepo.findOne({ where: { userId } });
 
   if (!layout) {
@@ -185,7 +209,9 @@ export async function getDashboardConfig(userId: string, roles: string[], userPe
   const authorizedWidgets = WIDGET_REGISTRY.filter((w) => {
     if (!w.enabled) return false;
     if (isSuperAdmin) return true;
-    return userPermissions.includes(w.requiredPermission) || w.requiredPermission === 'dashboard.view';
+    return (
+      userPermissions.includes(w.requiredPermission) ?? w.requiredPermission === 'dashboard.view'
+    );
   });
 
   return {
@@ -198,7 +224,7 @@ export async function getDashboardConfig(userId: string, roles: string[], userPe
 export async function updateDashboardLayout(userId: string, widgets: any[], theme?: string) {
   let layout = await layoutRepo.findOne({ where: { userId } });
   if (!layout) {
-    layout = layoutRepo.create({ userId, widgets: [] as any, filters: {} });
+    layout = layoutRepo.create({ userId, widgets: [], filters: {} });
   }
 
   layout.widgets = widgets;
@@ -231,7 +257,7 @@ export async function resetDashboardLayout(userId: string, roles: string[]) {
 
   let layout = await layoutRepo.findOne({ where: { userId } });
   if (!layout) {
-    layout = layoutRepo.create({ userId, widgets: [] as any });
+    layout = layoutRepo.create({ userId, widgets: [] });
   }
 
   layout.widgets = initialLayoutWidgets as any;
@@ -243,24 +269,26 @@ export async function resetDashboardLayout(userId: string, roles: string[]) {
 // ─── Composition Widgets Data APIs ──────────────────────────────────────────
 
 export async function getTenderData() {
-  const tenderRepo = AppDataSource.getRepository(Tender);
-  const versionRepo = AppDataSource.getRepository(TenderVersion);
+  const tenderRepo = appDataSource.getRepository(Tender);
+  const versionRepo = appDataSource.getRepository(TenderVersion);
 
   const draftCount = await versionRepo.count({ where: { status: TenderVersionStatus.DRAFT } });
-  const underReviewCount = await versionRepo.count({ where: { status: TenderVersionStatus.UNDER_REVIEW } });
-  
+  const underReviewCount = await versionRepo.count({
+    where: { status: TenderVersionStatus.UNDER_REVIEW },
+  });
+
   const publishedCount = await tenderRepo.count({
-    where: { publicationStatus: TenderPublicationStatus.PUBLISHED }
+    where: { publicationStatus: TenderPublicationStatus.PUBLISHED },
   });
   const openCount = await tenderRepo.count({
-    where: { publicationStatus: TenderPublicationStatus.OPEN }
+    where: { publicationStatus: TenderPublicationStatus.OPEN },
   });
-  
+
   const awardedCount = await tenderRepo.count({
-    where: { publicationStatus: TenderPublicationStatus.AWARDED }
+    where: { publicationStatus: TenderPublicationStatus.AWARDED },
   });
   const archivedCount = await tenderRepo.count({
-    where: { status: TenderLifecycleStatus.ARCHIVED }
+    where: { status: TenderLifecycleStatus.ARCHIVED },
   });
 
   // Calculate closing today (closingDate is today)
@@ -286,21 +314,21 @@ export async function getTenderData() {
 }
 
 export async function getRevenueData() {
-  const subRepo = AppDataSource.getRepository(Subscription);
+  const subRepo = appDataSource.getRepository(Subscription);
   const activeSubs = await subRepo.find({
     where: { status: 'active' as any },
     relations: ['plan'],
   });
 
   let totalMRR = 0;
-  let activeCount = activeSubs.length;
+  const activeCount = activeSubs.length;
 
   activeSubs.forEach((sub) => {
     if (sub.plan) {
       // priceCents is price, billingPeriod could be 'month' or 'year'
       const planPriceCents = (sub.plan as any).priceCents ?? 0;
       const billingPeriod = (sub.plan as any).billingPeriod ?? 'month';
-      
+
       if (billingPeriod === 'year') {
         totalMRR += planPriceCents / 12 / 100;
       } else {
@@ -310,7 +338,7 @@ export async function getRevenueData() {
   });
 
   const totalARR = totalMRR * 12;
-  const avgPlanValue = activeCount > 0 ? (totalMRR / activeCount) : 0;
+  const avgPlanValue = activeCount > 0 ? totalMRR / activeCount : 0;
 
   // Let's get subscription growth this month
   const thisMonthStart = new Date();
@@ -333,7 +361,7 @@ export async function getRevenueData() {
 }
 
 export async function getUsersData() {
-  const userRepo = AppDataSource.getRepository(User);
+  const userRepo = appDataSource.getRepository(User);
 
   const totalUsers = await userRepo.count();
   const admins = await userRepo.count({ where: { accountType: AccountType.ADMIN } });
@@ -349,7 +377,7 @@ export async function getUsersData() {
 }
 
 export async function getReviewQueueData() {
-  const versionRepo = AppDataSource.getRepository(TenderVersion);
+  const versionRepo = appDataSource.getRepository(TenderVersion);
 
   const pendingTenderReviews = await versionRepo.count({
     where: { status: TenderVersionStatus.UNDER_REVIEW },
@@ -369,14 +397,14 @@ export async function getCriticalAlertsData() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const failedLogins = await AppDataSource.getRepository(AuditLog).count({
+  const failedLogins = await appDataSource.getRepository(AuditLog).count({
     where: {
       action: 'auth.login_failed',
       createdAt: todayStart,
-    } as any,
+    },
   });
 
-  const expiredSubs = await AppDataSource.getRepository(Subscription).count({
+  const expiredSubs = await appDataSource.getRepository(Subscription).count({
     where: { status: 'expired' as any },
   });
 
@@ -390,7 +418,7 @@ export async function getCriticalAlertsData() {
 }
 
 export async function getRecentActivityData() {
-  const logRepo = AppDataSource.getRepository(AuditLog);
+  const logRepo = appDataSource.getRepository(AuditLog);
   const rawLogs = await logRepo.find({
     order: { createdAt: 'DESC' },
     take: 10,
@@ -406,22 +434,22 @@ export async function getRecentActivityData() {
         friendlyText = `Failed login attempt from IP ${log.ipAddress}`;
         break;
       case 'tender.create':
-        friendlyText = `New Tender registered`;
+        friendlyText = 'New Tender registered';
         break;
       case 'tender.publish':
-        friendlyText = `Tender published successfully`;
+        friendlyText = 'Tender published successfully';
         break;
       case 'role.create':
-        friendlyText = `New security role created`;
+        friendlyText = 'New security role created';
         break;
       case 'subscription.create':
-        friendlyText = `Subscription purchased`;
+        friendlyText = 'Subscription purchased';
         break;
       case 'subscription.upgrade':
-        friendlyText = `Subscription upgraded`;
+        friendlyText = 'Subscription upgraded';
         break;
       default:
-        friendlyText = `${log.action} performed in ${log.module || 'System'}`;
+        friendlyText = `${log.action} performed in ${log.module ?? 'System'}`;
     }
 
     return {

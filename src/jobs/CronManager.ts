@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
+
 import * as cron from 'node-cron';
-import { performance } from 'perf_hooks';
-import { randomUUID } from 'crypto';
+
 import { logger } from '../config/logger';
 import { runWithContext } from '../config/requestContext';
 
@@ -33,10 +35,11 @@ type JobName =
  */
 export class CronManager {
   private static instance: CronManager;
-  private tasks: Map<JobName, cron.ScheduledTask> = new Map();
-  private running: Map<JobName, boolean> = new Map();
+  private readonly tasks: Map<JobName, cron.ScheduledTask> = new Map();
+  private readonly running: Map<JobName, boolean> = new Map();
 
   static getInstance(): CronManager {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!CronManager.instance) CronManager.instance = new CronManager();
     return CronManager.instance;
   }
@@ -96,6 +99,6 @@ export class CronManager {
     this.running.forEach((isRunning, name) => {
       out[name] = isRunning;
     });
-    return out as Record<JobName, boolean>;
+    return out;
   }
 }

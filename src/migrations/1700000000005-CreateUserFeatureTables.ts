@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateUserFeatureTables1700000000005 implements MigrationInterface {
   name = 'CreateUserFeatureTables1700000000005';
@@ -67,15 +67,17 @@ export class CreateUserFeatureTables1700000000005 implements MigrationInterface 
         "downloaded_at" TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_downloads_user_date" ON "download_history" ("user_id", "downloaded_at")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_downloads_user_date" ON "download_history" ("user_id", "downloaded_at")',
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "download_history"`);
-    await queryRunner.query(`DROP TABLE "alert_preferences"`);
-    await queryRunner.query(`DROP TYPE "public"."alert_preferences_frequency_enum"`);
-    await queryRunner.query(`DROP TABLE "saved_tenders"`);
-    await queryRunner.query(`DROP TABLE "admin_permissions"`);
-    await queryRunner.query(`DROP TYPE "public"."admin_permissions_key_enum"`);
+    await queryRunner.query('DROP TABLE "download_history"');
+    await queryRunner.query('DROP TABLE "alert_preferences"');
+    await queryRunner.query('DROP TYPE "public"."alert_preferences_frequency_enum"');
+    await queryRunner.query('DROP TABLE "saved_tenders"');
+    await queryRunner.query('DROP TABLE "admin_permissions"');
+    await queryRunner.query('DROP TYPE "public"."admin_permissions_key_enum"');
   }
 }

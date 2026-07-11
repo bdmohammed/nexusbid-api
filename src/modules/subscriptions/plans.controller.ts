@@ -1,6 +1,8 @@
-import { Request, Response } from 'express';
-import * as plansService from './plans.service';
 import { logger } from '../../config/logger';
+
+import * as plansService from './plans.service';
+
+import type { Request, Response } from 'express';
 
 export async function listAllPlans(req: Request, res: Response): Promise<void> {
   try {
@@ -18,13 +20,13 @@ export async function getPlanById(req: Request, res: Response): Promise<void> {
     res.json({ success: true, data: plan });
   } catch (error: any) {
     logger.error({ error }, 'Error getting plan');
-    res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 500).json({ success: false, message: error.message });
   }
 }
 
 export async function createPlan(req: Request, res: Response): Promise<void> {
   try {
-    const userId = (req as any).user.userId;
+    const { userId } = (req as any).user;
     const plan = await plansService.createPlan(req.body, userId);
     res.status(201).json({ success: true, data: plan });
   } catch (error: any) {
@@ -35,12 +37,12 @@ export async function createPlan(req: Request, res: Response): Promise<void> {
 
 export async function createPlanVersionDraft(req: Request, res: Response): Promise<void> {
   try {
-    const userId = (req as any).user.userId;
+    const { userId } = (req as any).user;
     const version = await plansService.createPlanVersionDraft(req.params['id'], userId);
     res.status(201).json({ success: true, data: version });
   } catch (error: any) {
     logger.error({ error }, 'Error creating version draft');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
@@ -50,33 +52,36 @@ export async function submitPlanForReview(req: Request, res: Response): Promise<
     res.json({ success: true, data: version });
   } catch (error: any) {
     logger.error({ error }, 'Error submitting for review');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
 export async function assignPlanReviewer(req: Request, res: Response): Promise<void> {
   try {
-    const review = await plansService.assignPlanReviewer(req.params['reviewId'], req.body.reviewerId);
+    const review = await plansService.assignPlanReviewer(
+      req.params['reviewId'],
+      req.body.reviewerId,
+    );
     res.json({ success: true, data: review });
   } catch (error: any) {
     logger.error({ error }, 'Error assigning reviewer');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
 export async function submitPlanReviewAction(req: Request, res: Response): Promise<void> {
   try {
-    const userId = (req as any).user.userId;
+    const { userId } = (req as any).user;
     const review = await plansService.submitPlanReviewAction(
       req.params['reviewId'],
       userId,
       req.body.commentText,
-      req.body.action
+      req.body.action,
     );
     res.json({ success: true, data: review });
   } catch (error: any) {
     logger.error({ error }, 'Error submitting review action');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
@@ -86,7 +91,7 @@ export async function publishPlanVersion(req: Request, res: Response): Promise<v
     res.json({ success: true, data: plan });
   } catch (error: any) {
     logger.error({ error }, 'Error publishing plan version');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
@@ -118,7 +123,7 @@ export async function toggleCouponStatus(req: Request, res: Response): Promise<v
     res.json({ success: true, data: coupon });
   } catch (error: any) {
     logger.error({ error }, 'Error toggling coupon status');
-    res.status(error.statusCode || 400).json({ success: false, message: error.message });
+    res.status(error.statusCode ?? 400).json({ success: false, message: error.message });
   }
 }
 
@@ -126,11 +131,11 @@ export async function toggleCouponStatus(req: Request, res: Response): Promise<v
 
 export async function initiateSubscriptionMigration(req: Request, res: Response): Promise<void> {
   try {
-    const userId = (req as any).user.userId;
+    const { userId } = (req as any).user;
     const migration = await plansService.initiateSubscriptionMigration(
       req.body.sourcePlanVersionId,
       req.body.targetPlanVersionId,
-      userId
+      userId,
     );
     res.json({ success: true, data: migration });
   } catch (error: any) {

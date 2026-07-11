@@ -1,32 +1,23 @@
 import pino from 'pino';
+
 import { env } from './env';
 import { getContext } from './requestContext';
 
 const isDev = env.NODE_ENV === 'local' || env.NODE_ENV === 'dev';
 const isTest = env.NODE_ENV === 'test';
 
-let version = '1.0.0';
-try {
-  const pkg = require('../../package.json');
-  version = pkg.version;
-} catch {
-  // fallback
-}
-
-const defaultLevel = (isDev || isTest) ? 'debug' : 'info';
-const level = env.LOG_LEVEL || defaultLevel;
+const defaultLevel = isDev || isTest ? 'debug' : 'info';
+const level = env.LOG_LEVEL ?? defaultLevel;
 
 export const logger = pino({
   level,
   mixin() {
     const context = getContext();
-    return context
-      ? { traceId: context.traceId, userId: context.userId }
-      : {};
+    return context ? { traceId: context.traceId, userId: context.userId } : {};
   },
   base: {
     service: env.APP_NAME,
-    version,
+    version: env.npm_package_version,
     env: env.NODE_ENV,
   },
   redact: {
@@ -73,4 +64,3 @@ export const logger = pino({
         timestamp: pino.stdTimeFunctions.isoTime,
       }),
 });
-

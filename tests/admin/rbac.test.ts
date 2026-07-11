@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { clearAuthTables, setupTestRoleWithPermission } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
@@ -10,9 +10,9 @@ import { Role } from '../../src/entities/Role';
 import { UserRole } from '../../src/entities/UserRole';
 import { AuditLog } from '../../src/entities/AuditLog';
 
-const roleRepo = () => AppDataSource.getRepository(Role);
-const userRoleRepo = () => AppDataSource.getRepository(UserRole);
-const auditLogRepo = () => AppDataSource.getRepository(AuditLog);
+const roleRepo = () => appDataSource.getRepository(Role);
+const userRoleRepo = () => appDataSource.getRepository(UserRole);
+const auditLogRepo = () => appDataSource.getRepository(AuditLog);
 
 describe('RBAC System Integration Tests', () => {
   let agent: ReturnType<typeof request.agent>;
@@ -76,37 +76,32 @@ describe('RBAC System Integration Tests', () => {
 
   describe('Authorization Checks on RBAC Routes', () => {
     it('should deny non-logged in requests', async () => {
-      await request(app)
-        .get('/api/v1/rbac/roles')
-        .expect(401);
+      await request(app).get('/api/v1/rbac/roles').expect(401);
     });
 
     it('should deny access to ordinary customers', async () => {
       const { agent: userAgent } = await loginAs(ordinaryUser.email, ordinaryPassword);
-      await userAgent
-        .get('/api/v1/rbac/roles')
-        .expect(403);
+      await userAgent.get('/api/v1/rbac/roles').expect(403);
     });
 
     it('should allow super admin access', async () => {
       const { agent: adminAgent } = await loginAs(superAdminUser.email, superAdminPassword);
-      const res = await adminAgent
-        .get('/api/v1/rbac/roles')
-        .expect(200);
+      const res = await adminAgent.get('/api/v1/rbac/roles').expect(200);
       expect(res.body.success).toBe(true);
     });
 
     it('should allow RBAC manager admin access', async () => {
       const { agent: adminAgent } = await loginAs(rbacAdminUser.email, rbacAdminPassword);
-      await adminAgent
-        .get('/api/v1/rbac/roles')
-        .expect(200);
+      await adminAgent.get('/api/v1/rbac/roles').expect(200);
     });
   });
 
   describe('Role Management (CRUD)', () => {
     it('should create a new role and write an audit log', async () => {
-      const { agent: adminAgent, csrfToken: token } = await loginAs(rbacAdminUser.email, rbacAdminPassword);
+      const { agent: adminAgent, csrfToken: token } = await loginAs(
+        rbacAdminUser.email,
+        rbacAdminPassword,
+      );
 
       const res = await adminAgent
         .post('/api/v1/rbac/roles')
@@ -138,7 +133,10 @@ describe('RBAC System Integration Tests', () => {
     });
 
     it('should prevent deleting system roles', async () => {
-      const { agent: adminAgent, csrfToken: token } = await loginAs(superAdminUser.email, superAdminPassword);
+      const { agent: adminAgent, csrfToken: token } = await loginAs(
+        superAdminUser.email,
+        superAdminPassword,
+      );
 
       // Ensure Super Admin role exists
       const saRole = await roleRepo().findOneBy({ slug: 'super-admin' });
@@ -153,7 +151,10 @@ describe('RBAC System Integration Tests', () => {
 
   describe('User Role Assignment', () => {
     it('should assign a role to a user and support temporary expiration', async () => {
-      const { agent: adminAgent, csrfToken: token } = await loginAs(rbacAdminUser.email, rbacAdminPassword);
+      const { agent: adminAgent, csrfToken: token } = await loginAs(
+        rbacAdminUser.email,
+        rbacAdminPassword,
+      );
 
       // Create a role to assign
       const newRole = roleRepo().create({

@@ -1,8 +1,10 @@
-import { Request, Response } from 'express';
 import { asyncHandler } from '../../core/asyncHandler';
-import { sendOk, sendCreated } from '../../core/response';
+import { sendCreated, sendOk } from '../../core/response';
+
 import * as service from './subscriptions.service';
+
 import type { CreateSubscriptionDto } from './subscriptions.dto';
+import type { Request, Response } from 'express';
 
 export const getPlans = asyncHandler(async (_req: Request, res: Response) => {
   const plans = await service.listPlans();
@@ -26,5 +28,9 @@ export const getMySubscription = asyncHandler(async (req: Request, res: Response
 
 export const cancelMySubscription = asyncHandler(async (req: Request, res: Response) => {
   await service.cancelMySubscription(req.user!.userId);
-  return sendOk(res, null, 'Subscription cancelled. Access remains until the end of the billing period.');
+  return sendOk(
+    res,
+    null,
+    'Subscription cancelled. Access remains until the end of the billing period.',
+  );
 });

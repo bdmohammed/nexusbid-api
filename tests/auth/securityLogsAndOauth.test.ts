@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { User } from '../../src/entities/User';
 import { SecurityLog } from '../../src/entities/SecurityLog';
 import { clearAuthTables } from '../helpers/db';
@@ -10,8 +10,8 @@ import { createVerifiedUser } from '../helpers/builders';
 // Mock Email Service
 jest.mock('../../src/services/email.service');
 
-const userRepo = () => AppDataSource.getRepository(User);
-const securityLogRepo = () => AppDataSource.getRepository(SecurityLog);
+const userRepo = () => appDataSource.getRepository(User);
+const securityLogRepo = () => appDataSource.getRepository(SecurityLog);
 
 // Helper to wait for async geolocation / logging promises to settle
 const wait = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -3,7 +3,9 @@ import { z } from 'zod';
 export const AnalyticsQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
-  granularity: z.enum(['hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly']).default('daily'),
+  granularity: z
+    .enum(['hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'])
+    .default('daily'),
   country: z.string().optional(),
   categoryId: z.string().uuid().optional(),
   planId: z.string().uuid().optional(),
@@ -36,7 +38,16 @@ export const CreateScheduledReportSchema = z.object({
 });
 
 export const RequestExportSchema = z.object({
-  exportType: z.enum(['tenders', 'bids', 'financial', 'users', 'vendors', 'traffic', 'categories', 'system']),
+  exportType: z.enum([
+    'tenders',
+    'bids',
+    'financial',
+    'users',
+    'vendors',
+    'traffic',
+    'categories',
+    'system',
+  ]),
   filters: z.record(z.string(), z.any()).default({}),
 });
 

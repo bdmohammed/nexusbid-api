@@ -1,14 +1,67 @@
-import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+
 import { appDataSource } from '../config/database';
-import { User } from '../entities/User';
-import { AppError } from '../core/AppError';
-import { JWT_COOKIE_NAME } from '../core/constants';
 import { env } from '../config/env';
 import { setUserId } from '../config/requestContext';
+import { AppError } from '../core/AppError';
+import { JWT_COOKIE_NAME } from '../core/constants';
+import { User } from '../entities/User';
+
+import type { JwtPayload } from '../types/express';
+import type { NextFunction, Request, Response } from 'express';
 
 const userRepository = appDataSource.getRepository(User);
+
+function getRequestId(req: Request & { id?: string }): string {
+  return req.id || (req.headers['x-request-id'] as string) || uuidv4();
+}
+
+function verifyToken(token: string): JwtPayload {
+  try {
+    return jwt.verify(token, env.JWT_SECRET) as unknown as JwtPayload;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      throw new AppError('Access token expired', 401, 'TOKEN_EXPIRED');
+    }
+    throw new AppError('Session expired or invalid', 401, 'INVALID_TOKEN');
+  }
+}
+
+function validateUserAccount(user: User | null, decodedTokenVersion: number): void {
+  if (!user) {
+    throw new AppError('Account not found', 401, 'ACCOUNT_NOT_FOUND');
+  }
+
+  if (user.isBlocked) {
+    throw new AppError('Account suspended', 403, 'ACCOUNT_BLOCKED');
+  }
+
+  if (user.tokenVersion !== decodedTokenVersion) {
+    throw new AppError('Session has been revoked', 401, 'SESSION_REVOKED');
+  }
+}
+
+function validatePasswordStatus(
+  user: { mustResetPassword?: boolean; passwordChangedAt?: Date | null; createdAt: Date },
+  path: string,
+): void {
+  const bypassForcedReset = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
+  if (user.mustResetPassword && !bypassForcedReset.some((route) => path.startsWith(route))) {
+    throw new AppError(
+      'You must reset your password before continuing.',
+      403,
+      'FORCED_PASSWORD_RESET',
+    );
+  }
+
+  const lastChanged = user.passwordChangedAt ?? user.createdAt;
+  const daysSinceChange = (Date.now() - lastChanged.getTime()) / (24 * 60 * 60 * 1000);
+  const bypassExpiration = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
+  if (daysSinceChange > 90 && !bypassExpiration.some((route) => path.startsWith(route))) {
+    throw new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED');
+  }
+}
 
 /**
  * Verifies the JWT stored in the HTTP-only cookie.
@@ -21,65 +74,44 @@ const userRepository = appDataSource.getRepository(User);
  * - When an admin revokes all sessions
  */
 export const authenticate = async (
-  req: Request,
-  res: Response,
+  req: Request & { id?: string },
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  req.requestId = (req as any).id || (req.headers['x-request-id'] as string) || uuidv4();
-  const token = req.cookies?.[JWT_COOKIE_NAME] as string | undefined;
+  req.requestId = getRequestId(req);
+  const token = req.cookies[JWT_COOKIE_NAME] as string | undefined;
 
   if (!token) {
     return next(new AppError('Authentication required', 401, 'UNAUTHENTICATED'));
   }
 
-  let decodedTokenPayload: any;
+  let decodedTokenPayload: JwtPayload;
   try {
-    decodedTokenPayload = jwt.verify(token, env.JWT_SECRET) as any;
-  } catch (error: any) {
-    if (error?.name === 'TokenExpiredError') {
-      return next(new AppError('Access token expired', 401, 'TOKEN_EXPIRED'));
-    }
-    return next(new AppError('Session expired or invalid', 401, 'INVALID_TOKEN'));
+    decodedTokenPayload = verifyToken(token);
+  } catch (err: unknown) {
+    return next(err);
   }
 
-  // Verify tokenVersion against DB to detect revoked sessions
-  const user = await userRepository.findOne({
-    where: { id: decodedTokenPayload.sub },
-    select: ['id', 'tokenVersion', 'isBlocked', 'emailVerified', 'mustResetPassword', 'passwordChangedAt', 'createdAt'],
-  });
+  try {
+    const user = await userRepository.findOne({
+      where: { id: decodedTokenPayload.sub },
+      select: [
+        'id',
+        'tokenVersion',
+        'isBlocked',
+        'emailVerified',
+        'mustResetPassword',
+        'passwordChangedAt',
+        'createdAt',
+      ],
+    });
 
-  if (!user) {
-    return next(new AppError('Account not found', 401, 'ACCOUNT_NOT_FOUND'));
-  }
+    validateUserAccount(user, decodedTokenPayload.tokenVersion);
 
-  if (user.isBlocked) {
-    return next(new AppError('Account suspended', 403, 'ACCOUNT_BLOCKED'));
-  }
-
-  if (user.tokenVersion !== decodedTokenPayload.tokenVersion) {
-    return next(new AppError('Session has been revoked', 401, 'SESSION_REVOKED'));
-  }
-
-  const path = req.originalUrl.split('?')[0] || '';
-
-  // 1. Enforce Forced Password Reset
-  const bypassForcedReset = [
-    '/api/v1/auth/logout',
-    '/api/v1/auth/password/change',
-  ];
-  if (user.mustResetPassword && !bypassForcedReset.some((route) => path.startsWith(route))) {
-    return next(new AppError('You must reset your password before continuing.', 403, 'FORCED_PASSWORD_RESET'));
-  }
-
-  // 2. Enforce Password Expiration (90 Days)
-  const lastChanged = user.passwordChangedAt || user.createdAt;
-  const daysSinceChange = (Date.now() - lastChanged.getTime()) / (24 * 60 * 60 * 1000);
-  const bypassExpiration = [
-    '/api/v1/auth/logout',
-    '/api/v1/auth/password/change',
-  ];
-  if (daysSinceChange > 90 && !bypassExpiration.some((route) => path.startsWith(route))) {
-    return next(new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED'));
+    const path = req.originalUrl.split('?')[0] ?? '';
+    validatePasswordStatus(user!, path);
+  } catch (err: unknown) {
+    return next(err);
   }
 
   req.user = {
@@ -92,9 +124,7 @@ export const authenticate = async (
     tokenVersion: decodedTokenPayload.tokenVersion,
   };
   setUserId(decodedTokenPayload.sub);
-  if (req.log) {
-    req.log = req.log.child({ userId: decodedTokenPayload.sub });
-  }
+  req.log = req.log.child({ userId: decodedTokenPayload.sub });
   next();
 };
 
@@ -103,16 +133,16 @@ export const authenticate = async (
  * Used on public routes that show extra data to logged-in users (e.g., tender list).
  */
 export const optionalAuthenticate = async (
-  req: Request,
-  res: Response,
+  req: Request & { id?: string },
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  req.requestId = (req as any).id || (req.headers['x-request-id'] as string) || uuidv4();
-  const token = req.cookies?.[JWT_COOKIE_NAME] as string | undefined;
+  req.requestId = getRequestId(req);
+  const token = req.cookies[JWT_COOKIE_NAME] as string | undefined;
   if (!token) return next();
 
   try {
-    const decodedTokenPayload = jwt.verify(token, env.JWT_SECRET) as any;
+    const decodedTokenPayload = verifyToken(token);
     const user = await userRepository.findOne({
       where: { id: decodedTokenPayload.sub },
       select: ['id', 'tokenVersion', 'isBlocked'],
@@ -128,9 +158,7 @@ export const optionalAuthenticate = async (
         tokenVersion: decodedTokenPayload.tokenVersion,
       };
       setUserId(decodedTokenPayload.sub);
-      if (req.log) {
-        req.log = req.log.child({ userId: decodedTokenPayload.sub });
-      }
+      req.log = req.log.child({ userId: decodedTokenPayload.sub });
     }
   } catch {
     // Token invalid — treat as unauthenticated, continue

@@ -1,24 +1,32 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { State } from '../../src/entities/State';
 import { Category } from '../../src/entities/Category';
 import { Tender } from '../../src/entities/Tender';
 import { TenderVersion } from '../../src/entities/TenderVersion';
-import { AccountType, PermissionKey, TenderLifecycleStatus, TenderPublicationStatus, TenderVersionStatus } from '../../src/types/enums';
+import {
+  AccountType,
+  PermissionKey,
+  TenderLifecycleStatus,
+  TenderPublicationStatus,
+  TenderVersionStatus,
+} from '../../src/types/enums';
 import { clearAuthTables, setupTestRoleWithPermission } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
 import { User } from '../../src/entities/User';
 
-const stateRepo = () => AppDataSource.getRepository(State);
-const categoryRepo = () => AppDataSource.getRepository(Category);
-const tenderRepo = () => AppDataSource.getRepository(Tender);
-const versionRepo = () => AppDataSource.getRepository(TenderVersion);
+const stateRepo = () => appDataSource.getRepository(State);
+const categoryRepo = () => appDataSource.getRepository(Category);
+const tenderRepo = () => appDataSource.getRepository(Tender);
+const versionRepo = () => appDataSource.getRepository(TenderVersion);
 
 async function clearAllTables() {
   await clearAuthTables();
-  await AppDataSource.query(`TRUNCATE TABLE tenders, tender_versions, states, categories RESTART IDENTITY CASCADE`);
+  await appDataSource.query(
+    `TRUNCATE TABLE tenders, tender_versions, states, categories RESTART IDENTITY CASCADE`,
+  );
 }
 
 describe('Tenders Enterprise Admin API Integration Tests', () => {
@@ -37,9 +45,21 @@ describe('Tenders Enterprise Admin API Integration Tests', () => {
       password: superAdminPassword,
       emailVerified: true,
     });
-    await setupTestRoleWithPermission(superAdminUser.id, 'Super Admin', PermissionKey.CREATE_TENDER);
-    await setupTestRoleWithPermission(superAdminUser.id, 'Super Admin Edit', PermissionKey.EDIT_TENDER);
-    await setupTestRoleWithPermission(superAdminUser.id, 'Super Admin Approve', PermissionKey.APPROVE_TENDER);
+    await setupTestRoleWithPermission(
+      superAdminUser.id,
+      'Super Admin',
+      PermissionKey.CREATE_TENDER,
+    );
+    await setupTestRoleWithPermission(
+      superAdminUser.id,
+      'Super Admin Edit',
+      PermissionKey.EDIT_TENDER,
+    );
+    await setupTestRoleWithPermission(
+      superAdminUser.id,
+      'Super Admin Approve',
+      PermissionKey.APPROVE_TENDER,
+    );
 
     const csrf = await getCsrf(agent);
     csrfToken = csrf.token;
@@ -59,7 +79,7 @@ describe('Tenders Enterprise Admin API Integration Tests', () => {
   describe('Tender Lifecycle & Versioning CRUD', () => {
     it('creates a new draft tender aggregate and active version', async () => {
       const { agent: client, csrfToken: token } = await loginAsAdmin();
-      
+
       const payload = {
         title: 'New Municipal Airport Development',
         description: 'Design and construction of runway and logistics hangars.',
@@ -81,7 +101,7 @@ describe('Tenders Enterprise Admin API Integration Tests', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.referenceNo).toContain('TDR-');
       expect(res.body.data.status).toBe(TenderLifecycleStatus.ACTIVE);
-      
+
       const createdTender = await tenderRepo().findOne({
         where: { id: res.body.data.id },
         relations: ['activeVersion'],
@@ -150,7 +170,7 @@ describe('Tenders Enterprise Admin API Integration Tests', () => {
           priority: 'Low',
           currency: 'USD',
           siteVisitRequired: false,
-        })
+        }),
       );
 
       const v2 = await versionRepo().save(
@@ -163,7 +183,7 @@ describe('Tenders Enterprise Admin API Integration Tests', () => {
           priority: 'High',
           currency: 'USD',
           siteVisitRequired: true,
-        })
+        }),
       );
 
       tender.activeVersionId = v2.id;

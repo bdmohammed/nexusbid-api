@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  Index,
-} from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('tender_daily_metrics')
 @Index(['date'])
@@ -42,22 +37,43 @@ export class TenderDailyMetrics {
   @Column({ name: 'cancelled_count', type: 'integer', default: 0 })
   cancelledCount: number;
 
-  @Column({ name: 'total_budget', type: 'numeric', precision: 18, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    name: 'total_budget',
+    type: 'numeric',
+    precision: 18,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   totalBudget: number;
 
-  @Column({ name: 'average_evaluation_time_seconds', type: 'numeric', precision: 12, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    name: 'average_evaluation_time_seconds',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   averageEvaluationTimeSeconds: number;
 
-  @Column({ name: 'average_award_time_seconds', type: 'numeric', precision: 12, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    name: 'average_award_time_seconds',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   averageAwardTimeSeconds: number;
 
   @Column({ name: 'bid_count', type: 'integer', default: 0 })

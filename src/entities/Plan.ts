@@ -1,14 +1,15 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  OneToMany,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Subscription } from './Subscription';
+
 import { PlanVersion } from './PlanVersion';
+import { Subscription } from './Subscription';
 
 @Entity('plans')
 export class Plan {

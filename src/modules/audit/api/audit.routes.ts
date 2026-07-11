@@ -1,6 +1,8 @@
 import { Router } from 'express';
+
 import { authenticate } from '../../../middleware/authenticate';
 import { requirePermission } from '../../../middleware/permissions';
+
 import * as controller from './audit.controller';
 
 const router = Router();
@@ -193,8 +195,16 @@ router.get('/security', requirePermission('audit.security'), controller.getSecur
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.get('/retention', requirePermission('audit.retention.manage'), controller.getRetentionPolicies);
-router.patch('/retention', requirePermission('audit.retention.manage'), controller.updateRetentionPolicy);
+router.get(
+  '/retention',
+  requirePermission('audit.retention.manage'),
+  controller.getRetentionPolicies,
+);
+router.patch(
+  '/retention',
+  requirePermission('audit.retention.manage'),
+  controller.updateRetentionPolicy,
+);
 
 /**
  * @swagger
@@ -245,7 +255,11 @@ router.post('/export', requirePermission('audit.export'), controller.requestAudi
  *       200:
  *         description: Timeline logs resolved
  */
-router.get('/correlation/:correlationId', requirePermission('audit.search'), controller.getCorrelationTimeline);
+router.get(
+  '/correlation/:correlationId',
+  requirePermission('audit.search'),
+  controller.getCorrelationTimeline,
+);
 
 /**
  * @swagger

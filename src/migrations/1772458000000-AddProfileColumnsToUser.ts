@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddProfileColumnsToUser1772458000000 implements MigrationInterface {
   name = 'AddProfileColumnsToUser1772458000000';

@@ -22,7 +22,7 @@
  * Wraps a test body in a transaction that is always rolled back.
  * Use for tests that only need read isolation (no TRUNCATE overhead).
  */
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { Role } from '../../src/entities/Role';
 import { UserRole } from '../../src/entities/UserRole';
 import { Permission } from '../../src/entities/Permission';
@@ -34,7 +34,7 @@ import { RolePermission } from '../../src/entities/RolePermission';
  * Call in beforeEach() inside test suites that write to these tables.
  */
 export async function clearAuthTables(): Promise<void> {
-  await AppDataSource.query(`
+  await appDataSource.query(`
     TRUNCATE TABLE
       audit_logs,
       email_tokens,
@@ -71,7 +71,7 @@ export async function clearAuthTables(): Promise<void> {
  *   }));
  */
 export async function withTransaction(fn: () => Promise<void>): Promise<void> {
-  const queryRunner = AppDataSource.createQueryRunner();
+  const queryRunner = appDataSource.createQueryRunner();
   await queryRunner.connect();
   await queryRunner.startTransaction();
   try {
@@ -90,11 +90,11 @@ export async function setupTestRoleWithPermission(
   roleName: string,
   permissionKey: string,
 ): Promise<void> {
-  const roleRepo = AppDataSource.getRepository(Role);
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  const permissionRepo = AppDataSource.getRepository(Permission);
-  const moduleRepo = AppDataSource.getRepository(PermissionModule);
-  const rolePermissionRepo = AppDataSource.getRepository(RolePermission);
+  const roleRepo = appDataSource.getRepository(Role);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const permissionRepo = appDataSource.getRepository(Permission);
+  const moduleRepo = appDataSource.getRepository(PermissionModule);
+  const rolePermissionRepo = appDataSource.getRepository(RolePermission);
 
   const [modulePart] = permissionKey.split('.');
   let module = await moduleRepo.findOneBy({ name: modulePart });

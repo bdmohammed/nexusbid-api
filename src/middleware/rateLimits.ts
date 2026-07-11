@@ -16,7 +16,11 @@ export const loginLimiter = rateLimit({
   max: 10,
   standardHeaders,
   legacyHeaders,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many login attempts. Try again in 1 minute.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Too many login attempts. Try again in 1 minute.',
+  },
 });
 
 /** Registration: 5 requests per IP per hour */
@@ -25,7 +29,11 @@ export const registerLimiter = rateLimit({
   max: 5,
   standardHeaders,
   legacyHeaders,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many registration attempts. Try again in 1 hour.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Too many registration attempts. Try again in 1 hour.',
+  },
 });
 
 /** Password reset: 5 requests per IP per hour */
@@ -34,7 +42,11 @@ export const passwordResetLimiter = rateLimit({
   max: 5,
   standardHeaders,
   legacyHeaders,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many password reset attempts. Try again in 1 hour.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Too many password reset attempts. Try again in 1 hour.',
+  },
 });
 
 /** Resend email verification: 3 requests per IP per 15 minutes */
@@ -43,7 +55,11 @@ export const resendVerificationLimiter = rateLimit({
   max: 3,
   standardHeaders,
   legacyHeaders,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many verification link requests. Try again in 15 minutes.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Too many verification link requests. Try again in 15 minutes.',
+  },
 });
 
 /** Contact form: 3 requests per IP per hour */
@@ -52,7 +68,11 @@ export const contactLimiter = rateLimit({
   max: 3,
   standardHeaders,
   legacyHeaders,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many contact form submissions. Try again later.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Too many contact form submissions. Try again later.',
+  },
 });
 
 /**
@@ -65,7 +85,11 @@ export const downloadLimiter = rateLimit({
   standardHeaders,
   legacyHeaders,
   keyGenerator: (req) => req.user?.userId ?? req.ip ?? 'unknown',
-  message: { success: false, code: 'RATE_LIMITED', message: 'Download limit reached. Try again in 1 hour.' },
+  message: {
+    success: false,
+    code: 'RATE_LIMITED',
+    message: 'Download limit reached. Try again in 1 hour.',
+  },
 });
 
 /** Global API limit: 300 requests per IP per 15 minutes */

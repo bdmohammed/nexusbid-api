@@ -1,15 +1,16 @@
 import { Router } from 'express';
-import { RbacRoleController } from './controllers/RbacRoleController';
-import { RbacVersionController } from './controllers/RbacVersionController';
-import { RbacReviewController } from './controllers/RbacReviewController';
-import { RbacStatsController } from './controllers/RbacStatsController';
+
 import { authenticate } from '../../middleware/authenticate';
+import { requireAnyPermission, requirePermission } from '../../middleware/permissions';
 import { requireAccountType } from '../../middleware/requireAccountType';
-import { requirePermission, requireAnyPermission } from '../../middleware/permissions';
 import { AccountType } from '../../types/enums';
 
 // Let's import Export Controller correctly
 import { RbacExportController as ExportController } from './controllers/RbacExportController';
+import { RbacReviewController } from './controllers/RbacReviewController';
+import { RbacRoleController } from './controllers/RbacRoleController';
+import { RbacStatsController } from './controllers/RbacStatsController';
+import { RbacVersionController } from './controllers/RbacVersionController';
 
 const router = Router();
 
@@ -396,7 +397,11 @@ router.delete('/roles/:id', requirePermission('ROLE_ARCHIVE'), RbacRoleControlle
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/roles/:id/duplicate', requirePermission('ROLE_CREATE'), RbacRoleController.duplicateRole);
+router.post(
+  '/roles/:id/duplicate',
+  requirePermission('ROLE_CREATE'),
+  RbacRoleController.duplicateRole,
+);
 
 /**
  * @swagger
@@ -426,7 +431,11 @@ router.post('/roles/:id/duplicate', requirePermission('ROLE_CREATE'), RbacRoleCo
  *                     data:
  *                       $ref: '#/components/schemas/RbacRole'
  */
-router.post('/roles/:id/restore', requirePermission('ROLE_RESTORE'), RbacRoleController.restoreRole);
+router.post(
+  '/roles/:id/restore',
+  requirePermission('ROLE_RESTORE'),
+  RbacRoleController.restoreRole,
+);
 
 // ─── Role Assignments ─────────────────────────────────────────────────────────
 
@@ -528,7 +537,11 @@ router.post('/assignments', requirePermission('ROLE_ASSIGN'), RbacRoleController
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.delete('/assignments/:id', requirePermission('ROLE_ASSIGN'), RbacRoleController.revokeAssignment);
+router.delete(
+  '/assignments/:id',
+  requirePermission('ROLE_ASSIGN'),
+  RbacRoleController.revokeAssignment,
+);
 
 // ─── Metadata ────────────────────────────────────────────────────────────────
 
@@ -629,7 +642,11 @@ router.get('/modules', requirePermission('ROLE_VIEW'), RbacRoleController.getMod
  *                       items:
  *                         $ref: '#/components/schemas/RbacRoleVersion'
  */
-router.get('/roles/:roleId/versions', requirePermission('ROLE_VIEW'), RbacVersionController.getRoleVersions);
+router.get(
+  '/roles/:roleId/versions',
+  requirePermission('ROLE_VIEW'),
+  RbacVersionController.getRoleVersions,
+);
 
 /**
  * @swagger
@@ -654,7 +671,11 @@ router.get('/roles/:roleId/versions', requirePermission('ROLE_VIEW'), RbacVersio
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.post('/versions/:id/lock', requirePermission('ROLE_UPDATE'), RbacVersionController.lockVersion);
+router.post(
+  '/versions/:id/lock',
+  requirePermission('ROLE_UPDATE'),
+  RbacVersionController.lockVersion,
+);
 
 /**
  * @swagger
@@ -679,7 +700,11 @@ router.post('/versions/:id/lock', requirePermission('ROLE_UPDATE'), RbacVersionC
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.post('/versions/:id/unlock', requirePermission('ROLE_UPDATE'), RbacVersionController.unlockVersion);
+router.post(
+  '/versions/:id/unlock',
+  requirePermission('ROLE_UPDATE'),
+  RbacVersionController.unlockVersion,
+);
 
 /**
  * @swagger
@@ -730,7 +755,11 @@ router.post('/versions/:id/unlock', requirePermission('ROLE_UPDATE'), RbacVersio
  *                           type: array
  *                           items: { type: string }
  */
-router.get('/roles/:id/versions/:v1/compare/:v2', requirePermission('ROLE_COMPARE'), RbacVersionController.compareVersions);
+router.get(
+  '/roles/:id/versions/:v1/compare/:v2',
+  requirePermission('ROLE_COMPARE'),
+  RbacVersionController.compareVersions,
+);
 
 // ─── Approval Workflows ──────────────────────────────────────────────────────
 
@@ -784,7 +813,11 @@ router.get('/roles/:id/versions/:v1/compare/:v2', requirePermission('ROLE_COMPAR
  *                       properties:
  *                         reviewId: { type: string, format: uuid }
  */
-router.post('/versions/:versionId/submit', requirePermission('ROLE_UPDATE'), RbacReviewController.submitVersion);
+router.post(
+  '/versions/:versionId/submit',
+  requirePermission('ROLE_UPDATE'),
+  RbacReviewController.submitVersion,
+);
 
 /**
  * @swagger
@@ -831,7 +864,11 @@ router.post('/versions/:versionId/submit', requirePermission('ROLE_UPDATE'), Rba
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.post('/reviews/:reviewId/action', requireAnyPermission(['ROLE_REVIEW', 'ROLE_APPROVE', 'ROLE_REJECT']), RbacReviewController.submitReview);
+router.post(
+  '/reviews/:reviewId/action',
+  requireAnyPermission(['ROLE_REVIEW', 'ROLE_APPROVE', 'ROLE_REJECT']),
+  RbacReviewController.submitReview,
+);
 
 /**
  * @swagger

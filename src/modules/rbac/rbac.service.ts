@@ -1,29 +1,30 @@
-import { AppDataSource } from '../../config/database';
-import { Role, RoleStatus } from '../../entities/Role';
-import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
-import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
-import { RoleReview, ReviewStatus } from '../../entities/RoleReview';
-import { RoleReviewAssignment, ReviewAssignmentStatus } from '../../entities/RoleReviewAssignment';
-import { RoleReviewComment } from '../../entities/RoleReviewComment';
-import { Permission } from '../../entities/Permission';
-import { PermissionModule } from '../../entities/PermissionModule';
-import { UserRole } from '../../entities/UserRole';
-import { User } from '../../entities/User';
-import { AppError } from '../../core/AppError';
-import { rbacEventEmitter } from './events/RbacEvents';
 import slugify from 'slugify';
 import { In, Not } from 'typeorm';
 
+import { appDataSource } from '../../config/database';
+import { AppError } from '../../core/AppError';
+import { Permission } from '../../entities/Permission';
+import { PermissionModule } from '../../entities/PermissionModule';
+import { Role, RoleStatus } from '../../entities/Role';
+import { ReviewStatus, RoleReview } from '../../entities/RoleReview';
+import { ReviewAssignmentStatus, RoleReviewAssignment } from '../../entities/RoleReviewAssignment';
+import { RoleReviewComment } from '../../entities/RoleReviewComment';
+import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
+import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
+import { UserRole } from '../../entities/UserRole';
+
+import { rbacEventEmitter } from './events/RbacEvents';
+
 export class RbacService {
-  private static roleRepo = AppDataSource.getRepository(Role);
-  private static versionRepo = AppDataSource.getRepository(RoleVersion);
-  private static rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
-  private static reviewRepo = AppDataSource.getRepository(RoleReview);
-  private static assignmentRepo = AppDataSource.getRepository(RoleReviewAssignment);
-  private static commentRepo = AppDataSource.getRepository(RoleReviewComment);
-  private static permRepo = AppDataSource.getRepository(Permission);
-  private static moduleRepo = AppDataSource.getRepository(PermissionModule);
-  private static userRoleRepo = AppDataSource.getRepository(UserRole);
+  private static readonly roleRepo = appDataSource.getRepository(Role);
+  private static readonly versionRepo = appDataSource.getRepository(RoleVersion);
+  private static readonly rvpRepo = appDataSource.getRepository(RoleVersionPermission);
+  private static readonly reviewRepo = appDataSource.getRepository(RoleReview);
+  private static readonly assignmentRepo = appDataSource.getRepository(RoleReviewAssignment);
+  private static readonly commentRepo = appDataSource.getRepository(RoleReviewComment);
+  private static readonly permRepo = appDataSource.getRepository(Permission);
+  private static readonly moduleRepo = appDataSource.getRepository(PermissionModule);
+  private static readonly userRoleRepo = appDataSource.getRepository(UserRole);
 
   /**
    * Get all active, disabled and soft-deleted roles, joining their active version.
@@ -47,7 +48,7 @@ export class RbacService {
         displayVersion = sorted[0];
       }
 
-      const permissions = displayVersion?.roleVersionPermissions?.map((p) => p.permissionKey) || [];
+      const permissions = displayVersion?.roleVersionPermissions?.map((p) => p.permissionKey) ?? [];
 
       return {
         id: r.id,
@@ -56,9 +57,9 @@ export class RbacService {
         isSystemRole: r.isSystemRole,
         isDefaultRole: r.isDefaultRole,
         activeVersionId: r.activeVersionId,
-        name: displayVersion?.name || 'Unnamed Role',
-        description: displayVersion?.description || '',
-        version: displayVersion?.version || 0,
+        name: displayVersion?.name ?? 'Unnamed Role',
+        description: displayVersion?.description ?? '',
+        version: displayVersion?.version ?? 0,
         permissions,
         permissionKeys: permissions,
         createdAt: r.createdAt,
@@ -92,7 +93,7 @@ export class RbacService {
       displayVersion = sorted[0];
     }
 
-    const permissions = displayVersion?.roleVersionPermissions.map((p) => p.permissionKey) || [];
+    const permissions = displayVersion?.roleVersionPermissions.map((p) => p.permissionKey) ?? [];
 
     return {
       id: role.id,
@@ -101,9 +102,9 @@ export class RbacService {
       isSystemRole: role.isSystemRole,
       isDefaultRole: role.isDefaultRole,
       activeVersionId: role.activeVersionId,
-      name: displayVersion?.name || 'Unnamed Role',
-      description: displayVersion?.description || '',
-      version: displayVersion?.version || 0,
+      name: displayVersion?.name ?? 'Unnamed Role',
+      description: displayVersion?.description ?? '',
+      version: displayVersion?.version ?? 0,
       permissions,
       permissionKeys: permissions,
       createdAt: role.createdAt,
@@ -120,12 +121,16 @@ export class RbacService {
     permissionKeys: string[],
     userId: string,
   ): Promise<any> {
-    if (!name || name.trim() === '') {
+    if (!name ?? name.trim() === '') {
       throw new AppError('Role name is required', 400, 'VALIDATION_ERROR');
     }
 
-    if (!permissionKeys || permissionKeys.length === 0) {
-      throw new AppError('A role must have at least one permission assigned.', 400, 'VALIDATION_ERROR');
+    if (!permissionKeys ?? permissionKeys.length === 0) {
+      throw new AppError(
+        'A role must have at least one permission assigned.',
+        400,
+        'VALIDATION_ERROR',
+      );
     }
 
     const slug = slugify(name, { lower: true, strict: true });
@@ -135,7 +140,11 @@ export class RbacService {
       where: { name: name.trim() },
     });
     if (existingVersion) {
-      throw new AppError(`A role version with name "${name}" already exists.`, 409, 'ROLE_ALREADY_EXISTS');
+      throw new AppError(
+        `A role version with name "${name}" already exists.`,
+        409,
+        'ROLE_ALREADY_EXISTS',
+      );
     }
 
     // Resolve registry permissions
@@ -145,10 +154,14 @@ export class RbacService {
     });
 
     if (permissions.length === 0) {
-      throw new AppError('None of the assigned permissions exist in the registry.', 400, 'VALIDATION_ERROR');
+      throw new AppError(
+        'None of the assigned permissions exist in the registry.',
+        400,
+        'VALIDATION_ERROR',
+      );
     }
 
-    return AppDataSource.transaction(async (transactionManager) => {
+    return appDataSource.transaction(async (transactionManager) => {
       // 1. Create Role
       const role = new Role();
       role.slug = slug;
@@ -162,7 +175,7 @@ export class RbacService {
       version.roleId = savedRole.id;
       version.version = 1;
       version.name = name.trim();
-      version.description = description || '';
+      version.description = description ?? '';
       version.status = RoleVersionStatus.DRAFT;
       version.createdByUserId = userId;
       const savedVersion = await transactionManager.save(version);
@@ -218,8 +231,12 @@ export class RbacService {
       throw new AppError('System roles cannot be modified.', 403, 'SYSTEM_ROLE_PROTECTED');
     }
 
-    if (!permissionKeys || permissionKeys.length === 0) {
-      throw new AppError('A role must have at least one permission assigned.', 400, 'VALIDATION_ERROR');
+    if (!permissionKeys ?? permissionKeys.length === 0) {
+      throw new AppError(
+        'A role must have at least one permission assigned.',
+        400,
+        'VALIDATION_ERROR',
+      );
     }
 
     // Resolve registry permissions
@@ -228,14 +245,22 @@ export class RbacService {
       relations: ['module'],
     });
     if (permissions.length === 0) {
-      throw new AppError('None of the assigned permissions exist in the registry.', 400, 'VALIDATION_ERROR');
+      throw new AppError(
+        'None of the assigned permissions exist in the registry.',
+        400,
+        'VALIDATION_ERROR',
+      );
     }
 
     // Check if there is an editable draft
-    let draft = await this.versionRepo.findOne({
+    const draft = await this.versionRepo.findOne({
       where: {
         roleId: id,
-        status: In([RoleVersionStatus.DRAFT, RoleVersionStatus.REJECTED, RoleVersionStatus.REOPENED]),
+        status: In([
+          RoleVersionStatus.DRAFT,
+          RoleVersionStatus.REJECTED,
+          RoleVersionStatus.REOPENED,
+        ]),
       },
     });
 
@@ -244,7 +269,11 @@ export class RbacService {
       if (draft.lockedByUserId && draft.lockedByUserId !== userId && draft.lockedAt) {
         const lockExpiry = new Date(draft.lockedAt.getTime() + 15 * 60 * 1000);
         if (lockExpiry > new Date()) {
-          throw new AppError('This role draft is currently locked by another administrator.', 409, 'DRAFT_LOCKED');
+          throw new AppError(
+            'This role draft is currently locked by another administrator.',
+            409,
+            'DRAFT_LOCKED',
+          );
         }
       }
 
@@ -256,12 +285,12 @@ export class RbacService {
 
       // Update current draft
       draft.name = name.trim();
-      draft.description = description || '';
+      draft.description = description ?? '';
       draft.status = RoleVersionStatus.DRAFT; // Reset to Draft if it was rejected/reopened
       draft.lockedByUserId = null;
       draft.lockedAt = null;
 
-      await AppDataSource.transaction(async (transactionManager) => {
+      await appDataSource.transaction(async (transactionManager) => {
         await transactionManager.save(draft);
 
         // Delete old snapshot permissions
@@ -302,7 +331,7 @@ export class RbacService {
         .where('v.roleId = :roleId', { roleId: id })
         .select('MAX(v.version)', 'max')
         .getRawOne()
-        .then((res) => res?.max || 0);
+        .then((res) => res?.max ?? 0);
 
       const nextVersion = latestVersionNum + 1;
 
@@ -310,11 +339,11 @@ export class RbacService {
       newDraft.roleId = id;
       newDraft.version = nextVersion;
       newDraft.name = name.trim();
-      newDraft.description = description || '';
+      newDraft.description = description ?? '';
       newDraft.status = RoleVersionStatus.DRAFT;
       newDraft.createdByUserId = userId;
 
-      await AppDataSource.transaction(async (transactionManager) => {
+      await appDataSource.transaction(async (transactionManager) => {
         const savedDraft = await transactionManager.save(newDraft);
 
         const versionPermissions = permissions.map((p) => {
@@ -352,12 +381,7 @@ export class RbacService {
    */
   public static async duplicateRole(id: string, newName: string, userId: string): Promise<any> {
     const role = await this.getRoleById(id);
-    return this.createRole(
-      newName,
-      `Cloned from ${role.name}.`,
-      role.permissionKeys,
-      userId,
-    );
+    return this.createRole(newName, `Cloned from ${role.name}.`, role.permissionKeys, userId);
   }
 
   /**
@@ -370,7 +394,11 @@ export class RbacService {
     }
 
     if (role.isSystemRole) {
-      throw new AppError('System roles cannot be archived or deleted.', 403, 'SYSTEM_ROLE_PROTECTED');
+      throw new AppError(
+        'System roles cannot be archived or deleted.',
+        403,
+        'SYSTEM_ROLE_PROTECTED',
+      );
     }
 
     // Archive the role status
@@ -464,22 +492,29 @@ export class RbacService {
     const version = await this.versionRepo.findOne({ where: { id: versionId } });
     if (!version) throw new AppError('Role version not found', 404, 'NOT_FOUND');
 
-    if (version.status !== RoleVersionStatus.DRAFT && version.status !== RoleVersionStatus.REOPENED) {
+    if (
+      version.status !== RoleVersionStatus.DRAFT &&
+      version.status !== RoleVersionStatus.REOPENED
+    ) {
       throw new AppError('Only draft versions can be submitted for review.', 400, 'INVALID_STATE');
     }
 
     // Business Rules: Cannot assign oneself as reviewer
     if (reviewerIds.includes(userId)) {
-      throw new AppError('Creator/Submitter cannot be assigned as a reviewer.', 400, 'CREATOR_APPROVAL_BLOCKED');
+      throw new AppError(
+        'Creator/Submitter cannot be assigned as a reviewer.',
+        400,
+        'CREATOR_APPROVAL_BLOCKED',
+      );
     }
 
-    if (!reviewerIds || reviewerIds.length === 0) {
+    if (!reviewerIds ?? reviewerIds.length === 0) {
       throw new AppError('At least one reviewer must be assigned.', 400, 'VALIDATION_ERROR');
     }
 
     version.status = RoleVersionStatus.PENDING_REVIEW;
 
-    return AppDataSource.transaction(async (transactionManager) => {
+    return appDataSource.transaction(async (transactionManager) => {
       const savedVersion = await transactionManager.save(version);
 
       // Create Review Session
@@ -543,18 +578,26 @@ export class RbacService {
     });
 
     if (!assignment) {
-      throw new AppError('You are not assigned as a reviewer for this role.', 403, 'UNAUTHORIZED_REVIEWER');
+      throw new AppError(
+        'You are not assigned as a reviewer for this role.',
+        403,
+        'UNAUTHORIZED_REVIEWER',
+      );
     }
 
     if (assignment.status !== ReviewAssignmentStatus.PENDING) {
-      throw new AppError('You have already submitted your review decision.', 400, 'ALREADY_REVIEWED');
+      throw new AppError(
+        'You have already submitted your review decision.',
+        400,
+        'ALREADY_REVIEWED',
+      );
     }
 
     // Update assignment status
     assignment.status = status as any;
     assignment.reviewedAt = new Date();
 
-    await AppDataSource.transaction(async (transactionManager) => {
+    await appDataSource.transaction(async (transactionManager) => {
       await transactionManager.save(assignment);
 
       // Save Comment log
@@ -562,7 +605,7 @@ export class RbacService {
       commentLog.reviewId = review.id;
       commentLog.userId = userId;
       commentLog.action = status;
-      commentLog.comment = commentText || `${status} review submission.`;
+      commentLog.comment = commentText ?? `${status} review submission.`;
       await transactionManager.save(RoleReviewComment, commentLog);
 
       // Check all reviewer assignments to make final decision
@@ -571,9 +614,15 @@ export class RbacService {
       });
 
       const totalReviewers = allAssignments.length;
-      const approvals = allAssignments.filter((a) => a.status === ReviewAssignmentStatus.APPROVED).length;
-      const rejections = allAssignments.filter((a) => a.status === ReviewAssignmentStatus.REJECTED).length;
-      const changesRequested = allAssignments.filter((a) => a.status === ReviewAssignmentStatus.CHANGES_REQUESTED).length;
+      const approvals = allAssignments.filter(
+        (a) => a.status === ReviewAssignmentStatus.APPROVED,
+      ).length;
+      const rejections = allAssignments.filter(
+        (a) => a.status === ReviewAssignmentStatus.REJECTED,
+      ).length;
+      const changesRequested = allAssignments.filter(
+        (a) => a.status === ReviewAssignmentStatus.CHANGES_REQUESTED,
+      ).length;
 
       // Business Rules:
       // - Reject: If any reviewer rejects.
@@ -612,23 +661,27 @@ export class RbacService {
         await transactionManager.save(review.roleVersion);
 
         // Update active version of Role
-        const role = review.role;
+        const { role } = review;
         role.status = RoleStatus.ACTIVE;
         role.activeVersionId = review.roleVersionId;
         await transactionManager.save(role);
 
         // Check if role replaces a previous role
-        const description = review.roleVersion.description || '';
+        const description = review.roleVersion.description ?? '';
         const match = description.match(/\[ReplacesRole:\s*([0-9a-fA-F-]+)\]/);
         if (match) {
           const previousRoleId = match[1];
-          const previousRole = await transactionManager.findOne(Role, { where: { id: previousRoleId } });
+          const previousRole = await transactionManager.findOne(Role, {
+            where: { id: previousRoleId },
+          });
           if (previousRole) {
             previousRole.status = RoleStatus.DISABLED;
             await transactionManager.save(previousRole);
 
             // Migrate all users with that previous role to the new role
-            const userRoles = await transactionManager.find(UserRole, { where: { roleId: previousRoleId } });
+            const userRoles = await transactionManager.find(UserRole, {
+              where: { roleId: previousRoleId },
+            });
             for (const ur of userRoles) {
               const alreadyHasNew = await transactionManager.findOne(UserRole, {
                 where: { userId: ur.userId, roleId: role.id },
@@ -671,7 +724,7 @@ export class RbacService {
       relations: ['roleVersionPermissions'],
     });
 
-    if (!ver1 || !ver2) {
+    if (!ver1 ?? !ver2) {
       throw new AppError('One or both versions not found.', 404, 'NOT_FOUND');
     }
 
@@ -710,7 +763,7 @@ export class RbacService {
     const totalRoles = await this.roleRepo.count();
     const activeRoles = await this.roleRepo.count({ where: { status: RoleStatus.ACTIVE } });
     const pendingReviews = await this.reviewRepo.count({ where: { status: ReviewStatus.PENDING } });
-    
+
     // Distribution count by modules
     const permissions = await this.rvpRepo
       .createQueryBuilder('p')
@@ -731,16 +784,18 @@ export class RbacService {
    * Get audit trails for exports.
    */
   public static async getExportData(): Promise<any[]> {
-    const roles = await this.roleRepo.find({ relations: ['activeVersion', 'activeVersion.roleVersionPermissions'] });
+    const roles = await this.roleRepo.find({
+      relations: ['activeVersion', 'activeVersion.roleVersionPermissions'],
+    });
     return roles.map((r) => ({
       roleId: r.id,
       slug: r.slug,
       status: r.status,
       isSystemRole: r.isSystemRole,
-      name: r.activeVersion?.name || '',
-      description: r.activeVersion?.description || '',
-      version: r.activeVersion?.version || 0,
-      permissions: r.activeVersion?.roleVersionPermissions.map((p) => p.permissionKey) || [],
+      name: r.activeVersion?.name ?? '',
+      description: r.activeVersion?.description ?? '',
+      version: r.activeVersion?.version ?? 0,
+      permissions: r.activeVersion?.roleVersionPermissions.map((p) => p.permissionKey) ?? [],
     }));
   }
 
@@ -850,7 +905,7 @@ export class RbacService {
         review.status = ReviewStatus.REJECTED;
         review.roleVersion.status = RoleVersionStatus.REJECTED;
 
-        await AppDataSource.transaction(async (transactionManager) => {
+        await appDataSource.transaction(async (transactionManager) => {
           await transactionManager.save(review);
           await transactionManager.save(review.roleVersion);
 

@@ -1,21 +1,15 @@
+import { performance } from 'node:perf_hooks';
+
 import { appDataSource } from '../../config/database';
+import { logger } from '../../config/logger';
+import { AppError } from '../../core/AppError';
+import { Coupon } from '../../entities/Coupon';
 import { Plan } from '../../entities/Plan';
 import { Subscription } from '../../entities/Subscription';
-import { Coupon } from '../../entities/Coupon';
-import { AppError } from '../../core/AppError';
+import { cancelSubscription as paypalCancelSubscription } from '../../services/paypal/paypal.subscriptions';
 import { SubscriptionStatus } from '../../types/enums';
-import {
-  createSubscription as paypalCreateSubscription,
-  getSubscriptionApprovalUrl,
-  cancelSubscription as paypalCancelSubscription,
-} from '../../services/paypal/paypal.subscriptions';
-import {
-  createOrder as paypalCreateOrder,
-  getApprovalUrl as paypalGetOrderApprovalUrl,
-} from '../../services/paypal/paypal.orders';
+
 import type { CreateSubscriptionDto } from './subscriptions.dto';
-import { logger } from '../../config/logger';
-import { performance } from 'perf_hooks';
 
 const planRepository = appDataSource.getRepository(Plan);
 const subscriptionRepository = appDataSource.getRepository(Subscription);
@@ -26,7 +20,12 @@ const couponRepository = appDataSource.getRepository(Coupon);
 export async function listPlans(): Promise<Plan[]> {
   return planRepository.find({
     where: { status: 'ACTIVE' },
-    relations: ['activeVersion', 'activeVersion.features', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
+    relations: [
+      'activeVersion',
+      'activeVersion.features',
+      'activeVersion.countryPricing',
+      'activeVersion.categoryPricing',
+    ],
   });
 }
 
@@ -43,7 +42,7 @@ export async function createSubscription(
     where: { id: dto.planId, status: 'ACTIVE' },
     relations: ['activeVersion', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
   });
-  if (!plan || !plan.activeVersionId || !plan.activeVersion) {
+  if (!plan?.activeVersionId ?? !plan.activeVersion) {
     throw new AppError('Plan not found or inactive', 404, 'NOT_FOUND');
   }
 
@@ -54,17 +53,33 @@ export async function createSubscription(
     throw new AppError('State selection required for state-specific plan', 400, 'STATE_REQUIRED');
   }
   if (activeVer.planType === 'country' && !dto.targetCountry) {
-    throw new AppError('Country selection required for country-specific plan', 400, 'COUNTRY_REQUIRED');
+    throw new AppError(
+      'Country selection required for country-specific plan',
+      400,
+      'COUNTRY_REQUIRED',
+    );
   }
   if (activeVer.planType === 'category' && !dto.targetCategoryId) {
-    throw new AppError('Category selection required for category-specific plan', 400, 'CATEGORY_REQUIRED');
+    throw new AppError(
+      'Category selection required for category-specific plan',
+      400,
+      'CATEGORY_REQUIRED',
+    );
   }
   if (activeVer.planType === 'bundle') {
-    if (!dto.selectedCategoryIds || dto.selectedCategoryIds.length === 0) {
-      throw new AppError('Category selections required for custom bundle plan', 400, 'CATEGORIES_REQUIRED');
+    if (!dto.selectedCategoryIds ?? dto.selectedCategoryIds.length === 0) {
+      throw new AppError(
+        'Category selections required for custom bundle plan',
+        400,
+        'CATEGORIES_REQUIRED',
+      );
     }
     if (activeVer.bundleSize && dto.selectedCategoryIds.length > activeVer.bundleSize) {
-      throw new AppError(`You can select at most ${activeVer.bundleSize} categories`, 400, 'MAX_CATEGORIES_EXCEEDED');
+      throw new AppError(
+        `You can select at most ${activeVer.bundleSize} categories`,
+        400,
+        'MAX_CATEGORIES_EXCEEDED',
+      );
     }
   }
 
@@ -73,7 +88,7 @@ export async function createSubscription(
     where: { userId: user.userId, status: SubscriptionStatus.ACTIVE },
   });
   if (existingSubscription) {
-    if (existingSubscription.paypalSubscriptionId || existingSubscription.paypalOrderId) {
+    if (existingSubscription.paypalSubscriptionId ?? existingSubscription.paypalOrderId) {
       throw new AppError('You already have an active subscription', 409, 'ALREADY_SUBSCRIBED');
     }
   }
@@ -85,7 +100,10 @@ export async function createSubscription(
 
   // 1. Geographic Pricing Override
   if (user.country && activeVer.countryPricing) {
-    const countryPricingMatch = activeVer.countryPricing.find((countryPricingItem) => countryPricingItem.country.toLowerCase() === user.country!.toLowerCase());
+    const countryPricingMatch = activeVer.countryPricing.find(
+      (countryPricingItem) =>
+        countryPricingItem.country.toLowerCase() === user.country!.toLowerCase(),
+    );
     if (countryPricingMatch) {
       finalPriceCents = countryPricingMatch.priceCents;
     }
@@ -93,7 +111,9 @@ export async function createSubscription(
 
   // 2. Category Pricing Override
   if (activeVer.planType === 'category' && dto.targetCategoryId && activeVer.categoryPricing) {
-    const categoryPricingMatch = activeVer.categoryPricing.find((categoryPricingItem) => categoryPricingItem.categoryId === dto.targetCategoryId);
+    const categoryPricingMatch = activeVer.categoryPricing.find(
+      (categoryPricingItem) => categoryPricingItem.categoryId === dto.targetCategoryId,
+    );
     if (categoryPricingMatch) {
       finalPriceCents = categoryPricingMatch.priceCents;
     }
@@ -102,7 +122,9 @@ export async function createSubscription(
   // 3. Apply Coupon Discount (Coupon Code checking)
   let couponId: string | null = null;
   if (dto.couponCode) {
-    const coupon = await couponRepository.findOne({ where: { code: dto.couponCode, isActive: true } });
+    const coupon = await couponRepository.findOne({
+      where: { code: dto.couponCode, isActive: true },
+    });
     if (!coupon) throw new AppError('Coupon not found or inactive', 404, 'COUPON_NOT_FOUND');
 
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
@@ -153,21 +175,27 @@ export async function createSubscription(
     status: SubscriptionStatus.ACTIVE,
     paypalSubscriptionId: subscriptionId,
     paypalOrderId: orderId,
-    targetStateId: dto.targetStateId || null,
-    targetCountry: dto.targetCountry || null,
-    targetCategoryId: dto.targetCategoryId || null,
-    selectedCategoryIds: dto.selectedCategoryIds || null,
+    targetStateId: dto.targetStateId ?? null,
+    targetCountry: dto.targetCountry ?? null,
+    targetCategoryId: dto.targetCategoryId ?? null,
+    selectedCategoryIds: dto.selectedCategoryIds ?? null,
   });
 
   await subscriptionRepository.save(subscription);
 
   // Log audit info
-  logger.info({ planId: dto.planId, versionId: activeVer.id, finalPriceCents }, 'Subscription created');
+  logger.info(
+    { planId: dto.planId, versionId: activeVer.id, finalPriceCents },
+    'Subscription created',
+  );
 
   const durationMs = performance.now() - start;
-  logger.info({ planId: dto.planId, userId: user.userId, durationMs }, 'Subscription creation completed');
+  logger.info(
+    { planId: dto.planId, userId: user.userId, durationMs },
+    'Subscription creation completed',
+  );
 
-  return { approvalUrl, subscriptionId: (subscriptionId || orderId) as string };
+  return { approvalUrl, subscriptionId: (subscriptionId ?? orderId) as string };
 }
 
 // ─── Get current user's active subscription ───────────────────────────────────
@@ -208,5 +236,8 @@ export async function cancelMySubscription(userId: string): Promise<void> {
   await subscriptionRepository.update(subscription.id, { status: SubscriptionStatus.CANCELLED });
 
   const durationMs = performance.now() - start;
-  logger.info({ userId, subscriptionId: subscription.id, durationMs }, 'Subscription cancellation completed');
+  logger.info(
+    { userId, subscriptionId: subscription.id, durationMs },
+    'Subscription cancellation completed',
+  );
 }

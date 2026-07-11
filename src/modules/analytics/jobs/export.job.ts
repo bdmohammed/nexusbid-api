@@ -1,11 +1,12 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { AppDataSource } from '../../../config/database';
-import { ExportJob } from '../../../entities/ExportJob';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import { appDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
+import { ExportJob } from '../../../entities/ExportJob';
 
 export async function processNextExportJob(): Promise<void> {
-  const exportRepo = AppDataSource.getRepository(ExportJob);
+  const exportRepo = appDataSource.getRepository(ExportJob);
 
   // Find next pending job
   const job = await exportRepo.findOne({
@@ -26,21 +27,21 @@ export async function processNextExportJob(): Promise<void> {
     // 1. Resolve records based on type
     let data: any[] = [];
     if (job.exportType === 'tenders') {
-      data = await AppDataSource.query(`
+      data = await appDataSource.query(`
         SELECT id, title, slug, budget, category_id, status, created_at
         FROM tenders
         ORDER BY created_at DESC
         LIMIT 5000
       `);
     } else if (job.exportType === 'users') {
-      data = await AppDataSource.query(`
+      data = await appDataSource.query(`
         SELECT id, email, first_name, last_name, account_type, is_active, created_at
         FROM users
         ORDER BY created_at DESC
         LIMIT 5000
       `);
     } else if (job.exportType === 'financial') {
-      data = await AppDataSource.query(`
+      data = await appDataSource.query(`
         SELECT id, amount_cents, currency, status, type, reference_id, created_at
         FROM transactions
         ORDER BY created_at DESC
@@ -48,7 +49,7 @@ export async function processNextExportJob(): Promise<void> {
       `);
     } else {
       // General fall-back metrics
-      data = await AppDataSource.query(`
+      data = await appDataSource.query(`
         SELECT *
         FROM tender_daily_metrics
         ORDER BY date DESC
@@ -70,7 +71,7 @@ export async function processNextExportJob(): Promise<void> {
     for (const row of data) {
       const values = headers.map((header) => {
         const val = row[header];
-        const stringVal = val === null || val === undefined ? '' : String(val);
+        const stringVal = (val === null ?? val === undefined) ? '' : String(val);
         // Escape quotes
         return `"${stringVal.replace(/"/g, '""')}"`;
       });
@@ -103,14 +104,14 @@ export async function processNextExportJob(): Promise<void> {
     job.status = 'FAILED';
     job.progress = 100;
     job.finishedAt = new Date();
-    job.errorMessage = err?.message || 'Unknown error occurred during export';
+    job.errorMessage = err?.message ?? 'Unknown error occurred during export';
     await exportRepo.save(job);
   }
 }
 
 export async function cleanupExpiredExportFiles(): Promise<void> {
   logger.info('Cleaning up expired export files');
-  const exportRepo = AppDataSource.getRepository(ExportJob);
+  const exportRepo = appDataSource.getRepository(ExportJob);
   const now = new Date();
 
   try {

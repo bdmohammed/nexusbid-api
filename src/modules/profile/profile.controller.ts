@@ -1,10 +1,12 @@
-import { Request, Response } from 'express';
-import { asyncHandler } from '../../core/asyncHandler';
-import { sendOk } from '../../core/response';
-import * as profileService from './profile.service';
-import * as authService from '../auth/auth.service';
-import { JWT_COOKIE_NAME } from '../../core/constants';
 import { env } from '../../config/env';
+import { asyncHandler } from '../../core/asyncHandler';
+import { JWT_COOKIE_NAME } from '../../core/constants';
+import { sendOk } from '../../core/response';
+import * as authService from '../auth/auth.service';
+
+import * as profileService from './profile.service';
+
+import type { Request, Response } from 'express';
 
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   const profile = await profileService.getProfile(req.user!.userId);
@@ -30,8 +32,8 @@ export const removeAvatar = asyncHandler(async (req: Request, res: Response) => 
 
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const { currentPassword, newPassword } = req.validated as any;
-  const userAgent = req.headers['user-agent'] || null;
-  const ipAddress = req.ip || null;
+  const userAgent = req.headers['user-agent'] ?? null;
+  const ipAddress = req.ip ?? null;
 
   await authService.changeUserPassword(req.user!.userId, currentPassword, newPassword, {
     userAgent,
@@ -49,7 +51,7 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const getSessions = asyncHandler(async (req: Request, res: Response) => {
-  const refreshToken = req.cookies?.refreshToken || undefined;
+  const refreshToken = req.cookies?.refreshToken ?? undefined;
   const sessions = await authService.getUserSessions(req.user!.userId, refreshToken);
   return sendOk(res, sessions);
 });
@@ -79,15 +81,15 @@ export const getDevices = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getActivity = asyncHandler(async (req: Request, res: Response) => {
-  const page = parseInt(req.query['page'] as string || '1', 10);
-  const limit = parseInt(req.query['limit'] as string || '20', 10);
+  const page = parseInt((req.query['page'] as string) ?? '1', 10);
+  const limit = parseInt((req.query['limit'] as string) ?? '20', 10);
   const result = await profileService.getActivity(req.user!.userId, page, limit);
   return sendOk(res, result);
 });
 
 export const getSecurityHistory = asyncHandler(async (req: Request, res: Response) => {
-  const page = parseInt(req.query['page'] as string || '1', 10);
-  const limit = parseInt(req.query['limit'] as string || '20', 10);
+  const page = parseInt((req.query['page'] as string) ?? '1', 10);
+  const limit = parseInt((req.query['limit'] as string) ?? '20', 10);
   const result = await profileService.getSecurityHistory(req.user!.userId, page, limit);
   return sendOk(res, result);
 });

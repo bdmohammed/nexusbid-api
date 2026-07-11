@@ -1,13 +1,15 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
-import { RequestHandler } from 'express';
+
 import { env } from './env';
+
+import type { RequestHandler } from 'express';
 
 const serverUrls: Record<string, { url: string; description: string }[]> = {
   local: [{ url: 'http://localhost:3000', description: 'Local — all external services mocked' }],
-  dev:   [{ url: 'http://localhost:3000', description: 'Dev — real sandbox services' }],
-  uat:   [{ url: 'https://uat.nexusbid.com', description: 'UAT server' }],
-  prod:  [{ url: 'https://api.nexusbid.com', description: 'Production' }],
+  dev: [{ url: 'http://localhost:3000', description: 'Dev — real sandbox services' }],
+  uat: [{ url: 'https://uat.nexusbid.com', description: 'UAT server' }],
+  prod: [{ url: 'https://api.nexusbid.com', description: 'Production' }],
 };
 
 const options: swaggerJsdoc.Options = {
@@ -94,7 +96,8 @@ All responses use a consistent envelope:
           type: 'apiKey',
           in: 'cookie',
           name: 'nexusbid_token',
-          description: 'HTTP-only JWT access token. Set automatically on login. Customers: 7-day TTL. Admins: 4-hour TTL.',
+          description:
+            'HTTP-only JWT access token. Set automatically on login. Customers: 7-day TTL. Admins: 4-hour TTL.',
         },
         /**
          * Refresh cookie: used only by POST /auth/refresh.
@@ -103,7 +106,8 @@ All responses use a consistent envelope:
           type: 'apiKey',
           in: 'cookie',
           name: 'nexusbid_refresh',
-          description: 'HTTP-only refresh token. Used exclusively by POST /api/v1/auth/refresh to rotate the session.',
+          description:
+            'HTTP-only refresh token. Used exclusively by POST /api/v1/auth/refresh to rotate the session.',
         },
         /**
          * CSRF protection: required on all state-mutating requests except webhooks.
@@ -114,13 +118,13 @@ All responses use a consistent envelope:
           type: 'apiKey',
           in: 'header',
           name: 'x-csrf-token',
-          description: 'CSRF token. Obtain from GET /api/v1/auth/csrf-token. Required on POST/PATCH/PUT/DELETE in dev/uat/prod. Disabled in local env.',
+          description:
+            'CSRF token. Obtain from GET /api/v1/auth/csrf-token. Required on POST/PATCH/PUT/DELETE in dev/uat/prod. Disabled in local env.',
         },
       },
 
       // ─── Reusable Schemas ───────────────────────────────────────────────────
       schemas: {
-
         // ── Envelopes ──────────────────────────────────────────────────────────
         SuccessResponse: {
           type: 'object',
@@ -129,7 +133,11 @@ All responses use a consistent envelope:
             success: { type: 'boolean', example: true },
             message: { type: 'string', example: 'Operation completed successfully' },
             data: { description: 'Response payload — null for operations with no data' },
-            traceId: { type: 'string', format: 'uuid', description: 'Unique request trace ID for support' },
+            traceId: {
+              type: 'string',
+              format: 'uuid',
+              description: 'Unique request trace ID for support',
+            },
           },
         },
         ErrorResponse: {
@@ -143,11 +151,23 @@ All responses use a consistent envelope:
               example: 'VALIDATION_ERROR',
               description: 'Machine-readable error code',
               enum: [
-                'UNAUTHENTICATED', 'INVALID_TOKEN', 'TOKEN_EXPIRED', 'SESSION_REVOKED',
-                'ACCOUNT_NOT_FOUND', 'ACCOUNT_BLOCKED', 'FORCED_PASSWORD_RESET', 'PASSWORD_EXPIRED',
-                'FORBIDDEN', 'NOT_FOUND', 'CONFLICT', 'FK_VIOLATION',
-                'VALIDATION_ERROR', 'RATE_LIMITED', 'CSRF_INVALID',
-                'INTERNAL_ERROR', 'PERMISSION_LOAD_FAILED',
+                'UNAUTHENTICATED',
+                'INVALID_TOKEN',
+                'TOKEN_EXPIRED',
+                'SESSION_REVOKED',
+                'ACCOUNT_NOT_FOUND',
+                'ACCOUNT_BLOCKED',
+                'FORCED_PASSWORD_RESET',
+                'PASSWORD_EXPIRED',
+                'FORBIDDEN',
+                'NOT_FOUND',
+                'CONFLICT',
+                'FK_VIOLATION',
+                'VALIDATION_ERROR',
+                'RATE_LIMITED',
+                'CSRF_INVALID',
+                'INTERNAL_ERROR',
+                'PERMISSION_LOAD_FAILED',
               ],
             },
             errors: {
@@ -172,7 +192,11 @@ All responses use a consistent envelope:
           type: 'object',
           required: ['total', 'page', 'limit', 'totalPages'],
           properties: {
-            total: { type: 'integer', example: 250, description: 'Total number of records matching the query' },
+            total: {
+              type: 'integer',
+              example: 250,
+              description: 'Total number of records matching the query',
+            },
             page: { type: 'integer', example: 1, description: 'Current page number (1-indexed)' },
             limit: { type: 'integer', example: 20, description: 'Records per page' },
             totalPages: { type: 'integer', example: 13, description: 'Total pages available' },
@@ -245,7 +269,12 @@ All responses use a consistent envelope:
           required: ['email', 'password'],
           properties: {
             email: { type: 'string', format: 'email', example: 'jane@example.com' },
-            password: { type: 'string', example: 'SecurePass123!', description: 'Minimum 1 character (validation is intentionally permissive to avoid enumeration)' },
+            password: {
+              type: 'string',
+              example: 'SecurePass123!',
+              description:
+                'Minimum 1 character (validation is intentionally permissive to avoid enumeration)',
+            },
             rememberMe: {
               type: 'boolean',
               default: false,
@@ -276,7 +305,15 @@ All responses use a consistent envelope:
             emailVerified: { type: 'boolean', example: true },
             status: {
               type: 'string',
-              enum: ['pending_email_verification', 'pending_approval', 'active', 'rejected', 'suspended', 'deactivated', 'archived'],
+              enum: [
+                'pending_email_verification',
+                'pending_approval',
+                'active',
+                'rejected',
+                'suspended',
+                'deactivated',
+                'archived',
+              ],
               example: 'active',
             },
             companyName: { type: 'string', nullable: true, example: 'Acme Corp' },
@@ -288,7 +325,7 @@ All responses use a consistent envelope:
 
         MeResponse: {
           allOf: [
-            { '$ref': '#/components/schemas/AuthUser' },
+            { $ref: '#/components/schemas/AuthUser' },
             {
               type: 'object',
               properties: {
@@ -317,7 +354,10 @@ All responses use a consistent envelope:
             ipAddress: { type: 'string', nullable: true, example: '192.168.1.1' },
             createdAt: { type: 'string', format: 'date-time' },
             expiresAt: { type: 'string', format: 'date-time' },
-            isCurrent: { type: 'boolean', description: 'True if this is the caller\'s current session' },
+            isCurrent: {
+              type: 'boolean',
+              description: "True if this is the caller's current session",
+            },
           },
         },
 
@@ -342,11 +382,19 @@ All responses use a consistent envelope:
             id: { type: 'string', format: 'uuid' },
             title: { type: 'string', example: 'Road Resurfacing Project Phase 2' },
             slug: { type: 'string', example: 'road-resurfacing-project-phase-2-ref-12345' },
-            agency: { type: 'string', example: 'CDOT — Colorado Dept of Transportation', nullable: true },
+            agency: {
+              type: 'string',
+              example: 'CDOT — Colorado Dept of Transportation',
+              nullable: true,
+            },
             deadline: { type: 'string', format: 'date-time', nullable: true },
             postedDate: { type: 'string', format: 'date', nullable: true },
             isFeatured: { type: 'boolean', example: false },
-            priceCents: { type: 'integer', example: 999, description: 'Per-tender purchase price in USD cents' },
+            priceCents: {
+              type: 'integer',
+              example: 999,
+              description: 'Per-tender purchase price in USD cents',
+            },
             categoryId: { type: 'string', format: 'uuid', nullable: true },
             stateId: { type: 'string', format: 'uuid', nullable: true },
             lifecycleStatus: {
@@ -369,7 +417,7 @@ All responses use a consistent envelope:
 
         TenderDetail: {
           allOf: [
-            { '$ref': '#/components/schemas/TenderPreview' },
+            { $ref: '#/components/schemas/TenderPreview' },
             {
               type: 'object',
               description: 'Full detail — requires active subscription or individual purchase',
@@ -379,13 +427,22 @@ All responses use a consistent envelope:
                 eligibility: { type: 'string', nullable: true },
                 contactInfo: { type: 'string', nullable: true },
                 city: { type: 'string', nullable: true },
-                documentOriginalName: { type: 'string', nullable: true, example: 'rfp-document.pdf' },
-                hasDocument: { type: 'boolean', example: true, description: 'Whether a PDF document is attached' },
+                documentOriginalName: {
+                  type: 'string',
+                  nullable: true,
+                  example: 'rfp-document.pdf',
+                },
+                hasDocument: {
+                  type: 'boolean',
+                  example: true,
+                  description: 'Whether a PDF document is attached',
+                },
                 downloadUrl: {
                   type: 'string',
                   format: 'uri',
                   nullable: true,
-                  description: 'Pre-signed S3 URL valid for 15 minutes — only present when caller has access',
+                  description:
+                    'Pre-signed S3 URL valid for 15 minutes — only present when caller has access',
                 },
               },
             },
@@ -490,19 +547,34 @@ All responses use a consistent envelope:
           description: 'Authentication required — no valid session cookie found',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
               examples: {
                 noToken: {
                   summary: 'No session cookie',
-                  value: { success: false, message: 'Authentication required', error: 'UNAUTHENTICATED', traceId: 'uuid' },
+                  value: {
+                    success: false,
+                    message: 'Authentication required',
+                    error: 'UNAUTHENTICATED',
+                    traceId: 'uuid',
+                  },
                 },
                 expired: {
                   summary: 'Token expired',
-                  value: { success: false, message: 'Access token expired', error: 'TOKEN_EXPIRED', traceId: 'uuid' },
+                  value: {
+                    success: false,
+                    message: 'Access token expired',
+                    error: 'TOKEN_EXPIRED',
+                    traceId: 'uuid',
+                  },
                 },
                 revoked: {
                   summary: 'Session revoked',
-                  value: { success: false, message: 'Session has been revoked', error: 'SESSION_REVOKED', traceId: 'uuid' },
+                  value: {
+                    success: false,
+                    message: 'Session has been revoked',
+                    error: 'SESSION_REVOKED',
+                    traceId: 'uuid',
+                  },
                 },
               },
             },
@@ -512,8 +584,13 @@ All responses use a consistent envelope:
           description: 'Authenticated but insufficient permissions',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'Forbidden: Insufficient Permissions', error: 'FORBIDDEN', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'Forbidden: Insufficient Permissions',
+                error: 'FORBIDDEN',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -521,8 +598,13 @@ All responses use a consistent envelope:
           description: 'Resource not found',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'Resource not found', error: 'NOT_FOUND', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'Resource not found',
+                error: 'NOT_FOUND',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -530,8 +612,13 @@ All responses use a consistent envelope:
           description: 'Resource already exists (unique constraint violation)',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'A record with this value already exists', error: 'CONFLICT', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'A record with this value already exists',
+                error: 'CONFLICT',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -539,12 +626,18 @@ All responses use a consistent envelope:
           description: 'Request body failed Zod schema validation',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
               example: {
                 success: false,
                 message: 'Validation failed',
                 error: 'VALIDATION_ERROR',
-                errors: [{ field: 'email', message: 'Invalid email' }, { field: 'password', message: 'Password must contain at least one uppercase letter' }],
+                errors: [
+                  { field: 'email', message: 'Invalid email' },
+                  {
+                    field: 'password',
+                    message: 'Password must contain at least one uppercase letter',
+                  },
+                ],
                 traceId: 'uuid',
               },
             },
@@ -554,8 +647,13 @@ All responses use a consistent envelope:
           description: 'Too many requests — rate limit exceeded',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'Too many requests. Slow down.', error: 'RATE_LIMITED', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'Too many requests. Slow down.',
+                error: 'RATE_LIMITED',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -563,8 +661,13 @@ All responses use a consistent envelope:
           description: 'CSRF token missing or invalid',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'CSRF validation failed. Refresh the page and try again.', error: 'CSRF_INVALID', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'CSRF validation failed. Refresh the page and try again.',
+                error: 'CSRF_INVALID',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -572,8 +675,13 @@ All responses use a consistent envelope:
           description: 'Unexpected server error',
           content: {
             'application/json': {
-              schema: { '$ref': '#/components/schemas/ErrorResponse' },
-              example: { success: false, message: 'An unexpected error occurred', error: 'INTERNAL_ERROR', traceId: 'uuid' },
+              schema: { $ref: '#/components/schemas/ErrorResponse' },
+              example: {
+                success: false,
+                message: 'An unexpected error occurred',
+                error: 'INTERNAL_ERROR',
+                traceId: 'uuid',
+              },
             },
           },
         },
@@ -584,33 +692,53 @@ All responses use a consistent envelope:
     security: [],
 
     tags: [
-      { name: 'Health',        description: 'System health and readiness checks' },
-      { name: 'Auth',          description: 'Customer authentication — login, register, email verification, password reset, sessions, devices, OAuth' },
-      { name: 'Admin Auth',    description: 'Admin-specific authentication — separate login flow, bootstrap, owner review' },
-      { name: 'Profile',       description: 'Authenticated user profile management' },
-      { name: 'Tenders',       description: 'Public tender browsing, search, and Q&A' },
-      { name: 'Tenders Admin', description: 'Admin tender CRUD, workflow, reviews, assignments — requires admin account + permissions' },
-      { name: 'Subscriptions', description: 'Subscription status and PayPal checkout for customers' },
-      { name: 'Plans',         description: 'Public plan listing and admin plan management' },
-      { name: 'Admin Users',   description: 'Admin user management — list, block, impersonate, roles, notes' },
-      { name: 'RBAC',          description: 'Role-Based Access Control — roles, permissions, version workflow' },
-      { name: 'Categories',    description: 'Tender category taxonomy — public read, admin write' },
-      { name: 'States',        description: 'US states and territories reference data' },
-      { name: 'Support',       description: 'Customer support ticket system' },
+      { name: 'Health', description: 'System health and readiness checks' },
+      {
+        name: 'Auth',
+        description:
+          'Customer authentication — login, register, email verification, password reset, sessions, devices, OAuth',
+      },
+      {
+        name: 'Admin Auth',
+        description: 'Admin-specific authentication — separate login flow, bootstrap, owner review',
+      },
+      { name: 'Profile', description: 'Authenticated user profile management' },
+      { name: 'Tenders', description: 'Public tender browsing, search, and Q&A' },
+      {
+        name: 'Tenders Admin',
+        description:
+          'Admin tender CRUD, workflow, reviews, assignments — requires admin account + permissions',
+      },
+      {
+        name: 'Subscriptions',
+        description: 'Subscription status and PayPal checkout for customers',
+      },
+      { name: 'Plans', description: 'Public plan listing and admin plan management' },
+      {
+        name: 'Admin Users',
+        description: 'Admin user management — list, block, impersonate, roles, notes',
+      },
+      {
+        name: 'RBAC',
+        description: 'Role-Based Access Control — roles, permissions, version workflow',
+      },
+      { name: 'Categories', description: 'Tender category taxonomy — public read, admin write' },
+      { name: 'States', description: 'US states and territories reference data' },
+      { name: 'Support', description: 'Customer support ticket system' },
       { name: 'Notifications', description: 'In-app notification management' },
-      { name: 'Analytics',     description: 'BI analytics — revenue, rollups, exports, scheduled reports' },
-      { name: 'Dashboard',     description: 'Dashboard summary data aggregation' },
-      { name: 'Audit Logs',    description: 'Immutable audit trail, exports, security alert scanner' },
-      { name: 'Webhooks',      description: 'PayPal webhook ingestion — internal use only, no CSRF' },
-      { name: 'Setup',         description: 'First-time system bootstrap wizard' },
+      {
+        name: 'Analytics',
+        description: 'BI analytics — revenue, rollups, exports, scheduled reports',
+      },
+      { name: 'Dashboard', description: 'Dashboard summary data aggregation' },
+      { name: 'Audit Logs', description: 'Immutable audit trail, exports, security alert scanner' },
+      { name: 'Webhooks', description: 'PayPal webhook ingestion — internal use only, no CSRF' },
+      { name: 'Setup', description: 'First-time system bootstrap wizard' },
     ],
   },
 
   // Scan all route files + app.ts (health check)
-  apis: [
-    './src/modules/**/*.routes.ts',
-    './src/config/app.ts',
-  ],
+  apis: ['./src/modules/**/*.routes.ts', './src/config/app.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
@@ -638,5 +766,5 @@ export const swaggerMiddleware: RequestHandler[] = [
       }
       .swagger-ui .info .description p { font-size: 14px; }
     `,
-  }) as unknown as RequestHandler,
+  }),
 ];

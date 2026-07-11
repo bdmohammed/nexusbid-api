@@ -1,9 +1,9 @@
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
+import { logger } from '../config/logger';
 import { Subscription } from '../entities/Subscription';
 import { SubscriptionStatus } from '../types/enums';
-import { logger } from '../config/logger';
 
-const subRepo = AppDataSource.getRepository(Subscription);
+const subRepo = appDataSource.getRepository(Subscription);
 
 /**
  * Expire Subscriptions Job — runs hourly.
@@ -20,8 +20,5 @@ export async function expireSubscriptionsJob(): Promise<void> {
     .andWhere('"endDate" < :now', { now: new Date() })
     .execute();
 
-  logger.info(
-    { affected: result.affected },
-    'Expire subscriptions job: subscriptions expired',
-  );
+  logger.info({ affected: result.affected }, 'Expire subscriptions job: subscriptions expired');
 }

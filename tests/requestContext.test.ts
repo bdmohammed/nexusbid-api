@@ -63,7 +63,7 @@ describe('Request Trace ID (Correlation ID) & AsyncLocalStorage Context', () => 
   it('should parse W3C traceparent header if X-Trace-Id is absent', async () => {
     const w3cTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';
     const traceparent = `00-${w3cTraceId}-00f067aa0ba902b7-01`;
-    
+
     const res = await request(app)
       .get('/api/v1/auth/csrf-token')
       .set('traceparent', traceparent)
@@ -75,7 +75,7 @@ describe('Request Trace ID (Correlation ID) & AsyncLocalStorage Context', () => 
 
   it('should ignore malformed W3C traceparent header and generate a new UUID', async () => {
     const malformed = '00-malformedtraceid-too-short-01';
-    
+
     const res = await request(app)
       .get('/api/v1/auth/csrf-token')
       .set('traceparent', malformed)
@@ -142,12 +142,12 @@ describe('Request Trace ID (Correlation ID) & AsyncLocalStorage Context', () => 
     expect(task).toBeDefined();
 
     // Trigger the callback function
-    const cronCallback = task._executor || task.task; 
+    const cronCallback = task._executor ?? task.task;
     if (typeof cronCallback === 'function') {
       await cronCallback();
     } else {
       // Direct call fallback for node-cron task structure
-      const callbacks = (task as any)._callbacks || [];
+      const callbacks = (task as any)._callbacks ?? [];
       for (const cb of callbacks) {
         await cb();
       }

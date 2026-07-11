@@ -1,21 +1,19 @@
-// src/authorization/registry/types.ts
-//
 // Canonical types are defined here.
 
 export type PermissionAction =
-  | "view"
-  | "create"
-  | "update"
-  | "delete"
-  | "approve"
-  | "reject"
-  | "publish"
-  | "archive"
-  | "restore"
-  | "export"
-  | "import"
-  | "manage"
-  | "custom";
+  | 'view'
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'approve'
+  | 'reject'
+  | 'publish'
+  | 'archive'
+  | 'restore'
+  | 'export'
+  | 'import'
+  | 'manage'
+  | 'custom';
 
 export interface PermissionDependency {
   /**

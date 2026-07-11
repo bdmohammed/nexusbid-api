@@ -1,10 +1,11 @@
-import { Request, Response } from 'express';
 import { appDataSource } from '../../config/database';
-import { TenderVersion } from '../../entities/TenderVersion';
-import { Tender } from '../../entities/Tender';
-import { TenderSubmission } from '../../entities/TenderSubmission';
-import { TenderParticipant } from '../../entities/TenderParticipant';
 import { logger } from '../../config/logger';
+import { Tender } from '../../entities/Tender';
+import { TenderParticipant } from '../../entities/TenderParticipant';
+import { TenderSubmission } from '../../entities/TenderSubmission';
+import { TenderVersion } from '../../entities/TenderVersion';
+
+import type { Request, Response } from 'express';
 
 const tenderRepository = appDataSource.getRepository(Tender);
 const tenderVersionRepository = appDataSource.getRepository(TenderVersion);
@@ -74,8 +75,9 @@ export async function getPerformanceReport(req: Request, res: Response): Promise
       data: {
         totalSubmissions: submissionCount,
         totalParticipants: activeParticipants,
-        averageSubmissionsPerTender: activeParticipants > 0 ? (submissionCount / activeParticipants).toFixed(2) : 0,
-      }
+        averageSubmissionsPerTender:
+          activeParticipants > 0 ? (submissionCount / activeParticipants).toFixed(2) : 0,
+      },
     });
   } catch (error) {
     logger.error({ error }, 'Error compiling performance report');

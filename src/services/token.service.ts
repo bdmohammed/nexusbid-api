@@ -1,11 +1,14 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
+
 import { IsNull, MoreThan } from 'typeorm';
+
 import { appDataSource } from '../config/database';
-import { EmailToken } from '../entities/EmailToken';
-import { User } from '../entities/User';
 import { AppError } from '../core/AppError';
 import { EMAIL_TOKEN_TTL } from '../core/constants';
+import { EmailToken } from '../entities/EmailToken';
 import { EmailTokenType } from '../types/enums';
+
+import type { User } from '../entities/User';
 
 const emailTokenRepository = appDataSource.getRepository(EmailToken);
 
@@ -17,10 +20,7 @@ const emailTokenRepository = appDataSource.getRepository(EmailToken);
  *
  * Single-use: tokens are marked usedAt on consumption.
  */
-export async function createEmailToken(
-  userId: string,
-  type: EmailTokenType,
-): Promise<string> {
+export async function createEmailToken(userId: string, type: EmailTokenType): Promise<string> {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
@@ -63,11 +63,7 @@ export async function verifyAndConsumeToken(
   });
 
   if (!matched) {
-    throw new AppError(
-      'Invalid or expired token',
-      400,
-      'INVALID_TOKEN',
-    );
+    throw new AppError('Invalid or expired token', 400, 'INVALID_TOKEN');
   }
 
   // Mark as used
@@ -85,10 +81,7 @@ export async function verifyAndConsumeToken(
  * Deletes all tokens of a given type for a user.
  * Called after successful password reset to prevent token reuse.
  */
-export async function deleteTokensByType(
-  userId: string,
-  type: EmailTokenType,
-): Promise<void> {
+export async function deleteTokensByType(userId: string, type: EmailTokenType): Promise<void> {
   await emailTokenRepository.delete({ userId, type });
 }
 
@@ -110,11 +103,9 @@ export async function getValidTokenDetails(
     relations: ['user'],
   });
 
-  if (!matched || !matched.user) {
+  if (!matched?.user) {
     throw new AppError('Invalid or expired token', 400, 'INVALID_TOKEN');
   }
 
-  return matched as EmailToken & { user: User };
+  return matched;
 }
-
-

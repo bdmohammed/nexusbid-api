@@ -1,9 +1,10 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppDataSource } from '../config/database';
-import { User } from '../entities/User';
+import { appDataSource } from '../config/database';
 import { AppError } from '../core/AppError';
+import { User } from '../entities/User';
 
-const userRepo = AppDataSource.getRepository(User);
+import type { NextFunction, Request, Response } from 'express';
+
+const userRepo = appDataSource.getRepository(User);
 
 /**
  * Intercepts requests for users who are marked for a forced password reset.
@@ -12,7 +13,7 @@ const userRepo = AppDataSource.getRepository(User);
 export const checkForcedReset = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   if (!req.user) {
     return next();
@@ -24,7 +25,7 @@ export const checkForcedReset = async (
     '/api/v1/auth/password/change',
   ];
 
-  const path = req.originalUrl.split('?')[0] || '';
+  const path = req.originalUrl.split('?')[0] ?? '';
   if (bypassRoutes.some((route) => path.startsWith(route))) {
     return next();
   }
@@ -35,7 +36,9 @@ export const checkForcedReset = async (
   });
 
   if (user?.mustResetPassword) {
-    return next(new AppError('You must reset your password before continuing.', 403, 'FORCED_PASSWORD_RESET'));
+    return next(
+      new AppError('You must reset your password before continuing.', 403, 'FORCED_PASSWORD_RESET'),
+    );
   }
 
   next();
@@ -48,18 +51,15 @@ export const checkForcedReset = async (
 export const checkPasswordExpiration = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   if (!req.user) {
     return next();
   }
 
-  const bypassRoutes = [
-    '/api/v1/auth/logout',
-    '/api/v1/auth/password/change',
-  ];
+  const bypassRoutes = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
 
-  const path = req.originalUrl.split('?')[0] || '';
+  const path = req.originalUrl.split('?')[0] ?? '';
   if (bypassRoutes.some((route) => path.startsWith(route))) {
     return next();
   }
@@ -70,11 +70,13 @@ export const checkPasswordExpiration = async (
   });
 
   if (user) {
-    const lastChanged = user.passwordChangedAt || user.createdAt;
+    const lastChanged = user.passwordChangedAt ?? user.createdAt;
     const daysSinceChange = (Date.now() - lastChanged.getTime()) / (24 * 60 * 60 * 1000);
 
     if (daysSinceChange > 90) {
-      return next(new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED'));
+      return next(
+        new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED'),
+      );
     }
   }
 

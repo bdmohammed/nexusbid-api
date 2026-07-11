@@ -1,20 +1,34 @@
-import express, { Router } from 'express';
-import { authenticate } from '../../middleware/authenticate';
-import { requireAccountType } from '../../middleware/requireAccountType';
-import { requirePermission } from '../../middleware/permissions';
-import { validate } from '../../middleware/validate';
+import { Router } from 'express';
+
 import { auditLogger } from '../../middleware/auditLogger';
+import { authenticate } from '../../middleware/authenticate';
+import { requirePermission } from '../../middleware/permissions';
+import { requireAccountType } from '../../middleware/requireAccountType';
+import { validate } from '../../middleware/validate';
 import { AccountType } from '../../types/enums';
-import {
-  BlockUserDto, ListUsersQueryDto, CreateAdminDto,
-  CreatePlanDto, UpdatePlanDto, AnalyticsQueryDto,
-  CreateUserNoteDto, UpdateUserDetailDto, ImpersonateUserDto,
-} from './admin.dto';
-import * as controller from './admin.controller';
-import setupRouter from '../rbac/setup.routes';
-import { RegisterDto, LoginDto, VerifyEmailDto, ResendVerificationDto, ForgotPasswordDto, ResetPasswordDto } from '../auth/auth.dto';
 import * as authController from '../auth/auth.controller';
-import { loadPermissions } from '../../middleware/permissions';
+import {
+  ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResendVerificationDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from '../auth/auth.dto';
+import setupRouter from '../rbac/setup.routes';
+
+import * as controller from './admin.controller';
+import {
+  AnalyticsQueryDto,
+  BlockUserDto,
+  CreateAdminDto,
+  CreatePlanDto,
+  CreateUserNoteDto,
+  ImpersonateUserDto,
+  ListUsersQueryDto,
+  UpdatePlanDto,
+  UpdateUserDetailDto,
+} from './admin.dto';
 
 const router = Router();
 
@@ -122,7 +136,11 @@ router.post('/auth/verify-email', validate(VerifyEmailDto), authController.verif
  *       200:
  *         description: Verification email resent
  */
-router.post('/auth/resend-verification', validate(ResendVerificationDto), authController.resendAdminVerification);
+router.post(
+  '/auth/resend-verification',
+  validate(ResendVerificationDto),
+  authController.resendAdminVerification,
+);
 
 /**
  * @swagger
@@ -147,7 +165,11 @@ router.post('/auth/resend-verification', validate(ResendVerificationDto), authCo
  *       200:
  *         description: Password reset email sent
  */
-router.post('/auth/forgot-password', validate(ForgotPasswordDto), authController.forgotAdminPassword);
+router.post(
+  '/auth/forgot-password',
+  validate(ForgotPasswordDto),
+  authController.forgotAdminPassword,
+);
 
 /**
  * @swagger
@@ -217,7 +239,6 @@ router.get('/auth/owner-review', authController.ownerReview);
 router.get('/auth/bootstrap', authController.verifyBootstrapToken);
 router.post('/auth/bootstrap', authController.approveBootstrapAdmin);
 
-
 // ─── Protected Admin Endpoints (Require Admin Session) ─────────────────────────
 router.use(authenticate, requireAccountType(AccountType.ADMIN));
 
@@ -283,7 +304,12 @@ router.get('/users/stats', requirePermission('user.view'), controller.getUserSta
  *       200:
  *         description: Users list resolved
  */
-router.get('/users', requirePermission('user.view'), validate(ListUsersQueryDto, 'query'), controller.listUsers);
+router.get(
+  '/users',
+  requirePermission('user.view'),
+  validate(ListUsersQueryDto, 'query'),
+  controller.listUsers,
+);
 
 /**
  * @swagger
@@ -603,7 +629,11 @@ router.get('/users/:id/audit', requirePermission('user.view'), controller.getUse
  *       200:
  *         description: Subscription status details
  */
-router.get('/users/:id/subscription', requirePermission('user.view'), controller.getUserSubscription);
+router.get(
+  '/users/:id/subscription',
+  requirePermission('user.view'),
+  controller.getUserSubscription,
+);
 
 /**
  * @swagger
@@ -1062,7 +1092,11 @@ router.delete(
  *       200:
  *         description: Flat permissions key list
  */
-router.get('/users/:id/permissions', requirePermission('rbac.manage'), controller.previewUserPermissions);
+router.get(
+  '/users/:id/permissions',
+  requirePermission('rbac.manage'),
+  controller.previewUserPermissions,
+);
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 
@@ -1103,7 +1137,12 @@ router.get('/users/:id/permissions', requirePermission('rbac.manage'), controlle
  *         description: Plan created
  */
 router.get('/plans', requirePermission('plan.manage'), controller.listPlans);
-router.post('/plans', requirePermission('plan.manage'), validate(CreatePlanDto), controller.createPlan);
+router.post(
+  '/plans',
+  requirePermission('plan.manage'),
+  validate(CreatePlanDto),
+  controller.createPlan,
+);
 
 /**
  * @swagger
@@ -1130,7 +1169,12 @@ router.post('/plans', requirePermission('plan.manage'), validate(CreatePlanDto),
  *       200:
  *         description: Plan updated
  */
-router.patch('/plans/:id', requirePermission('plan.manage'), validate(UpdatePlanDto), controller.updatePlan);
+router.patch(
+  '/plans/:id',
+  requirePermission('plan.manage'),
+  validate(UpdatePlanDto),
+  controller.updatePlan,
+);
 
 // ─── Subscriptions ────────────────────────────────────────────────────────────
 
@@ -1170,7 +1214,12 @@ router.get('/subscriptions', requirePermission('subscription.view'), controller.
  *       200:
  *         description: Revenue stats
  */
-router.get('/analytics/revenue', requirePermission('analytics.view'), validate(AnalyticsQueryDto, 'query'), controller.getRevenue);
+router.get(
+  '/analytics/revenue',
+  requirePermission('analytics.view'),
+  validate(AnalyticsQueryDto, 'query'),
+  controller.getRevenue,
+);
 
 /**
  * @swagger
@@ -1206,6 +1255,11 @@ router.get('/analytics/downloads', requirePermission('analytics.view'), controll
  *       200:
  *         description: User growth resolved
  */
-router.get('/analytics/user-growth', requirePermission('analytics.view'), validate(AnalyticsQueryDto, 'query'), controller.getUserGrowth);
+router.get(
+  '/analytics/user-growth',
+  requirePermission('analytics.view'),
+  validate(AnalyticsQueryDto, 'query'),
+  controller.getUserGrowth,
+);
 
 export { router as adminRouter };

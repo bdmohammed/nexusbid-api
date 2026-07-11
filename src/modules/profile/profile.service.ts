@@ -1,25 +1,23 @@
-import { AppDataSource } from '../../config/database';
-import { User } from '../../entities/User';
-import { UserSession } from '../../entities/UserSession';
-import { UserDevice } from '../../entities/UserDevice';
+import { appDataSource } from '../../config/database';
+import { AppError } from '../../core/AppError';
 import { AuditLog } from '../../entities/AuditLog';
 import { SecurityLog } from '../../entities/SecurityLog';
 import { Subscription } from '../../entities/Subscription';
 import { SupportTicket } from '../../entities/SupportTicket';
-import { UserStatus, TicketStatus, SubscriptionStatus, AccountType } from '../../types/enums';
-import { AppError } from '../../core/AppError';
-import { MoreThan } from 'typeorm';
+import { User } from '../../entities/User';
+import { UserDevice } from '../../entities/UserDevice';
+import { UserSession } from '../../entities/UserSession';
+import { AccountType, SubscriptionStatus, TicketStatus, UserStatus } from '../../types/enums';
 
-const userRepo = AppDataSource.getRepository(User);
-const sessionRepo = AppDataSource.getRepository(UserSession);
-const deviceRepo = AppDataSource.getRepository(UserDevice);
-const auditRepo = AppDataSource.getRepository(AuditLog);
-const securityRepo = AppDataSource.getRepository(SecurityLog);
-const subscriptionRepo = AppDataSource.getRepository(Subscription);
-const ticketRepo = AppDataSource.getRepository(SupportTicket);
+const userRepo = appDataSource.getRepository(User);
+const sessionRepo = appDataSource.getRepository(UserSession);
+const deviceRepo = appDataSource.getRepository(UserDevice);
+const auditRepo = appDataSource.getRepository(AuditLog);
+const securityRepo = appDataSource.getRepository(SecurityLog);
+const subscriptionRepo = appDataSource.getRepository(Subscription);
+const ticketRepo = appDataSource.getRepository(SupportTicket);
 
 function sanitizeUserProfile(user: User) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { passwordHash, tokenVersion, failedLoginAttempts, lockoutUntil, ...safe } = user;
   return safe;
 }
@@ -35,7 +33,9 @@ export async function getProfile(userId: string) {
   }
 
   const sanitized = sanitizeUserProfile(user);
-  const roles = user.userRoles?.map((ur) => ur.role?.activeVersion?.name || ur.role?.slug).filter(Boolean) || [];
+  const roles =
+    user.userRoles?.map((ur) => ur.role?.activeVersion?.name ?? ur.role?.slug).filter(Boolean) ??
+    [];
 
   return {
     ...sanitized,
@@ -60,7 +60,7 @@ export async function updateProfile(userId: string, data: { name?: string; count
       email: user.email,
       event: 'profile.update',
       details: { fields: Object.keys(data) },
-    })
+    }),
   );
 
   return getProfile(userId);
@@ -188,7 +188,7 @@ export async function getTimeline(userId: string) {
   for (const sub of subs) {
     timeline.push({
       event: 'subscription_started',
-      title: `Plan Activated: ${sub.planVersion?.name || 'Subscription'}`,
+      title: `Plan Activated: ${sub.planVersion?.name ?? 'Subscription'}`,
       timestamp: sub.createdAt,
       description: `Access levels configured (Status: ${sub.status})`,
     });
@@ -210,18 +210,24 @@ export async function getSubscription(userId: string, accountType: AccountType) 
     order: { createdAt: 'DESC' },
   });
 
-  return activeSub || null;
+  return activeSub ?? null;
 }
 
 export async function getPreferences(userId: string) {
-  const user = await userRepo.findOne({ where: { id: userId }, select: ['id', 'notificationPreferences'] });
+  const user = await userRepo.findOne({
+    where: { id: userId },
+    select: ['id', 'notificationPreferences'],
+  });
   if (!user) {
     throw new AppError('User not found', 404, 'NOT_FOUND');
   }
   return user.notificationPreferences;
 }
 
-export async function updatePreferences(userId: string, preferences: Partial<User['notificationPreferences']>) {
+export async function updatePreferences(
+  userId: string,
+  preferences: Partial<User['notificationPreferences']>,
+) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'NOT_FOUND');
@@ -236,7 +242,12 @@ export async function updatePreferences(userId: string, preferences: Partial<Use
   return user.notificationPreferences;
 }
 
-export async function requestProfileChange(userId: string, field: string, value: string, reason: string) {
+export async function requestProfileChange(
+  userId: string,
+  field: string,
+  value: string,
+  reason: string,
+) {
   const ticket = ticketRepo.create({
     userId,
     subject: `Profile Change Request: ${field}`,
@@ -265,7 +276,7 @@ export async function deactivateAccount(userId: string) {
       userId,
       email: user.email,
       event: 'account.deactivate',
-    })
+    }),
   );
 
   return { success: true };
@@ -289,7 +300,7 @@ export async function reactivateAccount(userId: string) {
       userId,
       email: user.email,
       event: 'account.reactivate',
-    })
+    }),
   );
 
   return { success: true };
@@ -304,7 +315,7 @@ export async function requestDeleteAccount(userId: string) {
   // Create a support ticket for deletion
   const ticket = ticketRepo.create({
     userId,
-    subject: `Account Deletion Request`,
+    subject: 'Account Deletion Request',
     message: `User ${user.name} (${user.email}) requested account deletion.`,
     status: TicketStatus.OPEN,
   });
@@ -316,7 +327,7 @@ export async function requestDeleteAccount(userId: string) {
       userId,
       email: user.email,
       event: 'account.delete_request',
-    })
+    }),
   );
 
   return { success: true, message: 'Deletion request received and under review.' };
@@ -336,16 +347,43 @@ export async function exportProfileData(userId: string) {
   const devices = await deviceRepo.find({ where: { userId } });
   const activities = await auditRepo.find({ where: { actorId: userId } });
   const securityLogs = await securityRepo.find({ where: { userId } });
-  const subscription = await subscriptionRepo.find({ where: { userId }, relations: ['plan', 'planVersion'] });
+  const subscription = await subscriptionRepo.find({
+    where: { userId },
+    relations: ['plan', 'planVersion'],
+  });
 
   return {
     exportedAt: new Date(),
     profile: sanitizeUserProfile(user),
-    roles: user.userRoles?.map((ur) => ur.role?.activeVersion?.name || ur.role?.slug).filter(Boolean) || [],
-    sessions: sessions.map((s) => ({ userAgent: s.userAgent, ipAddress: s.ipAddress, createdAt: s.createdAt })),
-    devices: devices.map((d) => ({ userAgent: d.userAgent, lastIpAddress: d.lastIpAddress, lastActiveAt: d.lastActiveAt })),
-    activities: activities.map((a) => ({ action: a.action, details: { before: a.before, after: a.after }, createdAt: a.createdAt })),
-    securityLogs: securityLogs.map((sl) => ({ event: sl.event, ipAddress: sl.ipAddress, userAgent: sl.userAgent, createdAt: sl.createdAt })),
-    subscriptions: subscription.map((sub) => ({ plan: sub.planVersion?.name || 'Subscription', status: sub.status, endDate: sub.endDate, createdAt: sub.createdAt })),
+    roles:
+      user.userRoles?.map((ur) => ur.role?.activeVersion?.name ?? ur.role?.slug).filter(Boolean) ??
+      [],
+    sessions: sessions.map((s) => ({
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      createdAt: s.createdAt,
+    })),
+    devices: devices.map((d) => ({
+      userAgent: d.userAgent,
+      lastIpAddress: d.lastIpAddress,
+      lastActiveAt: d.lastActiveAt,
+    })),
+    activities: activities.map((a) => ({
+      action: a.action,
+      details: { before: a.before, after: a.after },
+      createdAt: a.createdAt,
+    })),
+    securityLogs: securityLogs.map((sl) => ({
+      event: sl.event,
+      ipAddress: sl.ipAddress,
+      userAgent: sl.userAgent,
+      createdAt: sl.createdAt,
+    })),
+    subscriptions: subscription.map((sub) => ({
+      plan: sub.planVersion?.name ?? 'Subscription',
+      status: sub.status,
+      endDate: sub.endDate,
+      createdAt: sub.createdAt,
+    })),
   };
 }

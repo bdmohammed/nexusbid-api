@@ -1,80 +1,82 @@
-import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { env } from './env';
 
 // ─── Entity Imports ───────────────────────────────────────────────────────────
 import { AlertPreference } from '../entities/AlertPreference';
+import { AnalyticsAlert } from '../entities/AnalyticsAlert';
+import { AnalyticsEvent } from '../entities/AnalyticsEvent';
+import { AnalyticsMetric } from '../entities/AnalyticsMetric';
 import { AuditLog } from '../entities/AuditLog';
+import { AuditRetentionPolicy } from '../entities/AuditRetentionPolicy';
 import { Category } from '../entities/Category';
+import { Coupon } from '../entities/Coupon';
 import { DownloadHistory } from '../entities/DownloadHistory';
 import { EmailToken } from '../entities/EmailToken';
+import { EvaluationTemplate } from '../entities/EvaluationTemplate';
+import { ExportJob } from '../entities/ExportJob';
+import { FeatureCatalog } from '../entities/FeatureCatalog';
 import { FeatureFlag } from '../entities/FeatureFlag';
 import { Notification } from '../entities/Notification';
-import { Plan } from '../entities/Plan';
-import { PurchasedTender } from '../entities/PurchasedTender';
-import { SavedTender } from '../entities/SavedTender';
-import { State } from '../entities/State';
-import { StaticPage } from '../entities/StaticPage';
-import { Subscription } from '../entities/Subscription';
-import { SupportTicket } from '../entities/SupportTicket';
-import { Tender } from '../entities/Tender';
-import { Transaction } from '../entities/Transaction';
-import { User } from '../entities/User';
-import { UserSession } from '../entities/UserSession';
-import { WebhookEvent } from '../entities/WebhookEvent';
-import { PermissionModule } from '../entities/PermissionModule';
+import { NotificationAction } from '../entities/NotificationAction';
+import { NotificationRecipient } from '../entities/NotificationRecipient';
+import { PasswordHistory } from '../entities/PasswordHistory';
 import { Permission } from '../entities/Permission';
+import { PermissionModule } from '../entities/PermissionModule';
+import { Plan } from '../entities/Plan';
+import { PlanCategoryPricing } from '../entities/PlanCategoryPricing';
+import { PlanCountryPricing } from '../entities/PlanCountryPricing';
+import { PlanFeature } from '../entities/PlanFeature';
+import { PlanReview } from '../entities/PlanReview';
+import { PlanReviewComment } from '../entities/PlanReviewComment';
+import { PlanVersion } from '../entities/PlanVersion';
+import { PurchasedTender } from '../entities/PurchasedTender';
 import { Role } from '../entities/Role';
-import { UserRole } from '../entities/UserRole';
-import { RoleVersion } from '../entities/RoleVersion';
-import { RoleVersionPermission } from '../entities/RoleVersionPermission';
 import { RoleReview } from '../entities/RoleReview';
 import { RoleReviewAssignment } from '../entities/RoleReviewAssignment';
 import { RoleReviewComment } from '../entities/RoleReviewComment';
-import { PasswordHistory } from '../entities/PasswordHistory';
-import { UserDevice } from '../entities/UserDevice';
+import { RoleVersion } from '../entities/RoleVersion';
+import { RoleVersionPermission } from '../entities/RoleVersionPermission';
+import { SavedTender } from '../entities/SavedTender';
+import { ScheduledReport } from '../entities/ScheduledReport';
 import { SecurityLog } from '../entities/SecurityLog';
-import { UserNote } from '../entities/UserNote';
-import { TenderVersion } from '../entities/TenderVersion';
+import { State } from '../entities/State';
+import { StaticPage } from '../entities/StaticPage';
+import { Subscription } from '../entities/Subscription';
+import { SubscriptionDailyMetrics } from '../entities/SubscriptionDailyMetrics';
+import { SubscriptionMigration } from '../entities/SubscriptionMigration';
+import { SupportTicket } from '../entities/SupportTicket';
+import { Tender } from '../entities/Tender';
+import { TenderAmendment } from '../entities/TenderAmendment';
+import { TenderClarification } from '../entities/TenderClarification';
+import { TenderCommittee } from '../entities/TenderCommittee';
+import { TenderDailyMetrics } from '../entities/TenderDailyMetrics';
 import { TenderDocument } from '../entities/TenderDocument';
+import { TenderEvaluation } from '../entities/TenderEvaluation';
+import { TenderInvitation } from '../entities/TenderInvitation';
+import { TenderParticipant } from '../entities/TenderParticipant';
+import { TenderQuestion } from '../entities/TenderQuestion';
 import { TenderReview } from '../entities/TenderReview';
 import { TenderReviewAssignment } from '../entities/TenderReviewAssignment';
 import { TenderReviewComment } from '../entities/TenderReviewComment';
-import { TenderCommittee } from '../entities/TenderCommittee';
-import { TenderParticipant } from '../entities/TenderParticipant';
-import { TenderEvaluation } from '../entities/TenderEvaluation';
-import { TenderWatcher } from '../entities/TenderWatcher';
-import { TenderInvitation } from '../entities/TenderInvitation';
-import { TenderTemplate } from '../entities/TenderTemplate';
-import { TenderQuestion } from '../entities/TenderQuestion';
-import { TenderClarification } from '../entities/TenderClarification';
-import { TenderAmendment } from '../entities/TenderAmendment';
-import { EvaluationTemplate } from '../entities/EvaluationTemplate';
 import { TenderSubmission } from '../entities/TenderSubmission';
-import { PlanVersion } from '../entities/PlanVersion';
-import { FeatureCatalog } from '../entities/FeatureCatalog';
-import { PlanFeature } from '../entities/PlanFeature';
-import { PlanCountryPricing } from '../entities/PlanCountryPricing';
-import { PlanCategoryPricing } from '../entities/PlanCategoryPricing';
-import { Coupon } from '../entities/Coupon';
-import { PlanReview } from '../entities/PlanReview';
-import { PlanReviewComment } from '../entities/PlanReviewComment';
-import { SubscriptionMigration } from '../entities/SubscriptionMigration';
-import { AnalyticsEvent } from '../entities/AnalyticsEvent';
-import { AnalyticsMetric } from '../entities/AnalyticsMetric';
-import { UserDashboardLayout } from '../entities/UserDashboardLayout';
-import { ExportJob } from '../entities/ExportJob';
-import { AnalyticsAlert } from '../entities/AnalyticsAlert';
-import { ScheduledReport } from '../entities/ScheduledReport';
-import { TenderDailyMetrics } from '../entities/TenderDailyMetrics';
-import { UserDailyMetrics } from '../entities/UserDailyMetrics';
-import { SubscriptionDailyMetrics } from '../entities/SubscriptionDailyMetrics';
+import { TenderTemplate } from '../entities/TenderTemplate';
+import { TenderVersion } from '../entities/TenderVersion';
+import { TenderWatcher } from '../entities/TenderWatcher';
 import { TrafficDailyMetrics } from '../entities/TrafficDailyMetrics';
-import { AuditRetentionPolicy } from '../entities/AuditRetentionPolicy';
-import { SnakeNamingStrategy } from './namingStrategy';
+import { Transaction } from '../entities/Transaction';
+import { User } from '../entities/User';
+import { UserDailyMetrics } from '../entities/UserDailyMetrics';
+import { UserDashboardLayout } from '../entities/UserDashboardLayout';
+import { UserDevice } from '../entities/UserDevice';
+import { UserNote } from '../entities/UserNote';
+import { UserRole } from '../entities/UserRole';
+import { UserSession } from '../entities/UserSession';
+import { WebhookEvent } from '../entities/WebhookEvent';
+
 import { TypeOrmPinoLogger } from './databaseLogger';
-import { NotificationRecipient } from '../entities/NotificationRecipient';
-import { NotificationAction } from '../entities/NotificationAction';
+import { env } from './env';
+import { SnakeNamingStrategy } from './namingStrategy';
+
+import 'reflect-metadata';
 
 export const appDataSource = new DataSource({
   type: 'postgres',
@@ -173,9 +175,7 @@ export const appDataSource = new DataSource({
   migrations: [
     // Production: compiled JS files
     // Development (ts-node): TypeScript source files
-    process.env['NODE_ENV'] === 'production'
-      ? 'dist/migrations/*.js'
-      : 'src/migrations/*.ts',
+    process.env['NODE_ENV'] === 'production' ? 'dist/migrations/*.js' : 'src/migrations/*.ts',
   ],
 
   /**
@@ -191,10 +191,5 @@ export const appDataSource = new DataSource({
     idle_in_transaction_session_timeout: 10000,
   },
 
-  ssl: env.NODE_ENV === 'prod'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: env.NODE_ENV === 'prod' ? { rejectUnauthorized: false } : false,
 });
-
-/** @deprecated Use appDataSource instead to comply with internal naming standard */
-export const AppDataSource = appDataSource;

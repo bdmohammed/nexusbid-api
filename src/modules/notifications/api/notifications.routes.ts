@@ -1,6 +1,8 @@
 import { Router } from 'express';
+
 import { authenticate } from '../../../middleware/authenticate';
 import { loadPermissions } from '../../../middleware/permissions';
+
 import * as controller from './notifications.controller';
 
 const router = Router();

@@ -1,8 +1,9 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
+
 import { logger } from '../config/logger';
 
 class DomainEvents extends EventEmitter {
-  public dispatch(eventName: string, payload: any): void {
+  public dispatch(eventName: string, payload: unknown): void {
     logger.info({ eventName, payload }, `[DomainEvent] Dispatched event: ${eventName}`);
     try {
       this.emit(eventName, payload);

@@ -1,4 +1,4 @@
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 
 /**
  * Decodes a base32 string into a Buffer.
@@ -78,7 +78,5 @@ export function verifyTOTP(secret: string, token: string, window: number = 1): b
  * Generates standard 2FA recovery codes.
  */
 export function generateRecoveryCodes(count: number = 8): string[] {
-  return Array.from({ length: count }, () =>
-    crypto.randomBytes(4).toString('hex').toUpperCase()
-  );
+  return Array.from({ length: count }, () => crypto.randomBytes(4).toString('hex').toUpperCase());
 }

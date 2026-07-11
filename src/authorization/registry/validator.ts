@@ -1,27 +1,20 @@
-// src/authorization/registry/validator.ts
+import { logger } from '../../config/logger';
 
-import { MODULES } from "./modules";
-import {
-  ModuleDefinition,
-  PermissionDefinition,
-} from "./types";
+import { MODULES } from './modules';
+
+import type { ModuleDefinition, PermissionDefinition } from './types';
+
 export class RegistryValidationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "RegistryValidationError";
+    this.name = 'RegistryValidationError';
     Object.setPrototypeOf(this, RegistryValidationError.prototype);
   }
 }
 
-import { logger } from "../../config/logger";
+const PERMISSION_KEY_REGEX = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
-const PERMISSION_KEY_REGEX =
-  /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
-
-function ensure(
-  condition: boolean,
-  message: string,
-): asserts condition {
+function ensure(condition: boolean, message: string): asserts condition {
   if (!condition) {
     throw new RegistryValidationError(message);
   }
@@ -29,11 +22,8 @@ function ensure(
 
 export function validateRegistry(): void {
   validateModules();
-
   validatePermissions();
-
   validateDependencies();
-
   validateDisplayOrders();
 }
 
@@ -41,22 +31,13 @@ function validateModules() {
   const slugSet = new Set<string>();
 
   for (const module of MODULES) {
-    ensure(
-      module.slug.trim().length > 0,
-      "Module slug cannot be empty.",
-    );
+    ensure(module.slug.trim().length > 0, 'Module slug cannot be empty.');
 
-    ensure(
-      !slugSet.has(module.slug),
-      `Duplicate module slug "${module.slug}".`,
-    );
+    ensure(!slugSet.has(module.slug), `Duplicate module slug "${module.slug}".`);
 
     slugSet.add(module.slug);
 
-    ensure(
-      module.permissions.length > 0,
-      `Module "${module.slug}" has no permissions.`,
-    );
+    ensure(module.permissions.length > 0, `Module "${module.slug}" has no permissions.`);
   }
 }
 
@@ -75,27 +56,15 @@ function validatePermission(
   permission: PermissionDefinition,
   permissionSet: Set<string>,
 ) {
-  ensure(
-    permission.key.trim().length > 0,
-    `Permission key cannot be empty (${module.slug}).`,
-  );
+  ensure(permission.key.trim().length > 0, `Permission key cannot be empty (${module.slug}).`);
 
-  ensure(
-    PERMISSION_KEY_REGEX.test(permission.key),
-    `Invalid permission key "${permission.key}".`,
-  );
+  ensure(PERMISSION_KEY_REGEX.test(permission.key), `Invalid permission key "${permission.key}".`);
 
-  ensure(
-    !permissionSet.has(permission.key),
-    `Duplicate permission "${permission.key}".`,
-  );
+  ensure(!permissionSet.has(permission.key), `Duplicate permission "${permission.key}".`);
 
   permissionSet.add(permission.key);
 
-  ensure(
-    permission.name.trim().length > 0,
-    `Permission "${permission.key}" has no name.`,
-  );
+  ensure(permission.name.trim().length > 0, `Permission "${permission.key}" has no name.`);
 
   ensure(
     permission.description.trim().length > 0,
@@ -118,23 +87,11 @@ function validateDependencies() {
 
       if (!deps) continue;
 
-      validateDependencyArray(
-        permission.key,
-        deps.allOf,
-        permissionKeys,
-      );
+      validateDependencyArray(permission.key, deps.allOf, permissionKeys);
 
-      validateDependencyArray(
-        permission.key,
-        deps.anyOf,
-        permissionKeys,
-      );
+      validateDependencyArray(permission.key, deps.anyOf, permissionKeys);
 
-      validateDependencyArray(
-        permission.key,
-        deps.conflictsWith,
-        permissionKeys,
-      );
+      validateDependencyArray(permission.key, deps.conflictsWith, permissionKeys);
     }
   }
 }
@@ -152,10 +109,7 @@ function validateDependencyArray(
       `Permission "${permissionKey}" depends on unknown permission "${dependency}".`,
     );
 
-    ensure(
-      dependency !== permissionKey,
-      `Permission "${permissionKey}" cannot depend on itself.`,
-    );
+    ensure(dependency !== permissionKey, `Permission "${permissionKey}" cannot depend on itself.`);
   }
 }
 
@@ -189,8 +143,5 @@ function validateDisplayOrders() {
 export function validatePermissionRegistry() {
   validateRegistry();
 
-  logger.info(
-    { modulesCount: MODULES.length },
-    'Permission Registry validated successfully',
-  );
+  logger.info({ modulesCount: MODULES.length }, 'Permission Registry validated successfully');
 }

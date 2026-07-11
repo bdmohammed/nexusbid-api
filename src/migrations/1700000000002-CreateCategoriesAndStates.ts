@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateCategoriesAndStates1700000000002 implements MigrationInterface {
   name = 'CreateCategoriesAndStates1700000000002';
@@ -24,7 +24,7 @@ export class CreateCategoriesAndStates1700000000002 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "states"`);
-    await queryRunner.query(`DROP TABLE "categories"`);
+    await queryRunner.query('DROP TABLE "states"');
+    await queryRunner.query('DROP TABLE "categories"');
   }
 }

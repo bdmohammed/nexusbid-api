@@ -1,7 +1,9 @@
+import { performance } from 'node:perf_hooks';
+
 import { Resend } from 'resend';
+
 import { env } from '../config/env';
 import { logger } from '../config/logger';
-import { performance } from 'perf_hooks';
 
 // ─── Local env: swap in dummy implementation (no real Resend calls) ───────────
 if (env.NODE_ENV === 'local') {
@@ -35,10 +37,16 @@ async function send(options: {
       html: options.html,
     });
     const durationMs = performance.now() - start;
-    logger.info({ id: sendResult.data?.id, recipientDomain, template: options.template, durationMs }, 'Email sent');
+    logger.info(
+      { id: sendResult.data?.id, recipientDomain, template: options.template, durationMs },
+      'Email sent',
+    );
   } catch (error) {
     const durationMs = performance.now() - start;
-    logger.error({ err: error, recipientDomain, template: options.template, durationMs }, 'Email send failed');
+    logger.error(
+      { err: error, recipientDomain, template: options.template, durationMs },
+      'Email send failed',
+    );
   }
 }
 
@@ -135,7 +143,9 @@ export async function sendSubscriptionReceiptEmail(options: {
 }): Promise<void> {
   const amount = `$${(options.amountCents / 100).toFixed(2)}`;
   const expires = options.expiresAt.toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
   await send({
     to: options.to,
@@ -186,7 +196,9 @@ export async function sendSubscriptionCancelledEmail(options: {
   endsAt: Date;
 }): Promise<void> {
   const ends = options.endsAt.toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
   await send({
     to: options.to,
@@ -286,12 +298,13 @@ export async function sendAdminRegistrationNotification(options: {
   approveLink?: string;
   rejectLink?: string;
 }): Promise<void> {
-  const linksHtml = options.approveLink && options.rejectLink
-    ? `<div style="margin-top:24px;">
+  const linksHtml =
+    options.approveLink && options.rejectLink
+      ? `<div style="margin-top:24px;">
          <a href="${options.approveLink}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-right:12px;">Approve</a>
          <a href="${options.rejectLink}" style="background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">Reject</a>
        </div>`
-    : `<p>Please log in to the admin dashboard to review this request.</p>`;
+      : '<p>Please log in to the admin dashboard to review this request.</p>';
 
   await send({
     to: options.to,
@@ -313,14 +326,16 @@ export async function sendAdminApprovalStatusEmail(options: {
   status: 'approved' | 'rejected';
   reason?: string;
 }): Promise<void> {
-  const subject = options.status === 'approved'
-    ? 'Your NexusBid Admin Account has been Approved'
-    : 'Your NexusBid Admin Account Request has been Rejected';
+  const subject =
+    options.status === 'approved'
+      ? 'Your NexusBid Admin Account has been Approved'
+      : 'Your NexusBid Admin Account Request has been Rejected';
 
-  const bodyHtml = options.status === 'approved'
-    ? `<p>Hi ${options.name}, your administrator account request has been approved. You can now log in to the admin dashboard.</p>
+  const bodyHtml =
+    options.status === 'approved'
+      ? `<p>Hi ${options.name}, your administrator account request has been approved. You can now log in to the admin dashboard.</p>
        <a href="${env.FRONTEND_ADMIN_URL}/login" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px;">Log In to Dashboard</a>`
-    : `<p>Hi ${options.name}, your administrator account request has been rejected.</p>
+      : `<p>Hi ${options.name}, your administrator account request has been rejected.</p>
        ${options.reason ? `<p><strong>Reason:</strong> ${options.reason}</p>` : ''}`;
 
   await send({
@@ -356,4 +371,3 @@ export async function sendAdminBootstrapNotification(options: {
     `,
   });
 }
-

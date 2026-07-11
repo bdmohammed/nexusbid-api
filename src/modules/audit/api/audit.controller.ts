@@ -1,7 +1,12 @@
-import { Request, Response, NextFunction } from 'express';
-import * as service from '../services/audit.service';
-import { AuditQuerySchema, UpdateRetentionSchema, RequestAuditExportSchema } from '../dto/audit.dto';
 import { AppError } from '../../../core/AppError';
+import {
+  AuditQuerySchema,
+  RequestAuditExportSchema,
+  UpdateRetentionSchema,
+} from '../dto/audit.dto';
+import * as service from '../services/audit.service';
+
+import type { NextFunction, Request, Response } from 'express';
 
 export async function searchLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -13,7 +18,11 @@ export async function searchLogs(req: Request, res: Response, next: NextFunction
   }
 }
 
-export async function getStatistics(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getStatistics(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const data = await service.getStatistics();
     res.json({ success: true, data });
@@ -22,7 +31,11 @@ export async function getStatistics(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function getLogDetails(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getLogDetails(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const { id } = req.params;
     const data = await service.getLogDetails(id);
@@ -32,7 +45,11 @@ export async function getLogDetails(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function getCorrelationTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getCorrelationTimeline(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const { correlationId } = req.params;
     const data = await service.getCorrelationTimeline(correlationId);
@@ -42,7 +59,11 @@ export async function getCorrelationTimeline(req: Request, res: Response, next: 
   }
 }
 
-export async function getRequestTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getRequestTimeline(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const { requestId } = req.params;
     const data = await service.getRequestTimeline(requestId);
@@ -52,10 +73,14 @@ export async function getRequestTimeline(req: Request, res: Response, next: Next
   }
 }
 
-export async function getSecurityEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getSecurityEvents(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
-    const page = Math.max(1, parseInt(req.query['page'] as string || '1', 10));
-    const limit = Math.max(1, parseInt(req.query['limit'] as string || '20', 10));
+    const page = Math.max(1, parseInt((req.query['page'] as string) ?? '1', 10));
+    const limit = Math.max(1, parseInt((req.query['limit'] as string) ?? '20', 10));
     const data = await service.getSecurityEvents(page, limit);
     res.json({ success: true, data });
   } catch (err) {
@@ -63,7 +88,11 @@ export async function getSecurityEvents(req: Request, res: Response, next: NextF
   }
 }
 
-export async function getRetentionPolicies(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getRetentionPolicies(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const data = await service.getRetentionPolicies();
     res.json({ success: true, data });
@@ -72,7 +101,11 @@ export async function getRetentionPolicies(req: Request, res: Response, next: Ne
   }
 }
 
-export async function updateRetentionPolicy(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function updateRetentionPolicy(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const dto = UpdateRetentionSchema.parse(req.body);
     const data = await service.updateRetentionPolicy(dto);
@@ -82,7 +115,11 @@ export async function updateRetentionPolicy(req: Request, res: Response, next: N
   }
 }
 
-export async function requestAuditExport(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requestAuditExport(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     const userId = (req as any).user?.id;
     if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');

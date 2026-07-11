@@ -1,10 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  Index,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('analytics_events')
 @Index(['eventType'])
@@ -29,5 +23,5 @@ export class AnalyticsEvent {
   entityId: string | null;
 
   @Column({ name: 'properties', type: 'jsonb', default: '{}' })
-  properties: Record<string, any>;
+  properties: Record<string, unknown>;
 }

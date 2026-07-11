@@ -1,18 +1,23 @@
 import { appDataSource } from '../../config/database';
-import { WebhookEvent } from '../../entities/WebhookEvent';
+import { logger } from '../../config/logger';
 import { Subscription } from '../../entities/Subscription';
 import { Transaction } from '../../entities/Transaction';
-import { WebhookEventStatus, SubscriptionStatus, TransactionStatus, TransactionType } from '../../types/enums';
-import { logger } from '../../config/logger';
+import { WebhookEvent } from '../../entities/WebhookEvent';
+import {
+  SubscriptionStatus,
+  TransactionStatus,
+  TransactionType,
+  WebhookEventStatus,
+} from '../../types/enums';
 
 const webhookEventRepository = appDataSource.getRepository(WebhookEvent);
 const subscriptionRepository = appDataSource.getRepository(Subscription);
 const transactionRepository = appDataSource.getRepository(Transaction);
 
-type PayPalWebhookBody = {
+interface PayPalWebhookBody {
   event_type: string;
   resource: Record<string, unknown>;
-};
+}
 
 // ─── Core webhook processing ──────────────────────────────────────────────────
 
@@ -54,9 +59,7 @@ export async function processWebhookEvent(body: PayPalWebhookBody): Promise<void
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
-async function handleSubscriptionActivated(
-  resource: Record<string, unknown>,
-): Promise<void> {
+async function handleSubscriptionActivated(resource: Record<string, unknown>): Promise<void> {
   const paypalSubscriptionId = resource['id'] as string;
   if (!paypalSubscriptionId) return;
 
@@ -84,9 +87,7 @@ async function handleSubscriptionCancelledOrExpired(
   logger.info({ paypalSubscriptionId }, 'Subscription marked cancelled/expired');
 }
 
-async function handleSaleCompleted(
-  resource: Record<string, unknown>,
-): Promise<void> {
+async function handleSaleCompleted(resource: Record<string, unknown>): Promise<void> {
   // PAYMENT.SALE.COMPLETED fires for recurring subscription renewal payments
   const billingAgreementId = resource['billing_agreement_id'] as string;
   const saleId = resource['id'] as string;
@@ -106,10 +107,9 @@ async function handleSaleCompleted(
   }
 
   // Extend the subscription end date by plan duration
-  const durationDays = subscription.planVersion?.durationDays || 30;
+  const durationDays = subscription.planVersion.durationDays || 30;
   const newEndDate = new Date(
-    Math.max(subscription.endDate.getTime(), Date.now()) +
-    durationDays * 24 * 60 * 60 * 1000,
+    Math.max(subscription.endDate.getTime(), Date.now()) + durationDays * 24 * 60 * 60 * 1000,
   );
   await subscriptionRepository.update(subscription.id, {
     endDate: newEndDate,
@@ -122,7 +122,7 @@ async function handleSaleCompleted(
     transactionRepository.create({
       userId: subscription.userId,
       amountCents,
-      currency: amount?.currency?.toLowerCase() ?? 'usd',
+      currency: amount?.currency.toLowerCase() ?? 'usd',
       type: TransactionType.SUBSCRIPTION,
       referenceId: subscription.id,
       paypalOrderId: saleId,
@@ -135,9 +135,7 @@ async function handleSaleCompleted(
   logger.info({ billingAgreementId, saleId }, 'Recurring payment recorded');
 }
 
-async function handleSaleDenied(
-  resource: Record<string, unknown>,
-): Promise<void> {
+async function handleSaleDenied(resource: Record<string, unknown>): Promise<void> {
   const billingAgreementId = resource['billing_agreement_id'] as string;
   if (!billingAgreementId) return;
 
@@ -150,14 +148,14 @@ async function handleSaleDenied(
   logger.warn({ billingAgreementId }, 'Subscription payment denied — marked expired');
 }
 
-async function handleCaptureCompleted(
-  resource: Record<string, unknown>,
-): Promise<void> {
+async function handleCaptureCompleted(resource: Record<string, unknown>): Promise<void> {
   // PAYMENT.CAPTURE.COMPLETED fires for one-time Orders API captures
   const captureId = resource['id'] as string;
   // Get the order ID from supplementary_data or capture resource if available
-  const orderId = (resource['supplementary_data'] as Record<string, unknown>)?.['related_ids'] as string ?? captureId;
-  const amount = resource['amount'] as { value: string; currency_code: string } | undefined;
+  const orderId =
+    ((resource['supplementary_data'] as Record<string, unknown>)['related_ids'] as string) ||
+    captureId;
+  // const amount = resource['amount'] as { value: string; currency_code: string } | undefined;
 
   logger.info({ captureId, orderId }, 'One-time capture completed');
 
@@ -167,6 +165,7 @@ async function handleCaptureCompleted(
     {
       status: TransactionStatus.SUCCESS,
       paypalCaptureId: captureId,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       paypalResponse: resource as any,
     },
   );
@@ -188,7 +187,14 @@ export async function logRawWebhookEvent(
   payload: Record<string, unknown>,
 ): Promise<void> {
   await webhookEventRepository.upsert(
-    { provider, eventId, eventType, payload: payload as any, status: WebhookEventStatus.RECEIVED },
+    {
+      provider,
+      eventId,
+      eventType,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      payload: payload as any,
+      status: WebhookEventStatus.RECEIVED,
+    },
     { conflictPaths: ['provider', 'eventId'] },
   );
 }
@@ -205,15 +211,21 @@ export async function markProcessing(eventId: string): Promise<void> {
 }
 
 export async function markProcessed(eventId: string): Promise<void> {
-  await webhookEventRepository.update({ eventId }, {
-    status: WebhookEventStatus.PROCESSED,
-    processedAt: new Date(),
-  });
+  await webhookEventRepository.update(
+    { eventId },
+    {
+      status: WebhookEventStatus.PROCESSED,
+      processedAt: new Date(),
+    },
+  );
 }
 
 export async function markFailed(eventId: string, error: string): Promise<void> {
-  await webhookEventRepository.update({ eventId }, {
-    status: WebhookEventStatus.FAILED,
-    error,
-  });
+  await webhookEventRepository.update(
+    { eventId },
+    {
+      status: WebhookEventStatus.FAILED,
+      error,
+    },
+  );
 }

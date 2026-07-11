@@ -10,7 +10,7 @@ export const AuditQuerySchema = z.object({
   userId: z.string().uuid().optional(),
   userEmail: z.string().optional(),
   role: z.string().optional(),
-  
+
   // Advanced filters
   country: z.string().optional(),
   ipAddress: z.string().optional(),
@@ -25,8 +25,11 @@ export const AuditQuerySchema = z.object({
   requestId: z.string().optional(),
   search: z.string().optional(),
 
-  page: z.preprocess((val) => parseInt(val as string || '1', 10), z.number().min(1).default(1)),
-  limit: z.preprocess((val) => parseInt(val as string || '20', 10), z.number().min(1).max(100).default(20)),
+  page: z.preprocess((val) => parseInt((val as string) ?? '1', 10), z.number().min(1).default(1)),
+  limit: z.preprocess(
+    (val) => parseInt((val as string) ?? '20', 10),
+    z.number().min(1).max(100).default(20),
+  ),
 });
 
 export type AuditQueryDto = z.infer<typeof AuditQuerySchema>;

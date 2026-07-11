@@ -1,14 +1,15 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
   ManyToOne,
+  PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
-import { User } from './User';
+
 import { Tender } from './Tender';
 import { Transaction } from './Transaction';
+import { User } from './User';
 
 @Entity('purchased_tenders')
 @Unique('uq_purchased_tenders_user_tender', ['userId', 'tenderId'])

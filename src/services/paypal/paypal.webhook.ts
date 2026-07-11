@@ -1,7 +1,9 @@
-import { Request } from 'express';
 import { env } from '../../config/env';
-import { paypalRequest, PAYPAL_BASE } from './paypal.client';
 import { logger } from '../../config/logger';
+
+import { paypalRequest } from './paypal.client';
+
+import type { Request } from 'express';
 
 interface VerifyWebhookPayload {
   auth_algo: string;
@@ -35,7 +37,7 @@ interface VerifyWebhookResponse {
  */
 export async function verifyPayPalWebhook(req: Request): Promise<boolean> {
   try {
-    const headers = req.headers;
+    const { headers } = req;
     const payload: VerifyWebhookPayload = {
       auth_algo: headers['paypal-auth-algo'] as string,
       cert_url: headers['paypal-cert-url'] as string,
@@ -65,5 +67,5 @@ export async function verifyPayPalWebhook(req: Request): Promise<boolean> {
  * Extracts the PayPal transmission ID used as the idempotency key.
  */
 export function getPayPalEventId(req: Request): string {
-  return (req.headers['paypal-transmission-id'] as string) ?? '';
+  return req.headers['paypal-transmission-id']?.toString() ?? '';
 }

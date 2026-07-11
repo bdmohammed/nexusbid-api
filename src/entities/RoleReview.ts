@@ -1,18 +1,19 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  OneToMany,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+
 import { Role } from './Role';
-import { RoleVersion } from './RoleVersion';
 import { RoleReviewAssignment } from './RoleReviewAssignment';
 import { RoleReviewComment } from './RoleReviewComment';
+import { RoleVersion } from './RoleVersion';
 
 export enum ReviewStatus {
   PENDING = 'PENDING',

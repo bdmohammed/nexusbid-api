@@ -1,10 +1,15 @@
-import 'reflect-metadata';
-import { performance } from 'perf_hooks';
-import { app } from './app';
-import { AppDataSource } from './database';
+import { performance } from 'node:perf_hooks';
+
 import { startCronJobs } from '../jobs';
+
+import { app } from './app';
+import { appDataSource } from './database';
 import { env } from './env';
 import { logger } from './logger';
+
+import { setupNotificationListeners } from '@/modules/notifications/services/notifications.service';
+
+import 'reflect-metadata';
 
 const startTime = performance.now();
 
@@ -31,11 +36,10 @@ async function bootstrap(): Promise<void> {
 
   // ── Step 1: Connect to database ─────────────────────────────────────────────
   try {
-    await AppDataSource.initialize();
+    await appDataSource.initialize();
     logger.info('Database connected');
-    
+
     // Initialize real-time notification listener bindings
-    const { setupNotificationListeners } = require('../modules/notifications/services/notifications.service');
     setupNotificationListeners();
   } catch (err) {
     logger.error({ err }, 'Database connection failed — shutting down');
@@ -63,7 +67,7 @@ async function bootstrap(): Promise<void> {
     const durationMs = performance.now() - startTime;
     logger.info({ reason: signal, durationMs }, 'Application shutting down');
     try {
-      await AppDataSource.destroy();
+      await appDataSource.destroy();
       logger.info('Database connection closed');
     } catch (err) {
       logger.error({ err }, 'Error during shutdown');
@@ -76,4 +80,3 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap();
-

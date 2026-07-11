@@ -10,9 +10,20 @@ export const ListUsersQueryDto = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   accountType: z.enum(['user', 'admin']).optional(),
-  status: z.enum(['ACTIVE', 'PENDING_VERIFICATION', 'PENDING_APPROVAL', 'SUSPENDED', 'BLOCKED', 'ARCHIVED']).optional(),
+  status: z
+    .enum([
+      'ACTIVE',
+      'PENDING_VERIFICATION',
+      'PENDING_APPROVAL',
+      'SUSPENDED',
+      'BLOCKED',
+      'ARCHIVED',
+    ])
+    .optional(),
   country: z.string().optional(),
-  verified: z.preprocess((val) => val === 'true' || val === true || val === '1', z.boolean()).optional(),
+  verified: z
+    .preprocess((val) => val === 'true' ?? val === true ?? val === '1', z.boolean())
+    .optional(),
   dateFrom: z.string().optional(), // Using optional string for dynamic date parses
   dateTo: z.string().optional(),
   planId: z.string().uuid().optional(),
@@ -73,7 +84,10 @@ export const AnalyticsQueryDto = z.object({
 export type AnalyticsQueryDto = z.infer<typeof AnalyticsQueryDto>;
 
 export const CreateCategoryDto = z.object({
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits').optional(),
+  code: z
+    .string()
+    .regex(/^\d{3}$/, 'Category code must be exactly 3 digits')
+    .optional(),
   name: z.string().min(1).max(200),
   slug: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).nullable().optional(),
@@ -82,7 +96,10 @@ export const CreateCategoryDto = z.object({
 export type CreateCategoryDto = z.infer<typeof CreateCategoryDto>;
 
 export const UpdateCategoryDto = z.object({
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits').optional(),
+  code: z
+    .string()
+    .regex(/^\d{3}$/, 'Category code must be exactly 3 digits')
+    .optional(),
   name: z.string().min(1).max(200).optional(),
   slug: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).nullable().optional(),
@@ -90,22 +107,27 @@ export const UpdateCategoryDto = z.object({
 });
 export type UpdateCategoryDto = z.infer<typeof UpdateCategoryDto>;
 
-export const BatchCategoryItemDto = z.object({
-  action: z.enum(['upsert', 'delete']).default('upsert'),
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits'),
-  name: z.string().min(1).max(200).optional(),
-  slug: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).nullable().optional(),
-  isActive: z.boolean().optional(),
-}).refine(data => {
-  if (data.action === 'upsert' && !data.name) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Name is required for upsert operation',
-  path: ['name'],
-});
+export const BatchCategoryItemDto = z
+  .object({
+    action: z.enum(['upsert', 'delete']).default('upsert'),
+    code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits'),
+    name: z.string().min(1).max(200).optional(),
+    slug: z.string().min(1).max(200).optional(),
+    description: z.string().max(1000).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.action === 'upsert' && !data.name) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Name is required for upsert operation',
+      path: ['name'],
+    },
+  );
 export type BatchCategoryItemDto = z.infer<typeof BatchCategoryItemDto>;
 
 export const BatchCategoryDto = z.array(BatchCategoryItemDto);
@@ -119,14 +141,18 @@ export const CategoryQueryDto = z.object({
   createdBy: z.string().uuid().optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
-  unusedOnly: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
+  unusedOnly: z.preprocess((val) => val === 'true' ?? val === true, z.boolean()).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 export type CategoryQueryDto = z.infer<typeof CategoryQueryDto>;
 
 export const CreateStateDto = z.object({
-  code: z.string().min(1).max(20).regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens'),
+  code: z
+    .string()
+    .min(1)
+    .max(20)
+    .regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens'),
   name: z.string().min(1).max(100),
   slug: z.string().min(1).max(100).optional(),
   type: z.enum(['state', 'territory', 'federal']),
@@ -135,7 +161,12 @@ export const CreateStateDto = z.object({
 export type CreateStateDto = z.infer<typeof CreateStateDto>;
 
 export const UpdateStateDto = z.object({
-  code: z.string().min(1).max(20).regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens').optional(),
+  code: z
+    .string()
+    .min(1)
+    .max(20)
+    .regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens')
+    .optional(),
   name: z.string().min(1).max(100).optional(),
   slug: z.string().min(1).max(100).optional(),
   type: z.enum(['state', 'territory', 'federal']).optional(),
@@ -143,22 +174,31 @@ export const UpdateStateDto = z.object({
 });
 export type UpdateStateDto = z.infer<typeof UpdateStateDto>;
 
-export const BatchStateItemDto = z.object({
-  action: z.enum(['upsert', 'delete']).default('upsert'),
-  code: z.string().min(1).max(20).regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens'),
-  name: z.string().min(1).max(100).optional(),
-  slug: z.string().min(1).max(100).optional(),
-  type: z.enum(['state', 'territory', 'federal']).optional(),
-  country: z.string().min(1).max(100).optional(),
-}).refine(data => {
-  if (data.action === 'upsert' && (!data.name || !data.type)) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Name and type are required for upsert operation',
-  path: ['name'],
-});
+export const BatchStateItemDto = z
+  .object({
+    action: z.enum(['upsert', 'delete']).default('upsert'),
+    code: z
+      .string()
+      .min(1)
+      .max(20)
+      .regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens'),
+    name: z.string().min(1).max(100).optional(),
+    slug: z.string().min(1).max(100).optional(),
+    type: z.enum(['state', 'territory', 'federal']).optional(),
+    country: z.string().min(1).max(100).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.action === 'upsert' && (!data.name ?? !data.type)) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: 'Name and type are required for upsert operation',
+      path: ['name'],
+    },
+  );
 export type BatchStateItemDto = z.infer<typeof BatchStateItemDto>;
 
 export const BatchStateDto = z.array(BatchStateItemDto);
@@ -185,7 +225,16 @@ export const UpdateUserDetailDto = z.object({
   email: z.string().email().optional(),
   companyName: z.string().max(160).nullable().optional(),
   country: z.string().max(100).nullable().optional(),
-  status: z.enum(['active', 'pending_email_verification', 'pending_approval', 'rejected', 'suspended', 'archived']).optional(),
+  status: z
+    .enum([
+      'active',
+      'pending_email_verification',
+      'pending_approval',
+      'rejected',
+      'suspended',
+      'archived',
+    ])
+    .optional(),
   isBlocked: z.boolean().optional(),
 });
 export type UpdateUserDetailDto = z.infer<typeof UpdateUserDetailDto>;
@@ -194,6 +243,3 @@ export const ImpersonateUserDto = z.object({
   reason: z.string().min(3, 'A valid reason of at least 3 characters is required to impersonate'),
 });
 export type ImpersonateUserDto = z.infer<typeof ImpersonateUserDto>;
-
-
-

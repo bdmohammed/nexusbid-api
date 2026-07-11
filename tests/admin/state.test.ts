@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { State } from '../../src/entities/State';
 import { Category } from '../../src/entities/Category';
 import { Tender } from '../../src/entities/Tender';
@@ -10,9 +10,9 @@ import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
 import { User } from '../../src/entities/User';
 
-const stateRepo = () => AppDataSource.getRepository(State);
-const categoryRepo = () => AppDataSource.getRepository(Category);
-const tenderRepo = () => AppDataSource.getRepository(Tender);
+const stateRepo = () => appDataSource.getRepository(State);
+const categoryRepo = () => appDataSource.getRepository(Category);
+const tenderRepo = () => appDataSource.getRepository(Tender);
 
 async function assignPermission(adminId: string, permissionKey: PermissionKey, allowed = true) {
   if (allowed) {
@@ -22,7 +22,7 @@ async function assignPermission(adminId: string, permissionKey: PermissionKey, a
 
 async function clearAllTables() {
   await clearAuthTables();
-  await AppDataSource.query(`TRUNCATE TABLE tenders, states, categories RESTART IDENTITY CASCADE`);
+  await appDataSource.query(`TRUNCATE TABLE tenders, states, categories RESTART IDENTITY CASCADE`);
 }
 
 describe('State Admin API Integration Tests', () => {
@@ -94,11 +94,17 @@ describe('State Admin API Integration Tests', () => {
   describe('Authorization checks', () => {
     it('allows public (unauthenticated) GET requests but denies admin operations', async () => {
       await request(app).get('/api/v1/states').expect(200);
-      await request(app).post('/api/v1/states').send({ code: 'CA', name: 'California', type: 'state' }).expect(401);
+      await request(app)
+        .post('/api/v1/states')
+        .send({ code: 'CA', name: 'California', type: 'state' })
+        .expect(401);
     });
 
     it('allows customers to GET states but denies admin operations', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(customerUser.email, customerPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        customerUser.email,
+        customerPassword,
+      );
       await client.get('/api/v1/states').expect(200);
       await client
         .post('/api/v1/states')
@@ -108,7 +114,10 @@ describe('State Admin API Integration Tests', () => {
     });
 
     it('denies admins without MANAGE_STATES permission from writing states', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(unauthorizedAdminUser.email, unauthorizedAdminPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        unauthorizedAdminUser.email,
+        unauthorizedAdminPassword,
+      );
       await client
         .post('/api/v1/states')
         .set('x-csrf-token', clientCsrf)
@@ -117,7 +126,10 @@ describe('State Admin API Integration Tests', () => {
     });
 
     it('allows Super Admin to perform write operations', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(superAdminUser.email, superAdminPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        superAdminUser.email,
+        superAdminPassword,
+      );
       await client
         .post('/api/v1/states')
         .set('x-csrf-token', clientCsrf)
@@ -126,7 +138,10 @@ describe('State Admin API Integration Tests', () => {
     });
 
     it('allows Admin with MANAGE_STATES permission to write states', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(authorizedAdminUser.email, authorizedAdminPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        authorizedAdminUser.email,
+        authorizedAdminPassword,
+      );
       await client
         .post('/api/v1/states')
         .set('x-csrf-token', clientCsrf)
@@ -147,9 +162,27 @@ describe('State Admin API Integration Tests', () => {
 
     it('GET /states returns active states sorted by code ascending', async () => {
       await stateRepo().save([
-        stateRepo().create({ code: 'TX', name: 'Texas', slug: 'texas', type: 'state', country: 'United States' }),
-        stateRepo().create({ code: 'CA', name: 'California', slug: 'california', type: 'state', country: 'United States' }),
-        stateRepo().create({ code: 'NY', name: 'New York', slug: 'new-york', type: 'state', country: 'United States' }),
+        stateRepo().create({
+          code: 'TX',
+          name: 'Texas',
+          slug: 'texas',
+          type: 'state',
+          country: 'United States',
+        }),
+        stateRepo().create({
+          code: 'CA',
+          name: 'California',
+          slug: 'california',
+          type: 'state',
+          country: 'United States',
+        }),
+        stateRepo().create({
+          code: 'NY',
+          name: 'New York',
+          slug: 'new-york',
+          type: 'state',
+          country: 'United States',
+        }),
       ]);
 
       const res = await client.get('/api/v1/states').expect(200);
@@ -162,10 +195,34 @@ describe('State Admin API Integration Tests', () => {
 
     it('GET /states supports pagination, searching and filtering', async () => {
       await stateRepo().save([
-        stateRepo().create({ code: 'CA', name: 'California', slug: 'california', type: 'state', country: 'United States' }),
-        stateRepo().create({ code: 'TX', name: 'Texas', slug: 'texas', type: 'state', country: 'United States' }),
-        stateRepo().create({ code: 'ON', name: 'Ontario', slug: 'ontario', type: 'state', country: 'Canada' }),
-        stateRepo().create({ code: 'PR', name: 'Puerto Rico', slug: 'puerto-rico', type: 'territory', country: 'United States' }),
+        stateRepo().create({
+          code: 'CA',
+          name: 'California',
+          slug: 'california',
+          type: 'state',
+          country: 'United States',
+        }),
+        stateRepo().create({
+          code: 'TX',
+          name: 'Texas',
+          slug: 'texas',
+          type: 'state',
+          country: 'United States',
+        }),
+        stateRepo().create({
+          code: 'ON',
+          name: 'Ontario',
+          slug: 'ontario',
+          type: 'state',
+          country: 'Canada',
+        }),
+        stateRepo().create({
+          code: 'PR',
+          name: 'Puerto Rico',
+          slug: 'puerto-rico',
+          type: 'territory',
+          country: 'United States',
+        }),
       ]);
 
       // 1. Pagination limit=2
@@ -259,15 +316,15 @@ describe('State Admin API Integration Tests', () => {
         stateRepo().create({ code: 'NV', name: 'Nevada', slug: 'nevada', type: 'state' }),
       );
 
-      await client
-        .delete(`/api/v1/states/${state.id}`)
-        .set('x-csrf-token', clientCsrf)
-        .expect(200);
+      await client.delete(`/api/v1/states/${state.id}`).set('x-csrf-token', clientCsrf).expect(200);
 
       const activeState = await stateRepo().findOneBy({ id: state.id });
       expect(activeState).toBeNull();
 
-      const deletedState = await stateRepo().findOne({ where: { id: state.id }, withDeleted: true });
+      const deletedState = await stateRepo().findOne({
+        where: { id: state.id },
+        withDeleted: true,
+      });
       expect(deletedState!.deletedAt).not.toBeNull();
     });
 
@@ -292,10 +349,7 @@ describe('State Admin API Integration Tests', () => {
         }),
       );
 
-      await client
-        .delete(`/api/v1/states/${state.id}`)
-        .set('x-csrf-token', clientCsrf)
-        .expect(400); // Fails due to active tender association
+      await client.delete(`/api/v1/states/${state.id}`).set('x-csrf-token', clientCsrf).expect(400); // Fails due to active tender association
     });
   });
 
@@ -319,8 +373,8 @@ describe('State Admin API Integration Tests', () => {
 
       const payload = [
         { action: 'upsert', code: 'CO', name: 'Colorado Upserted', type: 'state' }, // update
-        { action: 'upsert', code: 'WY', name: 'Wyoming', type: 'state' },           // create
-        { action: 'delete', code: 'UT' },                                           // delete
+        { action: 'upsert', code: 'WY', name: 'Wyoming', type: 'state' }, // create
+        { action: 'delete', code: 'UT' }, // delete
       ];
 
       const res = await client

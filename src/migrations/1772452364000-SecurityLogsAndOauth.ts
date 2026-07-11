@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class SecurityLogsAndOauth1772452364000 implements MigrationInterface {
   name = 'SecurityLogsAndOauth1772452364000';
@@ -41,11 +41,11 @@ export class SecurityLogsAndOauth1772452364000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indexes
-    await queryRunner.query(`DROP INDEX "idx_security_email_date"`);
-    await queryRunner.query(`DROP INDEX "idx_security_user_date"`);
+    await queryRunner.query('DROP INDEX "idx_security_email_date"');
+    await queryRunner.query('DROP INDEX "idx_security_user_date"');
 
     // Drop table
-    await queryRunner.query(`DROP TABLE "security_logs"`);
+    await queryRunner.query('DROP TABLE "security_logs"');
 
     // Drop user columns
     await queryRunner.query(`

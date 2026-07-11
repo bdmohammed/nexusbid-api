@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateEnterpriseSubscriptions1772470000000 implements MigrationInterface {
   name = 'CreateEnterpriseSubscriptions1772470000000';
@@ -206,7 +206,7 @@ export class CreateEnterpriseSubscriptions1772470000000 implements MigrationInte
 
     // Generate reference numbers for existing plans
     await queryRunner.query(`
-      UPDATE "plans" SET "reference_no" = 'PLN-' || UPPER(SUBSTRING(id::text, 1, 8)) WHERE "reference_no" IS NULL;
+      UPDATE "plans" SET "reference_no" = 'PLN-' ?? UPPER(SUBSTRING(id::text, 1, 8)) WHERE "reference_no" IS NULL;
     `);
 
     await queryRunner.query(`
@@ -224,15 +224,15 @@ export class CreateEnterpriseSubscriptions1772470000000 implements MigrationInte
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop all subscription tables
-    await queryRunner.query(`DROP TABLE IF EXISTS "subscription_migrations"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_review_comments"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_reviews"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "coupons"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_category_pricing"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_country_pricing"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_features"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "plan_versions"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "feature_catalog"`);
+    await queryRunner.query('DROP TABLE IF EXISTS "subscription_migrations"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_review_comments"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_reviews"');
+    await queryRunner.query('DROP TABLE IF EXISTS "coupons"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_category_pricing"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_country_pricing"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_features"');
+    await queryRunner.query('DROP TABLE IF EXISTS "plan_versions"');
+    await queryRunner.query('DROP TABLE IF EXISTS "feature_catalog"');
 
     // Revert plans modifications
     await queryRunner.query(`
@@ -265,8 +265,8 @@ export class CreateEnterpriseSubscriptions1772470000000 implements MigrationInte
     `);
 
     // Drop tender submissions, evaluation templates, modify amendments
-    await queryRunner.query(`DROP TABLE IF EXISTS "tender_submissions"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "evaluation_templates"`);
+    await queryRunner.query('DROP TABLE IF EXISTS "tender_submissions"');
+    await queryRunner.query('DROP TABLE IF EXISTS "evaluation_templates"');
 
     await queryRunner.query(`
       ALTER TABLE "tender_amendments" DROP CONSTRAINT IF EXISTS "FK_tender_amendments_publisher";

@@ -1,25 +1,27 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
+
 import { authenticate } from '../../middleware/authenticate';
+import { loadPermissions } from '../../middleware/permissions';
 import {
   loginLimiter,
-  registerLimiter,
   passwordResetLimiter,
+  registerLimiter,
   resendVerificationLimiter,
 } from '../../middleware/rateLimits';
+import { validate } from '../../middleware/validate';
+
+import * as controller from './auth.controller';
 import {
-  RegisterDto,
-  LoginDto,
+  ChangePasswordDto,
+  EmailChangeDto,
   ForgotPasswordDto,
+  LoginDto,
+  RegisterDto,
+  ResendVerificationDto,
   ResetPasswordDto,
   VerifyEmailDto,
-  ResendVerificationDto,
-  EmailChangeDto,
-  ChangePasswordDto,
 } from './auth.dto';
-import * as controller from './auth.controller';
 import * as oauthController from './oauth.controller';
-import { loadPermissions } from '../../middleware/permissions';
 
 const router = Router();
 
@@ -170,7 +172,12 @@ router.post('/verify-email', validate(VerifyEmailDto), controller.verifyEmail);
  *       429:
  *         $ref: '#/components/responses/RateLimited'
  */
-router.post('/resend-verification', resendVerificationLimiter, validate(ResendVerificationDto), controller.resendVerification);
+router.post(
+  '/resend-verification',
+  resendVerificationLimiter,
+  validate(ResendVerificationDto),
+  controller.resendVerification,
+);
 
 /**
  * @swagger
@@ -259,7 +266,12 @@ router.post('/login', loginLimiter, validate(LoginDto), controller.login);
  *       429:
  *         $ref: '#/components/responses/RateLimited'
  */
-router.post('/forgot-password', passwordResetLimiter, validate(ForgotPasswordDto), controller.forgotPassword);
+router.post(
+  '/forgot-password',
+  passwordResetLimiter,
+  validate(ForgotPasswordDto),
+  controller.forgotPassword,
+);
 
 /**
  * @swagger
@@ -588,7 +600,12 @@ router.post('/email/change/verify', validate(VerifyEmailDto), controller.verifyE
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.post('/password/change', authenticate, validate(ChangePasswordDto), controller.changePassword);
+router.post(
+  '/password/change',
+  authenticate,
+  validate(ChangePasswordDto),
+  controller.changePassword,
+);
 
 /**
  * @swagger

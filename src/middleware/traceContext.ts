@@ -1,6 +1,8 @@
-import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+
 import { runWithContext } from '../config/requestContext';
+
+import type { NextFunction, Request, Response } from 'express';
 
 const HEX_REGEX = /^[0-9a-fA-F]+$/;
 
@@ -15,10 +17,14 @@ function extractTraceIdFromTraceparent(traceparent: string): string | undefined 
   if (parts.length === 4) {
     const [version, traceId, parentId, flags] = parts;
     if (
-      version.length === 2 && HEX_REGEX.test(version) &&
-      traceId.length === 32 && HEX_REGEX.test(traceId) &&
-      parentId.length === 16 && HEX_REGEX.test(parentId) &&
-      flags.length === 2 && HEX_REGEX.test(flags)
+      version.length === 2 &&
+      HEX_REGEX.test(version) &&
+      traceId.length === 32 &&
+      HEX_REGEX.test(traceId) &&
+      parentId.length === 16 &&
+      HEX_REGEX.test(parentId) &&
+      flags.length === 2 &&
+      HEX_REGEX.test(flags)
     ) {
       return traceId;
     }
@@ -30,11 +36,12 @@ function extractTraceIdFromTraceparent(traceparent: string): string | undefined 
  * Middleware setting up the Request Trace ID (Correlation ID) using AsyncLocalStorage.
  */
 export const traceContext = (req: Request, res: Response, next: NextFunction): void => {
-  let traceId = (req.headers['x-trace-id'] as string || '').trim();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  let traceId = ((req.headers['x-trace-id'] as string) ?? '').trim();
 
   // If X-Trace-Id is absent, try retrieving from W3C traceparent
   if (!traceId) {
-    const traceparent = (req.headers['traceparent'] as string || '').trim();
+    const traceparent = ((req.headers['traceparent'] as string) ?? '').trim();
     const w3cTraceId = extractTraceIdFromTraceparent(traceparent);
     if (w3cTraceId) {
       traceId = w3cTraceId;
@@ -49,8 +56,8 @@ export const traceContext = (req: Request, res: Response, next: NextFunction): v
   const requestId = traceId;
 
   // Stash on request object for fallback references (e.g. error handlers outside the async flow)
-  (req as any).traceId = traceId;
-  (req as any).requestId = requestId;
+  req.traceId = traceId;
+  req.requestId = requestId;
 
   // Set the response header
   res.setHeader('X-Trace-Id', traceId);

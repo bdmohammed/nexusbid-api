@@ -1,72 +1,112 @@
 import * as bcrypt from 'bcryptjs';
-import { In, ILike } from 'typeorm';
 import * as jwt from 'jsonwebtoken';
-import * as crypto from 'crypto';
+import { In } from 'typeorm';
+
+import { appDataSource } from '../../config/database';
 import { env } from '../../config/env';
-import { AppDataSource } from '../../config/database';
-import { User } from '../../entities/User';
+import { AppError } from '../../core/AppError';
+import { BCRYPT_ROUNDS } from '../../core/constants';
+import { AuditLog } from '../../entities/AuditLog';
+import { Category } from '../../entities/Category';
+import { DownloadHistory } from '../../entities/DownloadHistory';
+import { Permission } from '../../entities/Permission';
 import { Plan } from '../../entities/Plan';
 import { PlanVersion } from '../../entities/PlanVersion';
-import { Subscription } from '../../entities/Subscription';
-import { Transaction } from '../../entities/Transaction';
-import { Category } from '../../entities/Category';
+import { Role } from '../../entities/Role';
+import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
+import { SecurityLog } from '../../entities/SecurityLog';
 import { State } from '../../entities/State';
+import { Subscription } from '../../entities/Subscription';
 import { Tender } from '../../entities/Tender';
 import { TenderVersion } from '../../entities/TenderVersion';
-import { Role } from '../../entities/Role';
-import { UserRole } from '../../entities/UserRole';
-import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
-import { Permission } from '../../entities/Permission';
-import { AuditLog } from '../../entities/AuditLog';
+import { Transaction } from '../../entities/Transaction';
+import { User } from '../../entities/User';
 import { UserNote } from '../../entities/UserNote';
-import { SecurityLog } from '../../entities/SecurityLog';
+import { UserRole } from '../../entities/UserRole';
 import { UserSession } from '../../entities/UserSession';
-import { DownloadHistory } from '../../entities/DownloadHistory';
-import { UserDevice } from '../../entities/UserDevice';
-import { AppError } from '../../core/AppError';
-import { AccountType, TransactionStatus, UserStatus, EmailTokenType, SubscriptionStatus } from '../../types/enums';
-import { BCRYPT_ROUNDS } from '../../core/constants';
-import { generateSlug } from '../../utils/slug';
 import { CacheService } from '../../services/cache.service';
-import { sendAdminApprovalStatusEmail, sendPasswordResetEmail, sendVerificationEmail } from '../../services/email.service';
+import {
+  sendAdminApprovalStatusEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from '../../services/email.service';
 import { createEmailToken } from '../../services/token.service';
-import { AnalyticsQueryDto, BatchCategoryItemDto, BatchStateItemDto, CategoryQueryDto, CreateAdminDto, CreateCategoryDto, CreatePlanDto, CreateStateDto, StateQueryDto, UpdateCategoryDto, UpdatePlanDto, UpdateStateDto, ListUsersQueryDto, UpdateUserDetailDto } from './admin.dto';
+import {
+  AccountType,
+  EmailTokenType,
+  SubscriptionStatus,
+  TransactionStatus,
+  UserStatus,
+} from '../../types/enums';
+import { generateSlug } from '../../utils/slug';
+
+import type {
+  AnalyticsQueryDto,
+  BatchCategoryItemDto,
+  BatchStateItemDto,
+  CategoryQueryDto,
+  CreateAdminDto,
+  CreateCategoryDto,
+  CreatePlanDto,
+  CreateStateDto,
+  ListUsersQueryDto,
+  StateQueryDto,
+  UpdateCategoryDto,
+  UpdatePlanDto,
+  UpdateStateDto,
+  UpdateUserDetailDto,
+} from './admin.dto';
 import { PermissionModule } from '@/entities/PermissionModule';
 
-const userRepo = AppDataSource.getRepository(User);
-const planRepo = AppDataSource.getRepository(Plan);
-const subRepo = AppDataSource.getRepository(Subscription);
-const txnRepo = AppDataSource.getRepository(Transaction);
-const categoryRepo = AppDataSource.getRepository(Category);
-const stateRepo = AppDataSource.getRepository(State);
-const tenderRepo = AppDataSource.getRepository(Tender);
-const auditRepo = AppDataSource.getRepository(AuditLog);
+const userRepo = appDataSource.getRepository(User);
+const planRepo = appDataSource.getRepository(Plan);
+const subRepo = appDataSource.getRepository(Subscription);
+const txnRepo = appDataSource.getRepository(Transaction);
+const categoryRepo = appDataSource.getRepository(Category);
+const stateRepo = appDataSource.getRepository(State);
+const tenderRepo = appDataSource.getRepository(Tender);
+const auditRepo = appDataSource.getRepository(AuditLog);
 
 // ─── User Management ──────────────────────────────────────────────────────────
 
-export async function listUsers(opts: Partial<ListUsersQueryDto> = {}): Promise<{ users: User[]; total: number }> {
+export async function listUsers(
+  opts: Partial<ListUsersQueryDto> = {},
+): Promise<{ users: User[]; total: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
   const skip = (page - 1) * limit;
 
   const qb = userRepo.createQueryBuilder('user');
-  
+
   qb.select([
-    'user.id', 'user.name', 'user.email', 'user.accountType',
-    'user.companyName', 'user.country', 'user.emailVerified',
-    'user.isBlocked', 'user.status', 'user.createdAt', 'user.lastLoginAt'
+    'user.id',
+    'user.name',
+    'user.email',
+    'user.accountType',
+    'user.companyName',
+    'user.country',
+    'user.emailVerified',
+    'user.isBlocked',
+    'user.status',
+    'user.createdAt',
+    'user.lastLoginAt',
   ]);
 
   qb.leftJoinAndSelect('user.userRoles', 'userRole')
     .leftJoinAndSelect('userRole.role', 'role')
     .leftJoinAndSelect('role.activeVersion', 'activeVersion')
-    .leftJoinAndSelect('user.subscriptions', 'subscription', 'subscription.status = :activeStatus', { activeStatus: SubscriptionStatus.ACTIVE })
+    .leftJoinAndSelect(
+      'user.subscriptions',
+      'subscription',
+      'subscription.status = :activeStatus',
+      { activeStatus: SubscriptionStatus.ACTIVE },
+    )
     .leftJoinAndSelect('subscription.plan', 'plan');
 
   if (opts.search) {
     qb.andWhere(
       '(user.name ILIKE :search OR user.email ILIKE :search OR user.companyName ILIKE :search OR user.id::text = :exactSearch)',
-      { search: `%${opts.search}%`, exactSearch: opts.search }
+      { search: `%${opts.search}%`, exactSearch: opts.search },
     );
   }
 
@@ -76,7 +116,9 @@ export async function listUsers(opts: Partial<ListUsersQueryDto> = {}): Promise<
 
   if (opts.status) {
     if (opts.status === 'ACTIVE') {
-      qb.andWhere("user.status = 'active' AND user.emailVerified = true AND user.isBlocked = false");
+      qb.andWhere(
+        "user.status = 'active' AND user.emailVerified = true AND user.isBlocked = false",
+      );
     } else if (opts.status === 'PENDING_VERIFICATION') {
       qb.andWhere('user.emailVerified = false');
     } else if (opts.status === 'PENDING_APPROVAL') {
@@ -124,9 +166,7 @@ export async function listUsers(opts: Partial<ListUsersQueryDto> = {}): Promise<
     }
   }
 
-  qb.orderBy('user.createdAt', 'DESC')
-    .skip(skip)
-    .take(limit);
+  qb.orderBy('user.createdAt', 'DESC').skip(skip).take(limit);
 
   const [users, total] = await qb.getManyAndCount();
   return { users, total };
@@ -136,8 +176,16 @@ export async function getUserById(id: string): Promise<User> {
   const user = await userRepo.findOne({
     where: { id },
     select: [
-      'id', 'name', 'email', 'accountType', 'companyName',
-      'country', 'emailVerified', 'isBlocked', 'createdAt', 'updatedAt',
+      'id',
+      'name',
+      'email',
+      'accountType',
+      'companyName',
+      'country',
+      'emailVerified',
+      'isBlocked',
+      'createdAt',
+      'updatedAt',
     ],
   });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
@@ -218,7 +266,7 @@ export async function sendUserVerificationAction(id: string): Promise<void> {
 }
 
 export async function revokeSession(userId: string, sessionId: string): Promise<void> {
-  const sessionRepo = AppDataSource.getRepository(UserSession);
+  const sessionRepo = appDataSource.getRepository(UserSession);
   const session = await sessionRepo.findOne({ where: { id: sessionId, userId } });
   if (!session) throw new AppError('Session not found', 404, 'NOT_FOUND');
   session.isRevoked = true;
@@ -226,7 +274,7 @@ export async function revokeSession(userId: string, sessionId: string): Promise<
 }
 
 export async function revokeAllSessions(userId: string): Promise<void> {
-  const sessionRepo = AppDataSource.getRepository(UserSession);
+  const sessionRepo = appDataSource.getRepository(UserSession);
   await sessionRepo.update({ userId }, { isRevoked: true });
   const user = await userRepo.findOne({ where: { id: userId } });
   if (user) {
@@ -235,7 +283,11 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   }
 }
 
-export async function impersonateUser(userId: string, adminId: string, reason: string): Promise<{ token: string }> {
+export async function impersonateUser(
+  userId: string,
+  adminId: string,
+  reason: string,
+): Promise<{ token: string }> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
 
@@ -272,10 +324,10 @@ export async function updateUserDetail(id: string, dto: UpdateUserDetailDto): Pr
   if (dto.name !== undefined) user.name = dto.name;
   if (dto.companyName !== undefined) user.companyName = dto.companyName;
   if (dto.country !== undefined) user.country = dto.country;
-  
+
   if (dto.status !== undefined) {
     user.status = dto.status as any;
-    if (dto.status === 'suspended' || dto.status === 'archived') {
+    if (dto.status === 'suspended' ?? dto.status === 'archived') {
       user.tokenVersion += 1;
     }
   }
@@ -292,39 +344,53 @@ export async function updateUserDetail(id: string, dto: UpdateUserDetailDto): Pr
 
 export async function getUserStats(): Promise<any> {
   const total = await userRepo.count();
-  const active = await userRepo.count({ where: { status: UserStatus.ACTIVE, emailVerified: true, isBlocked: false } });
-  const inactive = await userRepo.count({ where: { status: UserStatus.PENDING_EMAIL_VERIFICATION } });
+  const active = await userRepo.count({
+    where: { status: UserStatus.ACTIVE, emailVerified: true, isBlocked: false },
+  });
+  const inactive = await userRepo.count({
+    where: { status: UserStatus.PENDING_EMAIL_VERIFICATION },
+  });
   const suspended = await userRepo.count({ where: { status: UserStatus.SUSPENDED } });
   const admins = await userRepo.count({ where: { accountType: AccountType.ADMIN } });
   const customers = await userRepo.count({ where: { accountType: AccountType.USER } });
   const pendingVerification = await userRepo.count({ where: { emailVerified: false } });
-  const pendingApprovalAdmins = await userRepo.count({ where: { accountType: AccountType.ADMIN, status: UserStatus.PENDING_APPROVAL } });
-  
-  const subscribed = await userRepo.createQueryBuilder('user')
+  const pendingApprovalAdmins = await userRepo.count({
+    where: { accountType: AccountType.ADMIN, status: UserStatus.PENDING_APPROVAL },
+  });
+
+  const subscribed = await userRepo
+    .createQueryBuilder('user')
     .innerJoin('user.subscriptions', 'sub', "sub.status = 'active'")
     .getCount();
 
   const blocked = await userRepo.count({ where: { isBlocked: true } });
 
   const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-  const onlineNow = await AppDataSource.getRepository(UserSession).createQueryBuilder('session')
+  const onlineNow = await appDataSource
+    .getRepository(UserSession)
+    .createQueryBuilder('session')
     .select('DISTINCT session.userId')
-    .where('session.expiresAt > :now AND session.isRevoked = false AND session.updatedAt >= :fiveMinsAgo', {
-      now: new Date(),
-      fiveMinsAgo
-    })
+    .where(
+      'session.expiresAt > :now AND session.isRevoked = false AND session.updatedAt >= :fiveMinsAgo',
+      {
+        now: new Date(),
+        fiveMinsAgo,
+      },
+    )
     .getCount();
 
   const startOfToday = new Date();
-  startOfToday.setHours(0,0,0,0);
-  const newToday = await userRepo.createQueryBuilder('user')
+  startOfToday.setHours(0, 0, 0, 0);
+  const newToday = await userRepo
+    .createQueryBuilder('user')
     .where('user.createdAt >= :startOfToday', { startOfToday })
     .getCount();
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
-  startOfMonth.setHours(0,0,0,0);
-  const newThisMonth = await userRepo.createQueryBuilder('user')
+  startOfMonth.setHours(0, 0, 0, 0);
+  const newThisMonth = await userRepo
+    .createQueryBuilder('user')
     .where('user.createdAt >= :startOfMonth', { startOfMonth })
     .getCount();
 
@@ -352,19 +418,24 @@ export async function getUserOverview(id: string): Promise<any> {
   });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
 
-  const notesCount = await AppDataSource.getRepository(UserNote).count({ where: { userId: id } });
+  const notesCount = await appDataSource.getRepository(UserNote).count({ where: { userId: id } });
 
   const createdTendersCount = await tenderRepo.count({ where: { createdById: id } });
-  const downloadCount = await AppDataSource.getRepository(DownloadHistory).count({ where: { userId: id } });
-  const loginCount = await AppDataSource.getRepository(SecurityLog).count({ where: { userId: id, event: 'auth.login' } });
-  
-  const storageResult = await AppDataSource.getRepository(DownloadHistory)
+  const downloadCount = await appDataSource.getRepository(DownloadHistory).count({
+    where: { userId: id },
+  });
+  const loginCount = await appDataSource.getRepository(SecurityLog).count({
+    where: { userId: id, event: 'auth.login' },
+  });
+
+  const storageResult = await appDataSource
+    .getRepository(DownloadHistory)
     .createQueryBuilder('dl')
     .select('SUM(dl.fileSize)', 'totalSize')
     .where('dl.userId = :userId', { userId: id })
     .getRawOne();
-  
-  const storageUsedBytes = parseInt(storageResult?.totalSize || '0', 10);
+
+  const storageUsedBytes = parseInt(storageResult?.totalSize ?? '0', 10);
 
   return {
     id: user.id,
@@ -379,7 +450,9 @@ export async function getUserOverview(id: string): Promise<any> {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
     lastLoginAt: user.lastLoginAt,
-    approvedBy: user.approvedBy ? { id: user.approvedBy.id, name: user.approvedBy.name, email: user.approvedBy.email } : null,
+    approvedBy: user.approvedBy
+      ? { id: user.approvedBy.id, name: user.approvedBy.name, email: user.approvedBy.email }
+      : null,
     approvedAt: user.approvedAt,
     rejectionReason: user.rejectionReason,
     notesCount,
@@ -391,7 +464,7 @@ export async function getUserOverview(id: string): Promise<any> {
       documentsCount: downloadCount,
       loginsCount: loginCount,
       storageUsedBytes,
-    }
+    },
   };
 }
 
@@ -410,11 +483,11 @@ export async function getUserSecurity(id: string): Promise<any> {
 }
 
 export async function getUserSessions(id: string): Promise<any[]> {
-  const sessions = await AppDataSource.getRepository(UserSession).find({
+  const sessions = await appDataSource.getRepository(UserSession).find({
     where: { userId: id, isRevoked: false },
     order: { createdAt: 'DESC' },
   });
-  return sessions.map(s => ({
+  return sessions.map((s) => ({
     id: s.id,
     ipAddress: s.ipAddress,
     userAgent: s.userAgent,
@@ -424,30 +497,36 @@ export async function getUserSessions(id: string): Promise<any[]> {
 }
 
 export async function getUserDevices(id: string): Promise<any[]> {
-  const logs = await AppDataSource.getRepository(SecurityLog).find({
+  const logs = await appDataSource.getRepository(SecurityLog).find({
     where: { userId: id, event: 'auth.login' },
     order: { createdAt: 'DESC' },
     take: 10,
   });
-  return logs.map(l => ({
+  return logs.map((l) => ({
     id: l.id,
     ipAddress: l.ipAddress,
     userAgent: l.userAgent,
-    location: l.location || 'Unknown',
+    location: l.location ?? 'Unknown',
     lastUsedAt: l.createdAt,
   }));
 }
 
-export async function getUserActivity(id: string, page: number = 1, limit: number = 20): Promise<{ activities: any[]; total: number }> {
+export async function getUserActivity(
+  id: string,
+  page: number = 1,
+  limit: number = 20,
+): Promise<{ activities: any[]; total: number }> {
   const skip = (page - 1) * limit;
-  const qb = AppDataSource.getRepository(SecurityLog).createQueryBuilder('log')
+  const qb = appDataSource
+    .getRepository(SecurityLog)
+    .createQueryBuilder('log')
     .where('log.userId = :userId', { userId: id })
     .orderBy('log.createdAt', 'DESC')
     .skip(skip)
     .take(limit);
 
   const [logs, total] = await qb.getManyAndCount();
-  const activities = logs.map(l => ({
+  const activities = logs.map((l) => ({
     id: l.id,
     event: l.event,
     ipAddress: l.ipAddress,
@@ -462,21 +541,37 @@ export async function getUserTimeline(id: string): Promise<any[]> {
   const timeline: any[] = [];
   const user = await userRepo.findOneOrFail({ where: { id } });
 
-  timeline.push({ event: 'Created', timestamp: user.createdAt, description: 'Account registered successfully.' });
+  timeline.push({
+    event: 'Created',
+    timestamp: user.createdAt,
+    description: 'Account registered successfully.',
+  });
 
   if (user.emailVerified) {
-    timeline.push({ event: 'Verified', timestamp: user.emailChangedAt || user.createdAt, description: 'Email address verified.' });
+    timeline.push({
+      event: 'Verified',
+      timestamp: user.emailChangedAt ?? user.createdAt,
+      description: 'Email address verified.',
+    });
   }
 
-  const subs = await subRepo.find({ where: { userId: id }, relations: ['plan', 'planVersion'], order: { createdAt: 'ASC' } });
+  const subs = await subRepo.find({
+    where: { userId: id },
+    relations: ['plan', 'planVersion'],
+    order: { createdAt: 'ASC' },
+  });
   for (const sub of subs) {
-    const planName = sub.planVersion?.name || 'Subscription';
-    timeline.push({ event: 'Subscribed', timestamp: sub.createdAt, description: `Subscribed to ${planName} plan.` });
+    const planName = sub.planVersion?.name ?? 'Subscription';
+    timeline.push({
+      event: 'Subscribed',
+      timestamp: sub.createdAt,
+      description: `Subscribed to ${planName} plan.`,
+    });
   }
 
   const logs = await auditRepo.find({
     where: { entityType: 'user', entityId: id },
-    order: { createdAt: 'ASC' }
+    order: { createdAt: 'ASC' },
   });
   for (const l of logs) {
     let description = l.action;
@@ -490,16 +585,17 @@ export async function getUserTimeline(id: string): Promise<any[]> {
     timeline.push({ event: l.action, timestamp: l.createdAt, description });
   }
 
-  return timeline.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return timeline.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 }
 
-export async function getUserAuditLogs(id: string, page: number = 1, limit: number = 20): Promise<{ logs: AuditLog[]; total: number }> {
+export async function getUserAuditLogs(
+  id: string,
+  page: number = 1,
+  limit: number = 20,
+): Promise<{ logs: AuditLog[]; total: number }> {
   const skip = (page - 1) * limit;
   const [logs, total] = await auditRepo.findAndCount({
-    where: [
-      { actorId: id },
-      { entityType: 'user', entityId: id }
-    ],
+    where: [{ actorId: id }, { entityType: 'user', entityId: id }],
     order: { createdAt: 'DESC' },
     skip,
     take: limit,
@@ -513,21 +609,23 @@ export async function getUserSubscription(id: string): Promise<any> {
     relations: ['plan', 'planVersion'],
     order: { createdAt: 'DESC' },
   });
-  
+
   const txns = await txnRepo.find({
     where: { userId: id },
     order: { createdAt: 'DESC' },
   });
 
   return {
-    activeSubscription: activeSub ? {
-      id: activeSub.id,
-      planName: activeSub.planVersion?.name || 'Subscription',
-      status: activeSub.status,
-      startedAt: activeSub.createdAt,
-      expiresAt: activeSub.endDate,
-    } : null,
-    transactions: txns.map(t => ({
+    activeSubscription: activeSub
+      ? {
+          id: activeSub.id,
+          planName: activeSub.planVersion?.name ?? 'Subscription',
+          status: activeSub.status,
+          startedAt: activeSub.createdAt,
+          expiresAt: activeSub.endDate,
+        }
+      : null,
+    transactions: txns.map((t) => ({
       id: t.id,
       amountCents: t.amountCents,
       type: t.type,
@@ -538,12 +636,12 @@ export async function getUserSubscription(id: string): Promise<any> {
 }
 
 export async function getUserNotes(id: string): Promise<any[]> {
-  const notes = await AppDataSource.getRepository(UserNote).find({
+  const notes = await appDataSource.getRepository(UserNote).find({
     where: { userId: id },
     relations: ['admin'],
     order: { createdAt: 'DESC' },
   });
-  return notes.map(n => ({
+  return notes.map((n) => ({
     id: n.id,
     note: n.note,
     createdAt: n.createdAt,
@@ -551,8 +649,12 @@ export async function getUserNotes(id: string): Promise<any[]> {
   }));
 }
 
-export async function createUserNote(userId: string, adminId: string, note: string): Promise<UserNote> {
-  const noteRepo = AppDataSource.getRepository(UserNote);
+export async function createUserNote(
+  userId: string,
+  adminId: string,
+  note: string,
+): Promise<UserNote> {
+  const noteRepo = appDataSource.getRepository(UserNote);
   const userNote = noteRepo.create({ userId, adminId, note });
   return noteRepo.save(userNote);
 }
@@ -564,17 +666,22 @@ export async function createAdmin(dto: CreateAdminDto): Promise<User> {
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
   // Validate assigned roles
-  const roleRepo = AppDataSource.getRepository(Role);
-  const roles = await roleRepo.createQueryBuilder('role')
+  const roleRepo = appDataSource.getRepository(Role);
+  const roles = await roleRepo
+    .createQueryBuilder('role')
     .where('role.id IN (:...roleIds)', { roleIds: dto.roleIds })
     .andWhere('role.isActive = true')
     .getMany();
 
   if (roles.length !== dto.roleIds.length) {
-    throw new AppError('One or more assigned roles are invalid or inactive.', 400, 'VALIDATION_ERROR');
+    throw new AppError(
+      'One or more assigned roles are invalid or inactive.',
+      400,
+      'VALIDATION_ERROR',
+    );
   }
 
-  const saved = await AppDataSource.transaction(async (transactionManager) => {
+  const saved = await appDataSource.transaction(async (transactionManager) => {
     const admin = transactionManager.create(User, {
       name: dto.name,
       email: dto.email,
@@ -615,7 +722,7 @@ export async function createPlan(dto: CreatePlanDto, createdById?: string): Prom
   });
   const savedPlan = await planRepo.save(plan);
 
-  const versionRepo = AppDataSource.getRepository(PlanVersion);
+  const versionRepo = appDataSource.getRepository(PlanVersion);
   const version = versionRepo.create({
     planId: savedPlan.id,
     version: 1,
@@ -631,11 +738,11 @@ export async function createPlan(dto: CreatePlanDto, createdById?: string): Prom
     isRecurring: dto.isRecurring,
     isFeatured: false,
     planType: dto.planType,
-    targetStateId: dto.targetStateId || null,
-    targetCountry: dto.targetCountry || null,
-    targetCategoryId: dto.targetCategoryId || null,
-    bundleSize: dto.bundleSize || null,
-    createdById: createdById || null,
+    targetStateId: dto.targetStateId ?? null,
+    targetCountry: dto.targetCountry ?? null,
+    targetCategoryId: dto.targetCategoryId ?? null,
+    bundleSize: dto.bundleSize ?? null,
+    createdById: createdById ?? null,
   });
   await versionRepo.save(version);
 
@@ -658,9 +765,10 @@ export async function updatePlan(id: string, dto: UpdatePlanDto): Promise<Plan> 
     if (dto.planType !== undefined) activeVer.planType = dto.planType;
     if (dto.targetStateId !== undefined) activeVer.targetStateId = dto.targetStateId ?? null;
     if (dto.targetCountry !== undefined) activeVer.targetCountry = dto.targetCountry ?? null;
-    if (dto.targetCategoryId !== undefined) activeVer.targetCategoryId = dto.targetCategoryId ?? null;
+    if (dto.targetCategoryId !== undefined)
+      activeVer.targetCategoryId = dto.targetCategoryId ?? null;
     if (dto.bundleSize !== undefined) activeVer.bundleSize = dto.bundleSize ?? null;
-    await AppDataSource.getRepository(PlanVersion).save(activeVer);
+    await appDataSource.getRepository(PlanVersion).save(activeVer);
   }
 
   if (dto.isActive !== undefined) {
@@ -690,7 +798,7 @@ export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<unkno
 }
 
 export async function getTopDownloads(): Promise<unknown[]> {
-  return AppDataSource.query(`
+  return appDataSource.query(`
     SELECT
       t.id,
       t.title,
@@ -737,7 +845,9 @@ export async function listAllSubscriptions(opts: {
 
 // ─── Category Management ──────────────────────────────────────────────────────
 
-export async function listAllCategories(query: Partial<CategoryQueryDto> = {}): Promise<{ categories: Category[]; total: number }> {
+export async function listAllCategories(
+  query: Partial<CategoryQueryDto> = {},
+): Promise<{ categories: Category[]; total: number }> {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.min(100, Math.max(1, query.limit ?? 20));
   const skip = (page - 1) * limit;
@@ -793,12 +903,16 @@ export async function listAllCategories(query: Partial<CategoryQueryDto> = {}): 
   }
 
   if (query.dateTo !== undefined) {
-    qb.andWhere('category.createdAt <= :dateTo', { dateTo: new Date(query.dateTo + 'T23:59:59.999Z') });
+    qb.andWhere('category.createdAt <= :dateTo', {
+      dateTo: new Date(`${query.dateTo}T23:59:59.999Z`),
+    });
   }
 
   if (query.search !== undefined && query.search !== '') {
     const searchPattern = `%${query.search}%`;
-    qb.andWhere('(category.name ILIKE :search OR category.code ILIKE :search)', { search: searchPattern });
+    qb.andWhere('(category.name ILIKE :search OR category.code ILIKE :search)', {
+      search: searchPattern,
+    });
   }
 
   if (query.unusedOnly) {
@@ -819,20 +933,28 @@ export async function listAllCategories(query: Partial<CategoryQueryDto> = {}): 
   }
   if (query.code) countQb.andWhere('category.code = :code', { code: query.code });
   if (query.slug) countQb.andWhere('category.slug = :slug', { slug: query.slug });
-  if (query.createdBy) countQb.andWhere('category.createdBy = :createdBy', { createdBy: query.createdBy });
-  if (query.dateFrom) countQb.andWhere('category.createdAt >= :dateFrom', { dateFrom: new Date(query.dateFrom) });
-  if (query.dateTo) countQb.andWhere('category.createdAt <= :dateTo', { dateTo: new Date(query.dateTo + 'T23:59:59.999Z') });
+  if (query.createdBy)
+    countQb.andWhere('category.createdBy = :createdBy', { createdBy: query.createdBy });
+  if (query.dateFrom)
+    countQb.andWhere('category.createdAt >= :dateFrom', { dateFrom: new Date(query.dateFrom) });
+  if (query.dateTo)
+    countQb.andWhere('category.createdAt <= :dateTo', {
+      dateTo: new Date(`${query.dateTo}T23:59:59.999Z`),
+    });
   if (query.search) {
     const searchPattern = `%${query.search}%`;
-    countQb.andWhere('(category.name ILIKE :search OR category.code ILIKE :search)', { search: searchPattern });
+    countQb.andWhere('(category.name ILIKE :search OR category.code ILIKE :search)', {
+      search: searchPattern,
+    });
   }
   if (query.unusedOnly) {
-    countQb.andWhere(qb => {
-      const subQuery = qb.subQuery()
+    countQb.andWhere((qb) => {
+      const subQuery = qb
+        .subQuery()
         .select('tv.category_id')
         .from('tender_versions', 'tv')
         .getQuery();
-      return 'category.id NOT IN ' + subQuery;
+      return `category.id NOT IN ${subQuery}`;
     });
   }
 
@@ -842,7 +964,7 @@ export async function listAllCategories(query: Partial<CategoryQueryDto> = {}): 
   const { entities, raw } = await qb.getRawAndEntities();
 
   const categories = entities.map((entity, index) => {
-    entity.activeTenderCount = parseInt(raw[index]?.activeTenderCount || '0', 10);
+    entity.activeTenderCount = parseInt(raw[index]?.activeTenderCount ?? '0', 10);
     return entity;
   });
 
@@ -866,7 +988,7 @@ export async function getCategoryStats(): Promise<{
     .innerJoin('tender.activeVersion', 'activeVersion')
     .select('COUNT(DISTINCT activeVersion.categoryId)', 'cnt')
     .getRawOne();
-  const tendersCount = parseInt(tendersCountResult?.cnt || '0', 10);
+  const tendersCount = parseInt(tendersCountResult?.cnt ?? '0', 10);
 
   return { total, active, inactive, archived, tendersCount };
 }
@@ -886,7 +1008,6 @@ export async function getCategoryById(id: string): Promise<Category> {
   return category;
 }
 
-
 export async function generateUniqueSlug(name: string): Promise<string> {
   const baseSlug = generateSlug(name);
   let slug = baseSlug;
@@ -902,7 +1023,7 @@ export async function generateUniqueSlug(name: string): Promise<string> {
 }
 
 export async function createCategory(dto: CreateCategoryDto, adminId?: string): Promise<Category> {
-  let code = dto.code;
+  let { code } = dto;
   if (!code) {
     const maxCategory = await categoryRepo.findOne({
       where: {},
@@ -913,7 +1034,7 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
     code = String(maxVal + 1).padStart(3, '0');
   }
 
-  let slug = dto.slug;
+  let { slug } = dto;
   if (!slug) {
     slug = await generateUniqueSlug(dto.name);
   }
@@ -931,10 +1052,10 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
     code,
     name: dto.name,
     slug,
-    description: dto.description || null,
+    description: dto.description ?? null,
     isActive: dto.isActive !== undefined ? dto.isActive : true,
-    createdBy: adminId || null,
-    updatedBy: adminId || null,
+    createdBy: adminId ?? null,
+    updatedBy: adminId ?? null,
     isDeleted: false,
   });
 
@@ -944,7 +1065,7 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
       return await categoryRepo.save(category);
     } catch (err: any) {
       if (err.code === '23505') {
-        const detail = err.detail || '';
+        const detail = err.detail ?? '';
         if (detail.includes('code')) {
           throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
         }
@@ -960,16 +1081,24 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
       throw err;
     }
   }
-  throw new AppError('Failed to generate unique slug after multiple attempts', 409, 'CATEGORY_SLUG_CONFLICT');
+  throw new AppError(
+    'Failed to generate unique slug after multiple attempts',
+    409,
+    'CATEGORY_SLUG_CONFLICT',
+  );
 }
 
-export async function updateCategory(id: string, dto: UpdateCategoryDto, adminId?: string): Promise<Category> {
+export async function updateCategory(
+  id: string,
+  dto: UpdateCategoryDto,
+  adminId?: string,
+): Promise<Category> {
   const category = await categoryRepo.findOne({ where: { id } });
   if (!category) {
     throw new AppError('Category not found', 404, 'NOT_FOUND');
   }
 
-  let slug = dto.slug;
+  let { slug } = dto;
   if (dto.name && !slug && dto.name !== category.name) {
     slug = await generateUniqueSlug(dto.name);
   }
@@ -983,13 +1112,19 @@ export async function updateCategory(id: string, dto: UpdateCategoryDto, adminId
   if (adminId !== undefined) updates.updatedBy = adminId;
 
   if (updates.code && updates.code !== category.code) {
-    const existingCode = await categoryRepo.findOne({ where: { code: updates.code }, withDeleted: true });
+    const existingCode = await categoryRepo.findOne({
+      where: { code: updates.code },
+      withDeleted: true,
+    });
     if (existingCode) {
       throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
     }
   }
   if (updates.slug && updates.slug !== category.slug) {
-    const existingSlug = await categoryRepo.findOne({ where: { slug: updates.slug }, withDeleted: true });
+    const existingSlug = await categoryRepo.findOne({
+      where: { slug: updates.slug },
+      withDeleted: true,
+    });
     if (existingSlug) {
       throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
     }
@@ -1003,7 +1138,7 @@ export async function updateCategory(id: string, dto: UpdateCategoryDto, adminId
       return await categoryRepo.save(category);
     } catch (err: any) {
       if (err.code === '23505') {
-        const detail = err.detail || '';
+        const detail = err.detail ?? '';
         if (detail.includes('code')) {
           throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
         }
@@ -1019,7 +1154,11 @@ export async function updateCategory(id: string, dto: UpdateCategoryDto, adminId
       throw err;
     }
   }
-  throw new AppError('Failed to generate unique slug after multiple attempts', 409, 'CATEGORY_SLUG_CONFLICT');
+  throw new AppError(
+    'Failed to generate unique slug after multiple attempts',
+    409,
+    'CATEGORY_SLUG_CONFLICT',
+  );
 }
 
 export async function deleteCategory(id: string, adminId?: string): Promise<void> {
@@ -1028,9 +1167,15 @@ export async function deleteCategory(id: string, adminId?: string): Promise<void
     throw new AppError('Category not found', 404, 'NOT_FOUND');
   }
 
-  const hasTenders = await AppDataSource.getRepository(TenderVersion).findOne({ where: { categoryId: id } });
+  const hasTenders = await appDataSource.getRepository(TenderVersion).findOne({
+    where: { categoryId: id },
+  });
   if (hasTenders) {
-    throw new AppError('Cannot delete category with associated tenders', 400, 'CATEGORY_HAS_TENDERS');
+    throw new AppError(
+      'Cannot delete category with associated tenders',
+      400,
+      'CATEGORY_HAS_TENDERS',
+    );
   }
 
   category.isDeleted = true;
@@ -1040,12 +1185,15 @@ export async function deleteCategory(id: string, adminId?: string): Promise<void
   await categoryRepo.softRemove(category);
 }
 
-export async function processBatchCategories(items: BatchCategoryItemDto[], adminId?: string): Promise<{
+export async function processBatchCategories(
+  items: BatchCategoryItemDto[],
+  adminId?: string,
+): Promise<{
   created: number;
   updated: number;
   deleted: number;
 }> {
-  return await AppDataSource.transaction(async (transactionalEntityManager) => {
+  return await appDataSource.transaction(async (transactionalEntityManager) => {
     const categoryTxRepo = transactionalEntityManager.getRepository(Category);
     const tenderTxRepo = transactionalEntityManager.getRepository(Tender);
 
@@ -1082,7 +1230,7 @@ export async function processBatchCategories(items: BatchCategoryItemDto[], admi
 
       // Upsert action
       const name = item.name!;
-      let category = codeMap.get(item.code);
+      const category = codeMap.get(item.code);
 
       if (category) {
         // Update existing (including soft-deleted)
@@ -1131,7 +1279,7 @@ export async function processBatchCategories(items: BatchCategoryItemDto[], admi
         const newCategory = new Category();
         newCategory.code = item.code;
         newCategory.name = name;
-        newCategory.description = item.description || null;
+        newCategory.description = item.description ?? null;
         newCategory.isActive = item.isActive !== undefined ? item.isActive : true;
         newCategory.isDeleted = false;
         if (adminId) {
@@ -1178,7 +1326,9 @@ export async function processBatchCategories(items: BatchCategoryItemDto[], admi
       });
 
       if (tenderVersions.length > 0) {
-        const failedCodes = Array.from(new Set(tenderVersions.map((t) => t.category?.code).filter(Boolean)));
+        const failedCodes = Array.from(
+          new Set(tenderVersions.map((t) => t.category?.code).filter(Boolean)),
+        );
         throw new AppError(
           `Cannot delete categories because they are associated with active tenders: ${failedCodes.join(', ')}`,
           400,
@@ -1196,7 +1346,7 @@ export async function processBatchCategories(items: BatchCategoryItemDto[], admi
         await categoryTxRepo.save(categoriesToSave);
       } catch (err: any) {
         if (err.code === '23505') {
-          const detail = err.detail || '';
+          const detail = err.detail ?? '';
           if (detail.includes('code')) {
             throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
           }
@@ -1214,7 +1364,9 @@ export async function processBatchCategories(items: BatchCategoryItemDto[], admi
 
 // ─── State Management ──────────────────────────────────────────────────────────
 
-export async function listAllStates(query: Partial<StateQueryDto> = {}): Promise<{ states: State[]; total: number }> {
+export async function listAllStates(
+  query: Partial<StateQueryDto> = {},
+): Promise<{ states: State[]; total: number }> {
   const page = Math.max(1, query.page ?? 1);
   const limit = Math.min(100, Math.max(1, query.limit ?? 20));
   const skip = (page - 1) * limit;
@@ -1241,13 +1393,11 @@ export async function listAllStates(query: Partial<StateQueryDto> = {}): Promise
     const searchPattern = `%${query.search}%`;
     qb.andWhere(
       '(state.name ILike :pattern OR state.code ILike :pattern OR state.country ILike :pattern)',
-      { pattern: searchPattern }
+      { pattern: searchPattern },
     );
   }
 
-  qb.orderBy('state.code', 'ASC')
-    .skip(skip)
-    .take(limit);
+  qb.orderBy('state.code', 'ASC').skip(skip).take(limit);
 
   const [states, total] = await qb.getManyAndCount();
   return { states, total };
@@ -1288,7 +1438,7 @@ export async function generateUniqueStateSlug(name: string): Promise<string> {
 }
 
 export async function createState(dto: CreateStateDto, adminId?: string): Promise<State> {
-  let slug = dto.slug;
+  let { slug } = dto;
   if (!slug) {
     slug = await generateUniqueStateSlug(dto.name);
   }
@@ -1301,7 +1451,7 @@ export async function createState(dto: CreateStateDto, adminId?: string): Promis
       existingCode.name = dto.name;
       existingCode.slug = slug;
       existingCode.type = dto.type;
-      existingCode.country = dto.country || 'United States';
+      existingCode.country = dto.country ?? 'United States';
       if (adminId) {
         existingCode.updatedBy = adminId;
       }
@@ -1318,7 +1468,7 @@ export async function createState(dto: CreateStateDto, adminId?: string): Promis
         existingSlug.code = dto.code;
         existingSlug.name = dto.name;
         existingSlug.type = dto.type;
-        existingSlug.country = dto.country || 'United States';
+        existingSlug.country = dto.country ?? 'United States';
         if (adminId) {
           existingSlug.updatedBy = adminId;
         }
@@ -1333,9 +1483,9 @@ export async function createState(dto: CreateStateDto, adminId?: string): Promis
     name: dto.name,
     slug,
     type: dto.type,
-    country: dto.country || 'United States',
-    createdBy: adminId || null,
-    updatedBy: adminId || null,
+    country: dto.country ?? 'United States',
+    createdBy: adminId ?? null,
+    updatedBy: adminId ?? null,
   });
 
   let retries = 3;
@@ -1344,7 +1494,7 @@ export async function createState(dto: CreateStateDto, adminId?: string): Promis
       return await stateRepo.save(state);
     } catch (err: any) {
       if (err.code === '23505') {
-        const detail = err.detail || '';
+        const detail = err.detail ?? '';
         if (detail.includes('code')) {
           throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
         }
@@ -1360,16 +1510,24 @@ export async function createState(dto: CreateStateDto, adminId?: string): Promis
       throw err;
     }
   }
-  throw new AppError('Failed to generate unique slug after multiple attempts', 409, 'STATE_SLUG_CONFLICT');
+  throw new AppError(
+    'Failed to generate unique slug after multiple attempts',
+    409,
+    'STATE_SLUG_CONFLICT',
+  );
 }
 
-export async function updateState(id: string, dto: UpdateStateDto, adminId?: string): Promise<State> {
+export async function updateState(
+  id: string,
+  dto: UpdateStateDto,
+  adminId?: string,
+): Promise<State> {
   const state = await stateRepo.findOne({ where: { id } });
   if (!state) {
     throw new AppError('State not found', 404, 'NOT_FOUND');
   }
 
-  let slug = dto.slug;
+  let { slug } = dto;
   if (dto.name && !slug) {
     slug = await generateUniqueStateSlug(dto.name);
   }
@@ -1383,13 +1541,19 @@ export async function updateState(id: string, dto: UpdateStateDto, adminId?: str
   if (adminId !== undefined) updates.updatedBy = adminId;
 
   if (updates.code && updates.code !== state.code) {
-    const existingCode = await stateRepo.findOne({ where: { code: updates.code }, withDeleted: true });
+    const existingCode = await stateRepo.findOne({
+      where: { code: updates.code },
+      withDeleted: true,
+    });
     if (existingCode) {
       throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
     }
   }
   if (updates.slug && updates.slug !== state.slug) {
-    const existingSlug = await stateRepo.findOne({ where: { slug: updates.slug }, withDeleted: true });
+    const existingSlug = await stateRepo.findOne({
+      where: { slug: updates.slug },
+      withDeleted: true,
+    });
     if (existingSlug) {
       throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
     }
@@ -1403,7 +1567,7 @@ export async function updateState(id: string, dto: UpdateStateDto, adminId?: str
       return await stateRepo.save(state);
     } catch (err: any) {
       if (err.code === '23505') {
-        const detail = err.detail || '';
+        const detail = err.detail ?? '';
         if (detail.includes('code')) {
           throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
         }
@@ -1419,7 +1583,11 @@ export async function updateState(id: string, dto: UpdateStateDto, adminId?: str
       throw err;
     }
   }
-  throw new AppError('Failed to generate unique slug after multiple attempts', 409, 'STATE_SLUG_CONFLICT');
+  throw new AppError(
+    'Failed to generate unique slug after multiple attempts',
+    409,
+    'STATE_SLUG_CONFLICT',
+  );
 }
 
 export async function deleteState(id: string, adminId?: string): Promise<void> {
@@ -1428,7 +1596,9 @@ export async function deleteState(id: string, adminId?: string): Promise<void> {
     throw new AppError('State not found', 404, 'NOT_FOUND');
   }
 
-  const hasTenders = await AppDataSource.getRepository(TenderVersion).findOne({ where: { stateId: id } });
+  const hasTenders = await appDataSource.getRepository(TenderVersion).findOne({
+    where: { stateId: id },
+  });
   if (hasTenders) {
     throw new AppError('Cannot delete state with associated tenders', 400, 'STATE_HAS_TENDERS');
   }
@@ -1439,12 +1609,15 @@ export async function deleteState(id: string, adminId?: string): Promise<void> {
   await stateRepo.softRemove(state);
 }
 
-export async function processBatchStates(items: BatchStateItemDto[], adminId?: string): Promise<{
+export async function processBatchStates(
+  items: BatchStateItemDto[],
+  adminId?: string,
+): Promise<{
   created: number;
   updated: number;
   deleted: number;
 }> {
-  return await AppDataSource.transaction(async (transactionalEntityManager) => {
+  return await appDataSource.transaction(async (transactionalEntityManager) => {
     const stateTxRepo = transactionalEntityManager.getRepository(State);
     const tenderTxRepo = transactionalEntityManager.getRepository(Tender);
 
@@ -1477,8 +1650,8 @@ export async function processBatchStates(items: BatchStateItemDto[], adminId?: s
 
       const name = item.name!;
       const type = item.type!;
-      const country = item.country || 'United States';
-      let state = codeMap.get(item.code);
+      const country = item.country ?? 'United States';
+      const state = codeMap.get(item.code);
 
       if (state) {
         state.name = name;
@@ -1566,7 +1739,9 @@ export async function processBatchStates(items: BatchStateItemDto[], adminId?: s
       });
 
       if (tenderVersions.length > 0) {
-        const failedCodes = Array.from(new Set(tenderVersions.map((t) => t.state?.code).filter(Boolean)));
+        const failedCodes = Array.from(
+          new Set(tenderVersions.map((t) => t.state?.code).filter(Boolean)),
+        );
         throw new AppError(
           `Cannot delete states because they are associated with active tenders: ${failedCodes.join(', ')}`,
           400,
@@ -1582,7 +1757,7 @@ export async function processBatchStates(items: BatchStateItemDto[], adminId?: s
         await stateTxRepo.save(statesToSave);
       } catch (err: any) {
         if (err.code === '23505') {
-          const detail = err.detail || '';
+          const detail = err.detail ?? '';
           if (detail.includes('code')) {
             throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
           }
@@ -1604,11 +1779,15 @@ export async function getUserRoles(userId: string): Promise<any> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
   if (user.accountType !== AccountType.ADMIN) {
-    throw new AppError('Roles can only be managed for administrator accounts.', 400, 'VALIDATION_ERROR');
+    throw new AppError(
+      'Roles can only be managed for administrator accounts.',
+      400,
+      'VALIDATION_ERROR',
+    );
   }
 
-  const roleRepo = AppDataSource.getRepository(Role);
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const roleRepo = appDataSource.getRepository(Role);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
 
   const assigned = await userRoleRepo.find({
     where: { userId },
@@ -1623,14 +1802,14 @@ export async function getUserRoles(userId: string): Promise<any> {
   return {
     assigned: assigned.map((ur) => ({
       id: ur.role?.id,
-      name: ur.role?.activeVersion?.name || 'Unnamed Role',
+      name: ur.role?.activeVersion?.name ?? 'Unnamed Role',
       slug: ur.role?.slug,
       expiresAt: ur.expiresAt,
       isSystemRole: ur.role?.isSystemRole,
     })),
     available: available.map((r) => ({
       id: r.id,
-      name: r.activeVersion?.name || 'Unnamed Role',
+      name: r.activeVersion?.name ?? 'Unnamed Role',
       slug: r.slug,
       isSystemRole: r.isSystemRole,
     })),
@@ -1643,40 +1822,57 @@ export async function assignUserRoles(
   currentUserId: string,
 ): Promise<void> {
   if (userId === currentUserId) {
-    throw new AppError('Self-modification of roles is forbidden to prevent self-lockout.', 403, 'SELF_MODIFICATION_FORBIDDEN');
+    throw new AppError(
+      'Self-modification of roles is forbidden to prevent self-lockout.',
+      403,
+      'SELF_MODIFICATION_FORBIDDEN',
+    );
   }
 
-  if (!assignments || assignments.length === 0) {
-    throw new AppError('An administrator must have at least one role assigned. Mutation rejected.', 400, 'VALIDATION_ERROR');
+  if (!assignments ?? assignments.length === 0) {
+    throw new AppError(
+      'An administrator must have at least one role assigned. Mutation rejected.',
+      400,
+      'VALIDATION_ERROR',
+    );
   }
 
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
   if (user.accountType !== AccountType.ADMIN) {
-    throw new AppError('Roles can only be assigned to administrator accounts.', 400, 'VALIDATION_ERROR');
+    throw new AppError(
+      'Roles can only be assigned to administrator accounts.',
+      400,
+      'VALIDATION_ERROR',
+    );
   }
 
-  const roleRepo = AppDataSource.getRepository(Role);
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const roleRepo = appDataSource.getRepository(Role);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
   const roleIds = assignments.map((a) => a.roleId);
 
   // Validate all roles are active
-  const roles = await roleRepo.createQueryBuilder('role')
+  const roles = await roleRepo
+    .createQueryBuilder('role')
     .where('role.id IN (:...roleIds)', { roleIds })
     .andWhere("role.status = 'ACTIVE'")
     .getMany();
 
   if (roles.length !== roleIds.length) {
-    throw new AppError('One or more roles being assigned are invalid or inactive.', 400, 'VALIDATION_ERROR');
+    throw new AppError(
+      'One or more roles being assigned are invalid or inactive.',
+      400,
+      'VALIDATION_ERROR',
+    );
   }
 
   // Privilege Escalation Check: Compare against current user's max priority
   const currentUserRoles = await userRoleRepo.find({
     where: { userId: currentUserId },
-    relations: ['role']
+    relations: ['role'],
   });
   // const currentMaxPriority = currentUserRoles.reduce((max, ur) => {
-  //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority || 0) : max;
+  //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority ?? 0) : max;
   // }, 0);
 
   // for (const role of roles) {
@@ -1687,7 +1883,7 @@ export async function assignUserRoles(
 
   const targetUserRoles = await userRoleRepo.find({
     where: { userId },
-    relations: ['role']
+    relations: ['role'],
   });
   // for (const ur of targetUserRoles) {
   //   if (ur.role && ur.role.priority > currentMaxPriority) {
@@ -1698,7 +1894,7 @@ export async function assignUserRoles(
   // Last Super Admin Protection
   const superAdminRole = await roleRepo.findOne({ where: { slug: 'super-admin' } });
   if (superAdminRole) {
-    const targetHasSuperAdmin = targetUserRoles.some(ur => ur.roleId === superAdminRole.id);
+    const targetHasSuperAdmin = targetUserRoles.some((ur) => ur.roleId === superAdminRole.id);
     const newHasSuperAdmin = roleIds.includes(superAdminRole.id);
 
     if (targetHasSuperAdmin && !newHasSuperAdmin) {
@@ -1706,26 +1902,29 @@ export async function assignUserRoles(
         where: {
           roleId: superAdminRole.id,
           userId: In(
-            await userRepo.find({
-              where: { accountType: AccountType.ADMIN, isBlocked: false },
-              select: ['id']
-            }).then(users => users.map(u => u.id).filter(id => id !== userId))
-          )
-        }
+            await userRepo
+              .find({
+                where: { accountType: AccountType.ADMIN, isBlocked: false },
+                select: ['id'],
+              })
+              .then((users) => users.map((u) => u.id).filter((id) => id !== userId)),
+          ),
+        },
       });
 
       if (otherSuperAdminsCount === 0) {
-        throw new AppError('Forbidden: Cannot revoke Super Admin role from the last active Super Admin.', 403, 'LAST_SUPER_ADMIN_PROTECTION');
+        throw new AppError(
+          'Forbidden: Cannot revoke Super Admin role from the last active Super Admin.',
+          403,
+          'LAST_SUPER_ADMIN_PROTECTION',
+        );
       }
     }
   }
 
-  await AppDataSource.transaction(async (transactionManager) => {
+  await appDataSource.transaction(async (transactionManager) => {
     // Delete existing roles
-    await transactionManager.query(
-      'DELETE FROM "user_roles" WHERE "user_id" = $1',
-      [userId],
-    );
+    await transactionManager.query('DELETE FROM "user_roles" WHERE "user_id" = $1', [userId]);
 
     const userRoles = assignments.map((a) => {
       const ur = new UserRole();
@@ -1742,20 +1941,32 @@ export async function assignUserRoles(
   CacheService.invalidateBackground(`permissions:${userId}`);
 }
 
-export async function revokeUserRole(userId: string, roleId: string, currentUserId: string): Promise<void> {
+export async function revokeUserRole(
+  userId: string,
+  roleId: string,
+  currentUserId: string,
+): Promise<void> {
   if (userId === currentUserId) {
-    throw new AppError('Self-modification of roles is forbidden to prevent self-lockout.', 403, 'SELF_MODIFICATION_FORBIDDEN');
+    throw new AppError(
+      'Self-modification of roles is forbidden to prevent self-lockout.',
+      403,
+      'SELF_MODIFICATION_FORBIDDEN',
+    );
   }
 
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
 
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  const roleRepo = AppDataSource.getRepository(Role);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const roleRepo = appDataSource.getRepository(Role);
   const activeRolesCount = await userRoleRepo.count({ where: { userId } });
 
   if (activeRolesCount <= 1) {
-    throw new AppError('An administrator must have at least one role assigned. Revocation rejected.', 400, 'REVOCATION_REJECTED');
+    throw new AppError(
+      'An administrator must have at least one role assigned. Revocation rejected.',
+      400,
+      'REVOCATION_REJECTED',
+    );
   }
 
   const roleToRevoke = await roleRepo.findOne({ where: { id: roleId } });
@@ -1766,10 +1977,10 @@ export async function revokeUserRole(userId: string, roleId: string, currentUser
   // Privilege Escalation Check
   const currentUserRoles = await userRoleRepo.find({
     where: { userId: currentUserId },
-    relations: ['role']
+    relations: ['role'],
   });
   // const currentMaxPriority = currentUserRoles.reduce((max, ur) => {
-  //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority || 0) : max;
+  //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority ?? 0) : max;
   // }, 0);
 
   // if (roleToRevoke.priority > currentMaxPriority) {
@@ -1778,7 +1989,7 @@ export async function revokeUserRole(userId: string, roleId: string, currentUser
 
   const targetUserRoles = await userRoleRepo.find({
     where: { userId },
-    relations: ['role']
+    relations: ['role'],
   });
   // for (const ur of targetUserRoles) {
   //   if (ur.role && ur.role.priority > currentMaxPriority) {
@@ -1792,16 +2003,22 @@ export async function revokeUserRole(userId: string, roleId: string, currentUser
       where: {
         roleId: roleToRevoke.id,
         userId: In(
-          await userRepo.find({
-            where: { accountType: AccountType.ADMIN, isBlocked: false },
-            select: ['id']
-          }).then(users => users.map(u => u.id).filter(id => id !== userId))
-        )
-      }
+          await userRepo
+            .find({
+              where: { accountType: AccountType.ADMIN, isBlocked: false },
+              select: ['id'],
+            })
+            .then((users) => users.map((u) => u.id).filter((id) => id !== userId)),
+        ),
+      },
     });
 
     if (otherSuperAdminsCount === 0) {
-      throw new AppError('Forbidden: Cannot revoke Super Admin role from the last active Super Admin.', 403, 'LAST_SUPER_ADMIN_PROTECTION');
+      throw new AppError(
+        'Forbidden: Cannot revoke Super Admin role from the last active Super Admin.',
+        403,
+        'LAST_SUPER_ADMIN_PROTECTION',
+      );
     }
   }
 
@@ -1815,23 +2032,25 @@ export async function previewUserPermissions(userId: string): Promise<any> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
 
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const userRoleRepo = appDataSource.getRepository(UserRole);
   const userRoles = await userRoleRepo.find({
     where: { userId },
     relations: ['role', 'role.activeVersion'],
   });
 
   const activeUserRoles = userRoles.filter((ur) => {
-    if (!ur.role || ur.role.status !== 'ACTIVE') return false;
+    if (!ur.role ?? ur.role.status !== 'ACTIVE') return false;
     if (ur.expiresAt && ur.expiresAt.getTime() < Date.now()) return false;
     return true;
   });
 
-  const roleNames = activeUserRoles.map((ur) => ur.role.activeVersion?.name || 'Unnamed Role');
-  const isSuperAdmin = activeUserRoles.some((ur) => ur.role.isSystemRole || ur.role.slug === 'super-admin');
+  const roleNames = activeUserRoles.map((ur) => ur.role.activeVersion?.name ?? 'Unnamed Role');
+  const isSuperAdmin = activeUserRoles.some(
+    (ur) => ur.role.isSystemRole ?? ur.role.slug === 'super-admin',
+  );
 
-  const permRepo = AppDataSource.getRepository(Permission);
-  const modRepo = AppDataSource.getRepository(PermissionModule);
+  const permRepo = appDataSource.getRepository(Permission);
+  const modRepo = appDataSource.getRepository(PermissionModule);
 
   const modules = await modRepo.find({ order: { displayOrder: 'ASC' } });
   let effectiveKeys = new Set<string>();
@@ -1845,7 +2064,7 @@ export async function previewUserPermissions(userId: string): Promise<any> {
       .filter((id): id is string => !!id);
 
     if (activeVersionIds.length > 0) {
-      const rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
+      const rvpRepo = appDataSource.getRepository(RoleVersionPermission);
       const rvpList = await rvpRepo.find({
         where: { roleVersionId: In(activeVersionIds) },
         select: ['permissionKey'],
@@ -1879,7 +2098,11 @@ export async function previewUserPermissions(userId: string): Promise<any> {
   };
 }
 
-export async function approveAdminUser(userId: string, approvedByUserId: string, roleId: string): Promise<void> {
+export async function approveAdminUser(
+  userId: string,
+  approvedByUserId: string,
+  roleId: string,
+): Promise<void> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'USER_NOT_FOUND');
@@ -1895,8 +2118,8 @@ export async function approveAdminUser(userId: string, approvedByUserId: string,
   await userRepo.save(user);
 
   // Assign the specified role
-  const userRoleRepo = AppDataSource.getRepository(UserRole);
-  
+  const userRoleRepo = appDataSource.getRepository(UserRole);
+
   // Clean up any existing roles first to avoid unique constraint violations
   await userRoleRepo.delete({ userId: user.id });
 
@@ -1916,7 +2139,11 @@ export async function approveAdminUser(userId: string, approvedByUserId: string,
   });
 }
 
-export async function rejectAdminUser(userId: string, approvedByUserId: string, reason: string): Promise<void> {
+export async function rejectAdminUser(
+  userId: string,
+  approvedByUserId: string,
+  reason: string,
+): Promise<void> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
     throw new AppError('User not found', 404, 'USER_NOT_FOUND');
@@ -1940,6 +2167,3 @@ export async function rejectAdminUser(userId: string, approvedByUserId: string, 
     reason,
   });
 }
-
-
-

@@ -1,4 +1,4 @@
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { Plan } from '../../src/entities/Plan';
 import { Subscription } from '../../src/entities/Subscription';
 import { State } from '../../src/entities/State';
@@ -32,14 +32,16 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
 
   beforeAll(async () => {
     // Ensure database is initialized
-    if (!AppDataSource.isInitialized) {
-      await AppDataSource.initialize();
+    if (!appDataSource.isInitialized) {
+      await appDataSource.initialize();
     }
   });
 
   beforeEach(async () => {
     // Clear tables
-    await AppDataSource.query(`TRUNCATE TABLE subscriptions, plans, tenders, categories, states, users RESTART IDENTITY CASCADE`);
+    await appDataSource.query(
+      `TRUNCATE TABLE subscriptions, plans, tenders, categories, states, users RESTART IDENTITY CASCADE`,
+    );
 
     // Create user
     customerUser = await createUser({
@@ -49,7 +51,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     });
 
     // Create lookup states
-    const stateRepo = AppDataSource.getRepository(State);
+    const stateRepo = appDataSource.getRepository(State);
     testState = stateRepo.create({
       name: 'New York',
       code: 'NY',
@@ -77,7 +79,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     await stateRepo.save([testState, otherState, canadaState]);
 
     // Create categories
-    const categoryRepo = AppDataSource.getRepository(Category);
+    const categoryRepo = appDataSource.getRepository(Category);
     testCategory = categoryRepo.create({
       code: '001',
       name: 'Technology',
@@ -93,7 +95,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     await categoryRepo.save([testCategory, otherCategory]);
 
     // Create plans
-    const planRepo = AppDataSource.getRepository(Plan);
+    const planRepo = appDataSource.getRepository(Plan);
     allAccessPlan = await planRepo.save(
       planRepo.create({
         name: 'All-Access Plan',
@@ -103,7 +105,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         isRecurring: true,
         planType: 'all-access',
         trialDays: 7,
-      })
+      }),
     );
 
     statePlan = await planRepo.save(
@@ -115,7 +117,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         isRecurring: true,
         planType: 'state',
         trialDays: 3,
-      })
+      }),
     );
 
     countryPlan = await planRepo.save(
@@ -126,7 +128,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         isActive: true,
         isRecurring: true,
         planType: 'country',
-      })
+      }),
     );
 
     categoryPlan = await planRepo.save(
@@ -137,7 +139,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         isActive: true,
         isRecurring: true,
         planType: 'category',
-      })
+      }),
     );
 
     bundlePlan = await planRepo.save(
@@ -149,11 +151,11 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         isRecurring: true,
         planType: 'bundle',
         bundleSize: 3,
-      })
+      }),
     );
 
     // Create tenders
-    const tenderRepo = AppDataSource.getRepository(Tender);
+    const tenderRepo = appDataSource.getRepository(Tender);
     tenderInState = await tenderRepo.save(
       tenderRepo.create({
         title: 'NY Software Project',
@@ -166,7 +168,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         stateId: testState.id,
         categoryId: testCategory.id,
         priceCents: 100,
-      })
+      }),
     );
 
     tenderInOtherState = await tenderRepo.save(
@@ -181,7 +183,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         stateId: otherState.id,
         categoryId: otherCategory.id,
         priceCents: 100,
-      })
+      }),
     );
 
     tenderInCountry = await tenderRepo.save(
@@ -196,7 +198,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
         stateId: canadaState.id,
         categoryId: testCategory.id,
         priceCents: 100,
-      })
+      }),
     );
   });
 
@@ -209,8 +211,8 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
             returnUrl: 'https://return.url',
             cancelUrl: 'https://cancel.url',
           },
-          { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
-        )
+          { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
+        ),
       ).rejects.toThrow('State selection required for state-specific plan');
     });
 
@@ -222,8 +224,8 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
             returnUrl: 'https://return.url',
             cancelUrl: 'https://cancel.url',
           },
-          { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
-        )
+          { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
+        ),
       ).rejects.toThrow('Country selection required for country-specific plan');
     });
 
@@ -235,8 +237,8 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
             returnUrl: 'https://return.url',
             cancelUrl: 'https://cancel.url',
           },
-          { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
-        )
+          { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
+        ),
       ).rejects.toThrow('Category selection required for category-specific plan');
     });
 
@@ -248,8 +250,8 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
             returnUrl: 'https://return.url',
             cancelUrl: 'https://cancel.url',
           },
-          { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
-        )
+          { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
+        ),
       ).rejects.toThrow('Category selections required for custom bundle plan');
     });
 
@@ -262,8 +264,8 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
             cancelUrl: 'https://cancel.url',
             selectedCategoryIds: ['cat-1', 'cat-2', 'cat-3', 'cat-4'], // size is 3
           },
-          { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
-        )
+          { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
+        ),
       ).rejects.toThrow('You can select at most 3 categories');
     });
   });
@@ -284,7 +286,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
           returnUrl: 'https://return.url',
           cancelUrl: 'https://cancel.url',
         },
-        { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
+        { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
       );
 
       const nyAccess = await hasAccessToTender(customerUser.id, tenderInState.id);
@@ -302,7 +304,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
           cancelUrl: 'https://cancel.url',
           targetStateId: testState.id,
         },
-        { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
+        { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
       );
 
       const nyAccess = await hasAccessToTender(customerUser.id, tenderInState.id);
@@ -320,7 +322,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
           cancelUrl: 'https://cancel.url',
           targetCountry: 'Canada',
         },
-        { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
+        { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
       );
 
       const canadaAccess = await hasAccessToTender(customerUser.id, tenderInCountry.id);
@@ -338,7 +340,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
           cancelUrl: 'https://cancel.url',
           targetCategoryId: testCategory.id,
         },
-        { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
+        { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
       );
 
       const techAccess = await hasAccessToTender(customerUser.id, tenderInState.id); // testCategory
@@ -356,7 +358,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
           cancelUrl: 'https://cancel.url',
           selectedCategoryIds: [testCategory.id],
         },
-        { userId: customerUser.id, name: customerUser.name, email: customerUser.email }
+        { userId: customerUser.id, name: customerUser.name, email: customerUser.email },
       );
 
       const techAccess = await hasAccessToTender(customerUser.id, tenderInState.id); // testCategory

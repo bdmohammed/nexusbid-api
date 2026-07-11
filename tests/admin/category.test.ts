@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { Category } from '../../src/entities/Category';
 import { Tender } from '../../src/entities/Tender';
 import { AccountType, PermissionKey } from '../../src/types/enums';
@@ -9,8 +9,8 @@ import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
 import { User } from '../../src/entities/User';
 
-const categoryRepo = () => AppDataSource.getRepository(Category);
-const tenderRepo = () => AppDataSource.getRepository(Tender);
+const categoryRepo = () => appDataSource.getRepository(Category);
+const tenderRepo = () => appDataSource.getRepository(Tender);
 
 // Helper to assign a permission to a user
 async function assignPermission(adminId: string, permissionKey: PermissionKey, allowed = true) {
@@ -23,7 +23,7 @@ async function assignPermission(adminId: string, permissionKey: PermissionKey, a
 async function clearAllTables() {
   await clearAuthTables();
   // Clear categories and tenders to avoid FK issues
-  await AppDataSource.query(`TRUNCATE TABLE tenders, categories RESTART IDENTITY CASCADE`);
+  await appDataSource.query(`TRUNCATE TABLE tenders, categories RESTART IDENTITY CASCADE`);
 }
 
 describe('Category Admin API Integration Tests', () => {
@@ -37,13 +37,13 @@ describe('Category Admin API Integration Tests', () => {
   // 4. Regular Customer
   let superAdminUser: User;
   let superAdminPassword = 'SuperAdminPass1!';
-  
+
   let authorizedAdminUser: User;
   let authorizedAdminPassword = 'AuthAdminPass1!';
-  
+
   let unauthorizedAdminUser: User;
   let unauthorizedAdminPassword = 'UnauthAdminPass1!';
-  
+
   let customerUser: User;
   let customerPassword = 'CustomerPass1!';
 
@@ -109,7 +109,10 @@ describe('Category Admin API Integration Tests', () => {
     });
 
     it('allows customers to GET but denies POST', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(customerUser.email, customerPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        customerUser.email,
+        customerPassword,
+      );
       await client.get('/api/v1/categories').expect(200);
       await client
         .post('/api/v1/categories')
@@ -119,7 +122,10 @@ describe('Category Admin API Integration Tests', () => {
     });
 
     it('allows admins without MANAGE_CATEGORIES permission to GET but denies POST', async () => {
-      const { agent: client, csrfToken: clientCsrf } = await loginAs(unauthorizedAdminUser.email, unauthorizedAdminPassword);
+      const { agent: client, csrfToken: clientCsrf } = await loginAs(
+        unauthorizedAdminUser.email,
+        unauthorizedAdminPassword,
+      );
       await client.get('/api/v1/categories').expect(200);
       await client
         .post('/api/v1/categories')
@@ -169,17 +175,17 @@ describe('Category Admin API Integration Tests', () => {
     it('GET /categories returns dynamic activeTenderCount', async () => {
       // Seed two categories
       const catA = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Category A', slug: 'category-a' })
+        categoryRepo().create({ code: '001', name: 'Category A', slug: 'category-a' }),
       );
       const catB = await categoryRepo().save(
-        categoryRepo().create({ code: '002', name: 'Category B', slug: 'category-b' })
+        categoryRepo().create({ code: '002', name: 'Category B', slug: 'category-b' }),
       );
 
       // Seed a state
-      const stateRepo = AppDataSource.getRepository('State');
-      const state = await stateRepo.save(
-        stateRepo.create({ code: 'NY', name: 'New York' })
-      ) as any;
+      const stateRepo = appDataSource.getRepository('State');
+      const state = (await stateRepo.save(
+        stateRepo.create({ code: 'NY', name: 'New York' }),
+      )) as any;
 
       // Seed 2 active tenders for Category A
       await tenderRepo().save([
@@ -219,19 +225,19 @@ describe('Category Admin API Integration Tests', () => {
           categoryId: catA.id,
           stateId: state.id,
           createdById: superAdminUser.id,
-        } as any)
+        } as any),
       ]);
 
       const res = await client.get('/api/v1/categories').expect(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.length).toBe(2);
-      
+
       const catAData = res.body.data.find((c: any) => c.code === '001');
       const catBData = res.body.data.find((c: any) => c.code === '002');
-      
+
       expect(catAData).toBeDefined();
       expect(catAData.activeTenderCount).toBe(2);
-      
+
       expect(catBData).toBeDefined();
       expect(catBData.activeTenderCount).toBe(0);
     });
@@ -239,7 +245,11 @@ describe('Category Admin API Integration Tests', () => {
     it('GET /categories supports search and filter parameters', async () => {
       // Seed some categories
       await categoryRepo().save([
-        categoryRepo().create({ code: '001', name: 'Software Development', slug: 'software-development' }),
+        categoryRepo().create({
+          code: '001',
+          name: 'Software Development',
+          slug: 'software-development',
+        }),
         categoryRepo().create({ code: '002', name: 'Mobile App Dev', slug: 'mobile-app-dev' }),
         categoryRepo().create({ code: '003', name: 'HR Services', slug: 'hr-services' }),
       ]);
@@ -360,7 +370,7 @@ describe('Category Admin API Integration Tests', () => {
 
     it('POST /categories returns 409 on duplicate code (TOCTOU protection)', async () => {
       await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
 
       const res = await client
@@ -374,7 +384,7 @@ describe('Category Admin API Integration Tests', () => {
 
     it('POST /categories returns 409 on duplicate slug if slug explicitly supplied', async () => {
       await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'const-slug' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'const-slug' }),
       );
 
       const res = await client
@@ -388,7 +398,7 @@ describe('Category Admin API Integration Tests', () => {
 
     it('PATCH /categories/:id updates fields successfully', async () => {
       const cat = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
 
       const res = await client
@@ -409,10 +419,10 @@ describe('Category Admin API Integration Tests', () => {
 
     it('PATCH /categories/:id returns 409 if updated code is already taken', async () => {
       await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
       const cat2 = await categoryRepo().save(
-        categoryRepo().create({ code: '002', name: 'IT', slug: 'it' })
+        categoryRepo().create({ code: '002', name: 'IT', slug: 'it' }),
       );
 
       const res = await client
@@ -435,7 +445,7 @@ describe('Category Admin API Integration Tests', () => {
 
     it('DELETE /categories/:id deletes category successfully', async () => {
       const cat = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
 
       await client
@@ -450,15 +460,15 @@ describe('Category Admin API Integration Tests', () => {
     it('DELETE /categories/:id returns 400 when category has associated tenders', async () => {
       // 1. Create a category
       const cat = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' })
+        categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
 
       // 2. Create a tender referencing the category
       // We need a dummy state for tender
-      const stateRepo = AppDataSource.getRepository('State');
-      const state = await stateRepo.save(
-        stateRepo.create({ code: 'NY', name: 'New York' })
-      ) as any;
+      const stateRepo = appDataSource.getRepository('State');
+      const state = (await stateRepo.save(
+        stateRepo.create({ code: 'NY', name: 'New York' }),
+      )) as any;
 
       // Also need a user to assign as creator
       await tenderRepo().save(
@@ -473,7 +483,7 @@ describe('Category Admin API Integration Tests', () => {
           categoryId: cat.id,
           stateId: state.id,
           createdById: superAdminUser.id,
-        } as any)
+        } as any),
       );
 
       // 3. Attempt to delete
@@ -483,7 +493,7 @@ describe('Category Admin API Integration Tests', () => {
         .expect(400);
 
       expect(res.body.code).toBe('CATEGORY_HAS_TENDERS');
-      
+
       const found = await categoryRepo().findOneBy({ id: cat.id });
       expect(found).not.toBeNull();
     });
@@ -509,7 +519,7 @@ describe('Category Admin API Integration Tests', () => {
 
     it('soft deletes category and excludes it from standard GET queries', async () => {
       const cat = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'To Delete', slug: 'to-delete' })
+        categoryRepo().create({ code: '001', name: 'To Delete', slug: 'to-delete' }),
       );
 
       // Verify it exists in list
@@ -604,7 +614,7 @@ describe('Category Admin API Integration Tests', () => {
     it('restores soft-deleted categories during batch upsert', async () => {
       // 1. Create and soft-delete a category
       const cat = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Cat One', slug: 'cat-one' })
+        categoryRepo().create({ code: '001', name: 'Cat One', slug: 'cat-one' }),
       );
       await categoryRepo().softRemove(cat);
 
@@ -635,7 +645,7 @@ describe('Category Admin API Integration Tests', () => {
 
       // Batch with a duplicate slug conflict
       const payload = [
-        { action: 'upsert', code: '002', name: 'Cat Two', slug: 'cat-one' } // slug conflict with 001
+        { action: 'upsert', code: '002', name: 'Cat Two', slug: 'cat-one' }, // slug conflict with 001
       ];
 
       const res = await client

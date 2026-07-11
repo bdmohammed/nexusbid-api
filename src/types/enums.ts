@@ -5,7 +5,6 @@ export enum AccountType {
   ADMIN = 'admin',
 }
 
-
 // ─── Tender ───────────────────────────────────────────────────────────────────
 
 export enum TenderLifecycleStatus {
@@ -143,5 +142,3 @@ export enum UserStatus {
   DEACTIVATED = 'deactivated',
   ARCHIVED = 'archived',
 }
-
-

@@ -1,17 +1,18 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToMany,
+  Entity,
   Index,
-  ManyToOne,
   JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { UserRole } from './UserRole';
+
 import { RoleVersion } from './RoleVersion';
 import { User } from './User';
+import { UserRole } from './UserRole';
 
 export enum RoleStatus {
   ACTIVE = 'ACTIVE',

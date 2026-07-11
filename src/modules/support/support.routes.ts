@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { validate } from '../../middleware/validate';
+
 import { contactLimiter } from '../../middleware/rateLimits';
-import { ContactFormDto } from './support.dto';
+import { validate } from '../../middleware/validate';
+
 import { submitContactForm } from './support.controller';
+import { ContactFormDto } from './support.dto';
 
 const router = Router();
 

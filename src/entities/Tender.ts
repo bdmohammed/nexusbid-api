@@ -1,24 +1,26 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
+  Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
   VersionColumn,
 } from 'typeorm';
+
 import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
-import { User } from './User';
-import { TenderVersion } from './TenderVersion';
-import { TenderCommittee } from './TenderCommittee';
-import { TenderParticipant } from './TenderParticipant';
-import { TenderWatcher } from './TenderWatcher';
-import { TenderInvitation } from './TenderInvitation';
-import { TenderQuestion } from './TenderQuestion';
-import { TenderClarification } from './TenderClarification';
+
 import { TenderAmendment } from './TenderAmendment';
+import { TenderClarification } from './TenderClarification';
+import { TenderCommittee } from './TenderCommittee';
+import { TenderInvitation } from './TenderInvitation';
+import { TenderParticipant } from './TenderParticipant';
+import { TenderQuestion } from './TenderQuestion';
+import { TenderVersion } from './TenderVersion';
+import { TenderWatcher } from './TenderWatcher';
+import { User } from './User';
 
 @Entity('tenders')
 export class Tender {

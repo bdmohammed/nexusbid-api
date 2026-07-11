@@ -1,12 +1,7 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  OneToMany,
-} from 'typeorm';
-import { NotificationRecipient } from './NotificationRecipient';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+
 import { NotificationAction } from './NotificationAction';
+import { NotificationRecipient } from './NotificationRecipient';
 
 @Entity('notifications')
 export class Notification {

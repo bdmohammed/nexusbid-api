@@ -2,7 +2,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { User } from '../../src/entities/User';
 import { UserSession } from '../../src/entities/UserSession';
 import { clearAuthTables } from '../helpers/db';
@@ -12,8 +12,8 @@ import { JWT_COOKIE_NAME } from '../../src/core/constants';
 import { REFRESH_COOKIE_NAME } from '../../src/modules/auth/auth.service';
 import { env } from '../../src/config/env';
 
-const userRepo = AppDataSource.getRepository(User);
-const sessionRepo = AppDataSource.getRepository(UserSession);
+const userRepo = appDataSource.getRepository(User);
+const sessionRepo = appDataSource.getRepository(UserSession);
 
 describe('Session Management & Security integration tests', () => {
   let agent: ReturnType<typeof request.agent>;
@@ -26,7 +26,7 @@ describe('Session Management & Security integration tests', () => {
   // 1. Access Token Expiration
   it('should return TOKEN_EXPIRED (401) when access token is expired', async () => {
     const { user } = await createVerifiedUser();
-    
+
     // Create an expired access token
     const payload = {
       sub: user.id,
@@ -64,9 +64,9 @@ describe('Session Management & Security integration tests', () => {
     // Verify cookies are set
     const cookies = res.headers['set-cookie'] as string[];
     expect(cookies).toBeDefined();
-    
-    const hasAccessCookie = cookies.some(c => c.startsWith(`${JWT_COOKIE_NAME}=`));
-    const hasRefreshCookie = cookies.some(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`));
+
+    const hasAccessCookie = cookies.some((c) => c.startsWith(`${JWT_COOKIE_NAME}=`));
+    const hasRefreshCookie = cookies.some((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`));
     expect(hasAccessCookie).toBe(true);
     expect(hasRefreshCookie).toBe(true);
 
@@ -90,7 +90,9 @@ describe('Session Management & Security integration tests', () => {
 
     // Retrieve initial refresh token from cookie
     const loginCookies = loginRes.headers['set-cookie'] as string[];
-    const firstRefreshTokenCookie = loginCookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
+    const firstRefreshTokenCookie = loginCookies.find((c) =>
+      c.startsWith(`${REFRESH_COOKIE_NAME}=`),
+    )!;
     const firstRefreshToken = firstRefreshTokenCookie.split(';')[0].split('=')[1];
 
     // Trigger refresh using the refresh token
@@ -104,7 +106,9 @@ describe('Session Management & Security integration tests', () => {
 
     // Check that new cookies were returned
     const refreshCookies = refreshRes.headers['set-cookie'] as string[];
-    const newRefreshTokenCookie = refreshCookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
+    const newRefreshTokenCookie = refreshCookies.find((c) =>
+      c.startsWith(`${REFRESH_COOKIE_NAME}=`),
+    )!;
     const secondRefreshToken = newRefreshTokenCookie.split(';')[0].split('=')[1];
 
     expect(secondRefreshToken).not.toBe(firstRefreshToken);
@@ -132,7 +136,7 @@ describe('Session Management & Security integration tests', () => {
       .expect(200);
 
     const loginCookies = loginRes.headers['set-cookie'] as string[];
-    const refreshTokenCookie = loginCookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
+    const refreshTokenCookie = loginCookies.find((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
     const refreshToken = refreshTokenCookie.split(';')[0].split('=')[1];
 
     // First refresh: rotates token, revoking the first one
@@ -210,8 +214,8 @@ describe('Session Management & Security integration tests', () => {
       .expect(200);
 
     const cookies = loginRes.headers['set-cookie'] as string[];
-    const accessCookie = cookies.find(c => c.startsWith(`${JWT_COOKIE_NAME}=`))!;
-    const refreshCookie = cookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
+    const accessCookie = cookies.find((c) => c.startsWith(`${JWT_COOKIE_NAME}=`))!;
+    const refreshCookie = cookies.find((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
 
     // Create a second session (simulate another device)
     const secondAgent = request.agent(app);
@@ -221,7 +225,7 @@ describe('Session Management & Security integration tests', () => {
       .send({ email: user.email, password })
       .expect(200);
     const secondCookies = secondLoginRes.headers['set-cookie'] as string[];
-    const secondAccess = secondCookies.find(c => c.startsWith(`${JWT_COOKIE_NAME}=`))!;
+    const secondAccess = secondCookies.find((c) => c.startsWith(`${JWT_COOKIE_NAME}=`))!;
 
     // 1. Get active sessions
     const sessionsRes = await agent
@@ -248,19 +252,16 @@ describe('Session Management & Security integration tests', () => {
       .expect(200);
 
     // Verify second agent is now blocked
+    await secondAgent.get('/api/v1/auth/me').set('Cookie', [secondAccess]).expect(401); // Wait, since second agent's access token is still valid (until 15m expires),
+    // but wait, is the access token checked against DB isRevoked session?
+    // No, access token validation checks user.tokenVersion, not individual session status!
+    // But if we refresh the second agent's session, the refresh token will be found revoked:
+    const secondRefreshCookie = secondCookies.find((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
     await secondAgent
-      .get('/api/v1/auth/me')
-      .set('Cookie', [secondAccess])
-      .expect(401); // Wait, since second agent's access token is still valid (until 15m expires), 
-      // but wait, is the access token checked against DB isRevoked session?
-      // No, access token validation checks user.tokenVersion, not individual session status!
-      // But if we refresh the second agent's session, the refresh token will be found revoked:
-      const secondRefreshCookie = secondCookies.find(c => c.startsWith(`${REFRESH_COOKIE_NAME}=`))!;
-      await secondAgent
-        .post('/api/v1/auth/refresh')
-        .set('x-csrf-token', csrf.token)
-        .set('Cookie', [secondRefreshCookie])
-        .expect(401); // Refuses to rotate because session is revoked!
+      .post('/api/v1/auth/refresh')
+      .set('x-csrf-token', csrf.token)
+      .set('Cookie', [secondRefreshCookie])
+      .expect(401); // Refuses to rotate because session is revoked!
 
     // 3. Revoke all sessions (Global Logout)
     await agent
@@ -270,9 +271,6 @@ describe('Session Management & Security integration tests', () => {
       .expect(200);
 
     // Verify that even the first agent's access token is now rejected because tokenVersion was incremented
-    await agent
-      .get('/api/v1/auth/me')
-      .set('Cookie', [accessCookie])
-      .expect(401);
+    await agent.get('/api/v1/auth/me').set('Cookie', [accessCookie]).expect(401);
   });
 });

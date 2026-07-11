@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  Index,
-} from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('subscription_daily_metrics')
 @Index(['date'])
@@ -29,9 +24,14 @@ export class SubscriptionDailyMetrics {
   @Column({ name: 'cancelled_count', type: 'integer', default: 0 })
   cancelledCount: number;
 
-  @Column({ name: 'revenue_cents', type: 'bigint', default: 0, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseInt(val, 10)
-  }})
+  @Column({
+    name: 'revenue_cents',
+    type: 'bigint',
+    default: 0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseInt(val, 10),
+    },
+  })
   revenueCents: number;
 }

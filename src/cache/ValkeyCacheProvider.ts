@@ -1,5 +1,3 @@
-// src/cache/ValkeyCacheProvider.ts
-
 /**
  * Valkey Cache Provider
  *
@@ -17,10 +15,5 @@
  *
  * If Valkey adds APIs not in Redis in the future, extend this class.
  */
-export {
-    RedisCacheProvider as ValkeyCacheProvider,
-} from "./RedisCacheProvider";
-
-export type {
-    RedisClient as ValkeyClient,
-} from "./RedisCacheProvider";
+export type { RedisClient as ValkeyClient } from './RedisCacheProvider';
+export { RedisCacheProvider as ValkeyCacheProvider } from './RedisCacheProvider';

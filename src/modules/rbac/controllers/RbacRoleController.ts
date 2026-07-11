@@ -1,7 +1,9 @@
-import { Request, Response } from 'express';
-import { RbacService } from '../rbac.service';
-import { asyncHandler } from '../../../core/asyncHandler';
 import { z } from 'zod';
+
+import { asyncHandler } from '../../../core/asyncHandler';
+import { RbacService } from '../rbac.service';
+
+import type { Request, Response } from 'express';
 
 const CreateRoleSchema = z.object({
   name: z.string().min(1, 'Role name is required').max(100),
@@ -36,14 +38,25 @@ export class RbacRoleController {
 
   public static createRole = asyncHandler(async (req: Request, res: Response) => {
     const body = CreateRoleSchema.parse(req.body);
-    const draft = await RbacService.createRole(body.name, body.description, body.permissionKeys, req.user!.userId);
+    const draft = await RbacService.createRole(
+      body.name,
+      body.description,
+      body.permissionKeys,
+      req.user!.userId,
+    );
     res.status(201).json({ success: true, data: draft });
   });
 
   public static updateRole = asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const body = UpdateRoleSchema.parse(req.body);
-    const draft = await RbacService.updateRole(id!, body.name, body.description, body.permissionKeys, req.user!.userId);
+    const draft = await RbacService.updateRole(
+      id!,
+      body.name,
+      body.description,
+      body.permissionKeys,
+      req.user!.userId,
+    );
     res.json({ success: true, data: draft });
   });
 

@@ -1,4 +1,6 @@
-import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey } from 'typeorm';
+import { TableColumn, TableForeignKey } from 'typeorm';
+
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddSoftDeleteToCategories1700000000008 implements MigrationInterface {
   name = 'AddSoftDeleteToCategories1700000000008';
@@ -56,8 +58,12 @@ export class AddSoftDeleteToCategories1700000000008 implements MigrationInterfac
   public async down(queryRunner: QueryRunner): Promise<void> {
     const table = await queryRunner.getTable('categories');
     if (table) {
-      const createdByFk = table.foreignKeys.find((fk) => fk.columnNames.indexOf('created_by') !== -1);
-      const updatedByFk = table.foreignKeys.find((fk) => fk.columnNames.indexOf('updated_by') !== -1);
+      const createdByFk = table.foreignKeys.find(
+        (fk) => fk.columnNames.indexOf('created_by') !== -1,
+      );
+      const updatedByFk = table.foreignKeys.find(
+        (fk) => fk.columnNames.indexOf('updated_by') !== -1,
+      );
       if (createdByFk) await queryRunner.dropForeignKey('categories', createdByFk);
       if (updatedByFk) await queryRunner.dropForeignKey('categories', updatedByFk);
     }

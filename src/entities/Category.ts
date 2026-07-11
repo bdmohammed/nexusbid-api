@@ -1,16 +1,17 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
-  OneToMany,
   CreateDateColumn,
-  UpdateDateColumn,
   DeleteDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { TenderVersion } from './TenderVersion';
+
 import { AlertPreference } from './AlertPreference';
+import { TenderVersion } from './TenderVersion';
 import { User } from './User';
 
 @Entity('categories')

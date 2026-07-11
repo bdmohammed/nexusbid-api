@@ -17,12 +17,12 @@
  *   createVerifiedUser() -- persists + sets emailVerified=true, returns { user, password }
  */
 import * as bcrypt from 'bcryptjs';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { User } from '../../src/entities/User';
 import { AccountType } from '../../src/types/enums';
 import { BCRYPT_ROUNDS } from '../../src/core/constants';
 
-const userRepo = AppDataSource.getRepository(User);
+const userRepo = appDataSource.getRepository(User);
 
 let counter = 0;
 

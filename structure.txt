@@ -176,34 +176,6 @@
 │   │   ├── traceContext.ts
 │   │   └── validate.ts
 │   ├── migrations
-│   │   ├── 1700000000001-CreateUsers.ts
-│   │   ├── 1700000000002-CreateCategoriesAndStates.ts
-│   │   ├── 1700000000003-CreateTenders.ts
-│   │   ├── 1700000000004-CreateBillingTables.ts
-│   │   ├── 1700000000005-CreateUserFeatureTables.ts
-│   │   ├── 1700000000006-CreateAuditAndMiscTables.ts
-│   │   ├── 1700000000007-EnableFtsAndTrigram.ts
-│   │   ├── 1700000000008-AddSoftDeleteToCategories.ts
-│   │   ├── 1700000000009-AddAuditAndCountryToStates.ts
-│   │   ├── 1700000000010-AddSubscriptionPlanFields.ts
-│   │   ├── 1772452361000-ImplementRBAC.ts
-│   │   ├── 1772452362000-CreateUserSessions.ts
-│   │   ├── 1772452363000-SecurityBacklog.ts
-│   │   ├── 1772452364000-SecurityLogsAndOauth.ts
-│   │   ├── 1772452365000-AddUserStatusAndApprovalFields.ts
-│   │   ├── 1772452366000-AddEmailTokenEnumValues.ts
-│   │   ├── 1772452367000-EnhanceRBAC.ts
-│   │   ├── 1772452368000-EnhanceCategories.ts
-│   │   ├── 1772456000000-DropCategoryParentId.ts
-│   │   ├── 1772457000000-UserNotesAndImpersonation.ts
-│   │   ├── 1772458000000-AddProfileColumnsToUser.ts
-│   │   ├── 1772459000000-Remove2FAColumns.ts
-│   │   ├── 1772460000000-CreateEnterpriseTenders.ts
-│   │   ├── 1772470000000-CreateEnterpriseSubscriptions.ts
-│   │   ├── 1772480000000-CreateBIAnalyticsTables.ts
-│   │   ├── 1772490000000-EnhanceAuditLogs.ts
-│   │   ├── 1772510000000-ActionableNotificationsSchema.ts
-│   │   └── 1772520000000-AddDbVersionToTenders.ts
 │   ├── modules
 │   │   ├── admin
 │   │   │   ├── admin.controller.ts
@@ -379,7 +351,5 @@
 ├── jest.config.ts
 ├── package-lock.json
 ├── package.json
-├── structure.txt
-├── tree.ps1
 ├── tsconfig.json
 └── tsconfig.test.json

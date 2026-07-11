@@ -1,9 +1,32 @@
-import { Request, Response, NextFunction } from 'express';
 import { appDataSource } from '../config/database';
-import { AuditLog } from '../entities/AuditLog';
 import { asyncHandler } from '../core/asyncHandler';
+import { AuditLog } from '../entities/AuditLog';
+
+import type { NextFunction, Request, Response } from 'express';
 
 const auditLogRepository = appDataSource.getRepository(AuditLog);
+
+function buildAuditLogPayload(
+  req: Request,
+  res: Response,
+  action: string,
+  entityType: string,
+  responseBody: Record<string, unknown>,
+) {
+  const { user } = req;
+  return {
+    actorId: user ? user.userId : null,
+    actorEmail: user ? user.email : 'unknown',
+    action,
+    entityType,
+    entityId: req.params['id'] ?? null,
+    before: (res.locals['auditBefore'] as unknown) ?? null,
+    after: responseBody.data ?? null,
+    requestId: req.requestId ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+    ipAddress: req.ip ?? null,
+  };
+}
 
 /**
  * Middleware factory that logs admin actions to the audit_logs table.
@@ -25,25 +48,13 @@ export const auditLogger = (action: string, entityType: string) =>
   asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
 
-    res.json = (responseBody: unknown) => {
+    res.json = (responseBody: Record<string, unknown>) => {
       // Non-blocking — does not delay the response
       setImmediate(() => {
-        auditLogRepository
-          .save({
-            actorId: req.user?.userId ?? null,
-            actorEmail: req.user?.email ?? 'unknown',
-            action,
-            entityType,
-            entityId: req.params['id'] ?? null,
-            before: (res.locals['auditBefore'] as Record<string, unknown>) ?? null,
-            after: (responseBody as Record<string, unknown>)?.['data'] ?? null,
-            requestId: req.requestId ?? null,
-            userAgent: req.headers['user-agent'] ?? null,
-            ipAddress: req.ip ?? null,
-          })
-          .catch(() => {
-            // Silently fail — audit logging should never crash the app
-          });
+        const payload = buildAuditLogPayload(req, res, action, entityType, responseBody);
+        auditLogRepository.save(payload).catch(() => {
+          // Silently fail — audit logging should never crash the app
+        });
       });
 
       return originalJson(responseBody);

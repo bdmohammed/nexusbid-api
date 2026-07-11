@@ -23,13 +23,13 @@ export const BCRYPT_ROUNDS = {
 
 /** Email token TTLs in milliseconds */
 export const EMAIL_TOKEN_TTL = {
-  VERIFICATION: 24 * 60 * 60 * 1000,   // 24 hours
-  PASSWORD_RESET: 30 * 60 * 1000,       // 30 minutes
+  VERIFICATION: 24 * 60 * 60 * 1000, // 24 hours
+  PASSWORD_RESET: 30 * 60 * 1000, // 30 minutes
 } as const;
 
 /** S3 pre-signed URL expiry in seconds */
 export const S3_URL_EXPIRY = {
-  UPLOAD: 900,   // 15 minutes
+  UPLOAD: 900, // 15 minutes
   DOWNLOAD: 900, // 15 minutes
 } as const;
 

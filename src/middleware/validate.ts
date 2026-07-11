@@ -1,6 +1,7 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { ZodSchema, ZodError } from 'zod';
 import { AppError } from '../core/AppError';
+
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { ZodSchema } from 'zod';
 
 type Target = 'body' | 'query' | 'params';
 
@@ -13,21 +14,19 @@ type Target = 'body' | 'query' | 'params';
  * Usage:
  *   router.post('/register', validate(RegisterDto, 'body'), handler)
  */
-export const validate = (schema: ZodSchema, target: Target = 'body'): RequestHandler =>
+export const validate =
+  (schema: ZodSchema, target: Target = 'body'): RequestHandler =>
   (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req[target]);
 
     if (!result.success) {
-      const errors = (result.error as ZodError).issues.map((issue) => ({
+      const errors = result.error.issues.map((issue) => ({
         field: issue.path.join('.'),
         message: issue.message,
       }));
 
       return next(
-        Object.assign(
-          new AppError('Validation failed', 422, 'VALIDATION_ERROR'),
-          { errors },
-        ),
+        Object.assign(new AppError('Validation failed', 422, 'VALIDATION_ERROR'), { errors }),
       );
     }
 

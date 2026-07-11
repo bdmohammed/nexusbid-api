@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { AppDataSource } from '../../src/config/database';
+import { appDataSource } from '../../src/config/database';
 import { clearAuthTables } from '../helpers/db';
 import { User } from '../../src/entities/User';
 import { Role } from '../../src/entities/Role';
@@ -14,18 +14,16 @@ describe('System Setup Flow Integration Tests', () => {
 
   describe('GET /api/v1/setup/check', () => {
     it('should return setupAllowed: true when no Super Admin exists', async () => {
-      const res = await request(app)
-        .get('/api/v1/setup/check')
-        .expect(200);
+      const res = await request(app).get('/api/v1/setup/check').expect(200);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data.setupAllowed).toBe(true);
     });
 
     it('should return 403 Forbidden when a Super Admin already exists', async () => {
-      const userRepo = AppDataSource.getRepository(User);
-      const roleRepo = AppDataSource.getRepository(Role);
-      const userRoleRepo = AppDataSource.getRepository(UserRole);
+      const userRepo = appDataSource.getRepository(User);
+      const roleRepo = appDataSource.getRepository(Role);
+      const userRoleRepo = appDataSource.getRepository(UserRole);
 
       // Create admin user
       const admin = userRepo.create({
@@ -54,9 +52,7 @@ describe('System Setup Flow Integration Tests', () => {
       });
       await userRoleRepo.save(userRole);
 
-      const res = await request(app)
-        .get('/api/v1/setup/check')
-        .expect(403);
+      const res = await request(app).get('/api/v1/setup/check').expect(403);
 
       expect(res.body.success).toBe(false);
       expect(res.body.message).toContain('Forbidden');
@@ -78,9 +74,9 @@ describe('System Setup Flow Integration Tests', () => {
       expect(res.body.data.email).toBe('firstadmin@test.local');
 
       // Verify DB State
-      const userRepo = AppDataSource.getRepository(User);
-      const roleRepo = AppDataSource.getRepository(Role);
-      const userRoleRepo = AppDataSource.getRepository(UserRole);
+      const userRepo = appDataSource.getRepository(User);
+      const roleRepo = appDataSource.getRepository(Role);
+      const userRoleRepo = appDataSource.getRepository(UserRole);
 
       const createdUser = await userRepo.findOne({ where: { email: 'firstadmin@test.local' } });
       expect(createdUser).toBeDefined();
@@ -103,9 +99,9 @@ describe('System Setup Flow Integration Tests', () => {
     });
 
     it('should reject setup requests with 403 if a Super Admin already exists', async () => {
-      const userRepo = AppDataSource.getRepository(User);
-      const roleRepo = AppDataSource.getRepository(Role);
-      const userRoleRepo = AppDataSource.getRepository(UserRole);
+      const userRepo = appDataSource.getRepository(User);
+      const roleRepo = appDataSource.getRepository(Role);
+      const userRoleRepo = appDataSource.getRepository(UserRole);
 
       // Create admin user
       const admin = userRepo.create({
@@ -149,9 +145,9 @@ describe('System Setup Flow Integration Tests', () => {
     });
 
     it('should successfully upgrade an existing user to admin and assign Super Admin role', async () => {
-      const userRepo = AppDataSource.getRepository(User);
-      const roleRepo = AppDataSource.getRepository(Role);
-      const userRoleRepo = AppDataSource.getRepository(UserRole);
+      const userRepo = appDataSource.getRepository(User);
+      const roleRepo = appDataSource.getRepository(Role);
+      const userRoleRepo = appDataSource.getRepository(UserRole);
 
       // Create pre-existing user (ordinary user)
       const existingUser = userRepo.create({
@@ -182,7 +178,7 @@ describe('System Setup Flow Integration Tests', () => {
       expect(upgradedUser?.accountType).toBe(AccountType.ADMIN);
       expect(upgradedUser?.name).toBe('Upgraded Admin');
       expect(upgradedUser?.emailVerified).toBe(true);
-      
+
       // Verify password changed
       expect(upgradedUser?.passwordHash).not.toBe('oldhash');
 

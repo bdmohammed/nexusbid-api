@@ -1,10 +1,12 @@
-import { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
 import { QueryFailedError } from 'typeorm';
-import { AppError } from '../core/AppError';
-import { logger } from '../config/logger';
+import { ZodError } from 'zod';
+
 import { env } from '../config/env';
-import { getTraceId, getContext } from '../config/requestContext';
+import { logger } from '../config/logger';
+import { getContext, getTraceId } from '../config/requestContext';
+import { AppError } from '../core/AppError';
+
+import type { NextFunction, Request, Response } from 'express';
 
 interface AppErrorWithErrors extends AppError {
   errors?: Array<{ field: string; message: string }>;
@@ -24,12 +26,11 @@ export const errorHandler = (
   err: unknown,
   req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void => {
-  const activeLogger = req.log || logger;
-  const traceId = getTraceId() ?? (req as any).traceId ?? 'unknown';
-  const requestId = getContext()?.requestId ?? (req as any).requestId ?? (req as any).id ?? 'unknown';
+  const activeLogger = req.log ?? logger;
+  const traceId = getTraceId() ?? req.traceId ?? 'unknown';
+  const requestId = getContext()?.requestId ?? req.requestId ?? req.id ?? 'unknown';
   const userId = getContext()?.userId ?? req.user?.userId;
 
   // ── AppError ────────────────────────────────────────────────────────────────
@@ -59,7 +60,10 @@ export const errorHandler = (
 
   // ── Zod (should be caught by validate middleware, but belt-and-suspenders) ──
   if (err instanceof ZodError) {
-    const validationErrors = err.issues.map((i) => ({ field: i.path.join('.'), message: i.message }));
+    const validationErrors = err.issues.map((i) => ({
+      field: i.path.join('.'),
+      message: i.message,
+    }));
     activeLogger.warn(
       {
         requestId,

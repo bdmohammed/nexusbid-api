@@ -1,0 +1,670 @@
+Internal Naming Standard for TypeScript Backend:
+Refactor internal code naming conventions in this project
+SCOPE — CRITICAL:
+This is a naming-only refactor. Do NOT change business logic, control flow, or 
+file structure. Do NOT rename: files, folders, routes, API URL paths, database 
+tables, database columns, entity class names, environment variable keys 
+(process.env.X), or test files. Those are out of scope for this pass.
+
+RULES TO APPLY (TypeScript, throughout the codebase):
+a. Rename to meaningful names: Distinguish names in such a way that the reader knows what the differences offer.
+Bad:
+```ts
+    function isBetween(a1: number, a2: number, a3: number): boolean {
+        return a2 <= a1 && a1 <= a3;
+    }
+```
+Good:
+```ts
+    function isBetween(value: number, left: number, right: number): boolean {
+        return left <= value && value <= right;
+    }
+```
+
+b. Use pronounceable variable names
+If you can't pronounce it, you can't discuss it without sounding weird.
+Bad:
+```ts
+    class Subs {
+        public ccId: number;
+        public billingAddrId: number;
+        public shippingAddrId: number;
+    }
+```
+Good:
+```ts
+    class Subscription {
+        public creditCardId: number;
+        public billingAddressId: number;
+        public shippingAddressId: number;
+    }
+```
+
+c. Avoid mental mapping
+Explicit is better than implicit.
+Clarity is king.
+
+Bad:
+```ts
+    const u = getUser();
+    const s = getSubscription();
+    const t = charge(u, s);
+```
+Good:
+```ts
+    const user = getUser();
+    const subscription = getSubscription();
+    const transaction = charge(user, subscription);
+```
+
+d. Don't add unneeded context
+If your class/type/object name tells you something, don't repeat that in your variable name.
+
+Bad:
+```ts
+    type Car = {
+        carMake: string;
+        carModel: string;
+        carColor: string;
+    }
+
+    function print(car: Car): void {
+        console.log(`${car.carMake} ${car.carModel} (${car.carColor})`);
+    }
+```
+Good:
+```ts
+    type Car = {
+        make: string;
+        model: string;
+        color: string;
+    }
+
+    function print(car: Car): void {
+        console.log(`${car.make} ${car.model} (${car.color})`);
+    }
+```
+
+e. The Declaration Keywords (var, let, const)
+    1.. var (The Enemy)
+        a. Eliminate all var declarations.
+        b. Search your codebase for var and replace them with const (if the value doesn't change) or let (if it does).
+
+    2. const (The Default)
+        a. Make const your default. If you aren't sure if a variable needs to change, start with const. The compiler will yell at you if you try to reassign it; if it doesn't, keep it as const.
+        b. const prevents reassignment, but it doesn't make objects immutable. You can still push to a const array.
+    3. let (The Exception)
+        a. Only use let when a variable must change (e.g., loop counters, accumulators, or state that updates in a try/catch block).
+
+f. No Type in Variable Names.
+g. 
+1. Variables:
+a. Use camelCase for variable name.
+Bad:
+```ts
+const data = ...
+const res = ...
+const obj = ...
+const temp = ...
+const result = ...
+const value = ...
+```
+Good:
+```ts
+const customer
+const customerProfile
+const accessToken
+const refreshToken
+const authenticatedUser
+const existingUser
+const updatedSubscription
+const createdTender
+const validationResult
+```
+
+1. CONSTANT VARIABLES (module-level, never reassigned, config-like)
+Use UPPER_SNAKE_CASE only for true compile-time constants.
+Good:
+```ts
+const JWT_COOKIE_NAME
+const MAX_RETRIES
+const DEFAULT_PAGE_SIZE
+```
+Bad:
+```ts
+const USER_PERMISSIONS = new Map()
+const DATABASE_CONFIG = buildConfig()
+```
+Those are objects, not constants in the conventional sense.
+Good:
+```ts
+const permissionCache = new Map()
+const databaseConfig = ...
+```
+Otherwise you'll end up with Java-style code.
+
+2. Block-Scoped Variables (let inside a function/loop)
+Use camelCase, name by role in that scope, not generic counters beyond simple loop indices.
+Bad:
+```ts
+    for (let i = 0; i < tenders.length; i++) { let x = tenders[i]; }
+```
+Good:
+```ts
+    for (let index = 0; index < tenders.length; index++) { let currentTender = tenders[index]; }
+    // or prefer: for (const currentTender of tenders) { ... }
+```
+
+3. Global Variables (module-scope singletons, e.g. exported instances)
+Use camelCase, suffix by what it is.
+Bad:
+```ts
+    export const db = new DataSource(...);
+```
+Good:
+```ts
+    export const appDataSource = new DataSource(...);
+```
+
+4. Module/Package Variables (internal to a file, not exported)
+Same camelCase rule; prefix with intent if it's a cache/registry.
+Bad:
+```ts
+    const cache = new Map();
+```
+Good:
+```ts
+    const permissionCache = new Map();
+```
+
+5. Environment Variables (process.env keys)
+UPPER_SNAKE_CASE always (this is a Node.js/shell convention, not a TS style choice).
+Bad:
+```ts
+    process.env.jwtSecret
+```
+Good:
+```ts
+    process.env.JWT_SECRET
+```
+
+6. Configuration Variables (parsed/typed config objects derived from env)
+camelCase, grouped under a namespaced config object rather than loose top-level names.
+Bad:
+```ts
+    const dbUrl = env.DATABASE_URL;
+    const dbPoolMax = env.DB_POOL_MAX;
+```
+Good:
+```ts
+    const databaseConfig = { url: env.DATABASE_URL, poolMax: env.DB_POOL_MAX };
+```
+
+7. Boolean Variables:
+Bad:
+```ts
+    active
+    verified
+    permission
+    login
+    # Avoid Negative Booleans
+```
+Good:
+```ts
+    isActive
+    isVerified
+    hasPermission
+    isLoggedIn
+    canEdit
+    shouldRetry
+    needsApproval
+```
+
+---
+
+2. Functions
+a. Use camelCase for function names.
+b. Functions should start with verbs.
+Bad:
+```ts
+password()
+email()
+subscription()
+user()
+```
+Good:
+```ts
+hashPassword()
+sendVerificationEmail()
+createSubscription()
+findUserByEmail()
+generateAccessToken()
+revokeSession()
+```
+
+1. Function Parameters:
+Bad
+```ts
+function update(a, b)
+function update(user, data)
+```
+Good:
+```ts
+function updateUser(
+    existingUser: User,
+    updateUserDto: UpdateUserDto,
+)
+```
+
+2. Function Arguments (as opposed to parameters — the values passed at call site)
+Prefer named/destructured objects once you exceed 2 positional args, so call sites stay 
+self-documenting.
+Bad:
+```ts
+    createTender(userId, title, description, categoryId, deadline, budget);
+```
+Good:
+```ts
+    createTender({ userId, title, description, categoryId, deadline, budget });
+```
+
+---
+
+3. Classes
+a. Use PascalCase for class names.
+b. Every class should describe one responsibility.
+Bad:
+```ts
+AuthManager
+AuthHelper
+CommonUtils
+GeneralService
+DataHandler
+```
+Good:
+```ts
+AuthService
+EmailService
+JwtService
+PermissionService
+SubscriptionRepository
+```
+unless that is genuinely their responsibility.
+c. Use camelCase for function variables, methods: Naturally follows from variable and function naming convention.
+
+1. Private Fields:
+Bad
+```ts
+private repo;
+private cache;
+private jwt;
+```
+Good:
+```ts
+private readonly userRepository;
+private readonly cacheService;
+private readonly tokenService;
+```
+
+2. Protected Fields
+Same camelCase + descriptive rule as private; used when subclasses need access.
+Bad:
+```ts
+    protected repo;
+```
+Good:
+```ts
+    protected readonly baseRepository: Repository<Tender>;
+```
+
+3. Static / Constant Class Members
+UPPER_SNAKE_CASE for true constants attached to a class; camelCase for static utility 
+methods/properties that aren't constant values.
+Bad:
+```ts
+    static DefaultPageSize = 20;
+    static max_retries = 3;
+```
+Good:
+```ts
+    static readonly DEFAULT_PAGE_SIZE = 20;
+    static readonly MAX_RETRIES = 3;
+```
+
+4. Public Fields
+camelCase, no prefix (no m_, no _ underscore convention — TS access modifiers already 
+express visibility).
+Bad:
+```ts
+    public _userId;
+    public m_status;
+```
+Good:
+```ts
+    public userId: string;
+    public status: TenderStatus;
+```
+
+5. Constructor Parameters
+Match field names exactly when using parameter-property shorthand; keep dependency 
+injection params ordered: repositories/services first, config/primitives last.
+Bad:
+```ts
+    constructor(private a: TenderRepository, private b: CacheService) {}
+```
+Good:
+```ts
+    constructor(
+        private readonly tenderRepository: TenderRepository,
+        private readonly cacheService: CacheService,
+    ) {}
+```
+
+6. Methods
+camelCase, verb-first, same as standalone functions. Boolean-returning methods still get is/has/can prefixes.
+Bad:
+```ts
+    class TenderService {
+        tender(id: string) {}
+        check(user: User) {}
+    }
+```
+Good:
+```ts
+    class TenderService {
+        findTenderById(id: string) {}
+        isUserEligible(user: User): boolean {}
+    }
+```
+
+---
+
+4. Interface
+a. Use PascalCase for name: Similar to class
+b. Use camelCase for members: Similar to class
+c.  Don't prefix with I : Unconventional. lib.d.ts defines important interfaces without an I (e.g. Window, Document etc).
+
+Good
+```ts
+AuthenticatedUser
+JwtPayload
+ApiResponse
+PaginationOptions
+UserPermissions
+```
+Avoid
+```ts
+IUser
+IToken
+IResponse
+IData
+```
+
+---
+
+5. Enums
+a. Use PascalCase for enum names: Similar to Class. Is a Type.
+b. Use PascalCase for enum member: Convention followed by TypeScript team i.e. the language creators e.g SyntaxKind.StringLiteral. Also helps with translation (code generation) of other languages into TypeScript.
+
+Names
+```ts
+UserRole
+TenderStatus
+SubscriptionStatus
+NotificationType
+```
+Members
+```ts
+enum UserRole {
+    Admin,
+    Customer,
+}
+```
+or
+```ts
+enum UserRole {
+    ADMIN,
+    CUSTOMER,
+}
+```
+Pick one style and use it everywhere.
+
+---
+
+6. Generic Types
+a. Use PascalCase for name: Similar to class
+b. Use camelCase for members: Similar to class
+Good:
+```ts
+    type LoginResponse
+    type CreateTenderRequest
+    type TenderFilters
+    type UserSession
+    type JwtClaims
+```
+Bad:
+```ts
+    type Data
+    type Response
+    type Result
+    type Payload
+```
+
+---
+
+7. Generic Objects
+Avoid
+```ts
+    obj
+    data
+    temp
+    result
+    value
+    info
+```
+Good:
+```ts
+    userProfile
+    subscriptionPlan
+    permissionMap
+    tenderFilters
+    jwtClaims
+    emailPayload
+```
+
+8. NameSpace:
+a. Use PascalCase for names : Convention followed by the TypeScript team. Namespaces are effectively just a class with static members. Class names are PascalCase => Namespace names are PascalCase
+Bad:
+```ts
+    namespace foo {}
+```
+Good:
+```ts
+    namespace Foo {}
+```
+
+9. Null vs. Undefined
+a. Prefer `undefined` in your own code.
+b Use `null` only when an external API, library, or protocol expects it.
+
+10. Arrays
+a. Annotate arrays as foos: Foo[] instead of foos: Array<Foo>: It's easier to read. It's used by the TypeScript team. Makes easier to know something is an array as the mind is trained to detect [].
+
+11. DTO:
+I would add
+Good:
+```
+CreateUserDto
+UpdateUserDto
+RegisterUserDto
+LoginDto
+CreateTenderRequest
+TenderResponse
+```
+
+12: Repository method:
+Good:
+```ts
+findById()
+findByEmail()
+findMany()
+create()
+update()
+delete()
+exists()
+count()
+findOne()
+findFirst()
+findLatest()
+findAll()
+```
+Bad:
+```ts
+get()
+fetch()
+read()
+load()
+retrieve()
+```
+Using one vocabulary across repositories makes the codebase easier to navigate.
+
+13: Service Method:
+Service methods should express business intent, not infrastructure.
+Good:
+```ts
+registerCustomer()
+approveTender()
+publishTender()
+renewSubscription()
+assignRole()
+approveTender()
+rejectTender()
+renewSubscription()
+```
+Bad:
+```ts
+handle()
+process()
+execute()
+manage()
+save()
+execute()
+run()
+handle()
+```
+Those names are too generic.
+
+14. Controller:
+Controllers should mirror HTTP intent.
+```ts
+register()
+login()
+logout()
+create()
+update()
+remove()
+delete()
+list()
+getById()
+```
+This improves consistency across modules.
+
+15. Add acronym consistency
+Decide once.
+Examples:
+```
+userId
+apiKey
+jwtToken
+oauthProvider
+pdfDocument
+urlPath
+httpClient
+```
+
+Don't mix
+```
+userid
+userID
+UserID
+```
+One rule prevents lots of inconsistencies.
+
+---
+
+# Things I would NOT rename yet
+
+❌ Files
+❌ Folders
+❌ Routes
+❌ API URLs
+❌ Database tables
+❌ Database columns
+❌ Entity names (unless absolutely necessary)
+❌ Environment variables
+❌ Test Files
+
+Those changes tend to have a much larger impact and are better handled after the internal code is consistent.
+
+---
+
+## One additional rule I'd add
+
+Since much of this code was AI-generated, I'd ban ambiguous names entirely. The following should never appear in new code unless there's a very specific reason:
+
+```text
+cfg
+usr
+sub
+repo
+svc
+perm
+notif
+txn
+resp
+Data
+Info
+Details
+Object
+Obj
+Value
+Temp
+data
+obj
+temp
+val
+reqData
+responseData
+newData
+oldData
+item
+items
+list
+helper
+common
+util
+misc
+execute
+doStuff
+```
+
+Every name should answer **what it represents**, not just **its data type**. That single rule tends to make AI-generated code much easier to read and maintain.
+
+DELIVERABLE (in this order — do not skip ahead):
+1. Scan the codebase and output a violation report grouped by category above 
+   (variables / functions / classes / interfaces / enums / generic types / 
+   DTOs / repository methods / service methods / controller methods / 
+   acronyms / banned names): file path, line, current name, proposed name.
+2. Flag anything that would touch an excluded item (file/folder names, route 
+   strings, DB table/column names, entity class names, env var keys, test 
+   file names) — exclude those from the plan entirely.
+3. Report which enum member-casing style (PascalCase vs UPPER_SNAKE_CASE) 
+   currently dominates the codebase, and which acronym casing pattern 
+   dominates — before standardizing either.
+4. STOP and wait for my explicit confirmation on the report. Do not apply 
+   any renames yet.
+5. Once I confirm, apply the renames project-wide — update every reference 
+   (imports, destructuring, JSX usage, and test files' usage of renamed 
+   symbols, but not test file names themselves). Run 
+   `npm run typecheck` / `tsc --noEmit` afterward and report any resulting 
+   errors.

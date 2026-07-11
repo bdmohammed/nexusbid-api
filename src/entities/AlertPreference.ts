@@ -1,14 +1,10 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+
 import { AlertFrequency } from '../types/enums';
-import { User } from './User';
+
 import { Category } from './Category';
 import { State } from './State';
+import { User } from './User';
 
 @Entity('alert_preferences')
 export class AlertPreference {

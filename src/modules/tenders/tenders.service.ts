@@ -1,45 +1,52 @@
 import { appDataSource } from '../../config/database';
+import { logger } from '../../config/logger';
+import { AppError } from '../../core/AppError';
+import { DownloadHistory } from '../../entities/DownloadHistory';
+import { EvaluationTemplate } from '../../entities/EvaluationTemplate';
 import { Tender } from '../../entities/Tender';
-import { TenderVersion } from '../../entities/TenderVersion';
+import { TenderAmendment } from '../../entities/TenderAmendment';
+import { TenderClarification } from '../../entities/TenderClarification';
+import { TenderCommittee } from '../../entities/TenderCommittee';
 import { TenderDocument } from '../../entities/TenderDocument';
+import { TenderEvaluation } from '../../entities/TenderEvaluation';
+import { TenderInvitation } from '../../entities/TenderInvitation';
+import { TenderParticipant } from '../../entities/TenderParticipant';
+import { TenderQuestion } from '../../entities/TenderQuestion';
 import { TenderReview } from '../../entities/TenderReview';
 import { TenderReviewAssignment } from '../../entities/TenderReviewAssignment';
 import { TenderReviewComment } from '../../entities/TenderReviewComment';
-import { TenderCommittee } from '../../entities/TenderCommittee';
-import { TenderParticipant } from '../../entities/TenderParticipant';
-import { TenderEvaluation } from '../../entities/TenderEvaluation';
-import { TenderWatcher } from '../../entities/TenderWatcher';
-import { TenderInvitation } from '../../entities/TenderInvitation';
 import { TenderTemplate } from '../../entities/TenderTemplate';
-import { TenderQuestion } from '../../entities/TenderQuestion';
-import { TenderClarification } from '../../entities/TenderClarification';
-import { TenderAmendment } from '../../entities/TenderAmendment';
-import { EvaluationTemplate } from '../../entities/EvaluationTemplate';
-import { DownloadHistory } from '../../entities/DownloadHistory';
-import { AppError } from '../../core/AppError';
-import { TenderLifecycleStatus, TenderVersionStatus, TenderPublicationStatus } from '../../types/enums';
-import { hasAccessToTender } from '../../utils/access';
+import { TenderVersion } from '../../entities/TenderVersion';
+import { TenderWatcher } from '../../entities/TenderWatcher';
 import { generateDownloadUrl } from '../../services/s3.service';
-import { logger } from '../../config/logger';
+import {
+  TenderLifecycleStatus,
+  TenderPublicationStatus,
+  TenderVersionStatus,
+} from '../../types/enums';
+import { hasAccessToTender } from '../../utils/access';
 import { domainEvents, TENDER_EVENTS } from '../../utils/domainEvents';
+
 import type {
-  CreateTenderDto,
-  UpdateTenderDto,
-  UpdateTenderStatusDto,
-  RegisterDocumentDto,
-  CreateQuestionDto,
   AnswerQuestionDto,
-  CreateClarificationDto,
-  CreateAmendmentDto,
   AssignReviewerDto,
+  CreateAmendmentDto,
+  CreateClarificationDto,
+  CreateQuestionDto,
+  CreateTenderDto,
+  RegisterDocumentDto,
+  SubmitEvaluationDto,
   SubmitReviewCommentDto,
   TenderCommitteeDto,
-  SubmitEvaluationDto,
-  TenderWatcherDto,
   TenderInvitationDto,
+  TenderSearchQueryDto,
   TenderTemplateDto,
+  TenderWatcherDto,
+  UpdateTenderDto,
+  UpdateTenderStatusDto,
 } from './tenders.dto';
 import type { Request } from 'express';
+import type { SelectQueryBuilder } from 'typeorm';
 
 const tenderRepository = appDataSource.getRepository(Tender);
 const tenderVersionRepository = appDataSource.getRepository(TenderVersion);
@@ -58,37 +65,23 @@ const tenderClarificationRepository = appDataSource.getRepository(TenderClarific
 const tenderAmendmentRepository = appDataSource.getRepository(TenderAmendment);
 const downloadHistoryRepository = appDataSource.getRepository(DownloadHistory);
 
-// ─── Public: List Tenders ─────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-export async function listTenders(params: {
-  q?: string;
-  categoryId?: string;
-  stateId?: string;
-  priority?: string;
-  procurementType?: string;
-  budgetMin?: number;
-  budgetMax?: number;
-  page?: number;
-  limit?: number;
-  sort?: 'createdAt' | 'closingDate' | 'estimatedBudget';
-  order?: 'ASC' | 'DESC';
-}): Promise<{ tenders: any[]; total: number; page: number; limit: number }> {
-  const page = params.page ?? 1;
-  const limit = params.limit ?? 20;
+function getVal<T>(val: T | null | undefined, fallback: T): T {
+  if (val === null || val === undefined) {
+    return fallback;
+  }
+  return val;
+}
 
-  const qb = tenderRepository.createQueryBuilder('tender')
-    .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
-    .leftJoinAndSelect('activeVersion.category', 'category')
-    .leftJoinAndSelect('activeVersion.state', 'state')
-    .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
-    .andWhere('tender.publicationStatus IN (:...pubStatuses)', {
-      pubStatuses: [TenderPublicationStatus.PUBLISHED, TenderPublicationStatus.OPEN, TenderPublicationStatus.CLOSING],
-    });
-
+function applyTenderFilters(qb: SelectQueryBuilder<Tender>, params: TenderSearchQueryDto): void {
   if (params.q) {
-    qb.andWhere('(activeVersion.title ILIKE :q OR activeVersion.description ILIKE :q OR tender.referenceNo ILIKE :q)', {
-      q: `%${params.q}%`,
-    });
+    qb.andWhere(
+      '(activeVersion.title ILIKE :q OR activeVersion.description ILIKE :q OR tender.referenceNo ILIKE :q)',
+      {
+        q: `%${params.q}%`,
+      },
+    );
   }
 
   if (params.categoryId) {
@@ -104,7 +97,9 @@ export async function listTenders(params: {
   }
 
   if (params.procurementType) {
-    qb.andWhere('activeVersion.procurementType = :procurementType', { procurementType: params.procurementType });
+    qb.andWhere('activeVersion.procurementType = :procurementType', {
+      procurementType: params.procurementType,
+    });
   }
 
   if (params.budgetMin) {
@@ -114,31 +109,188 @@ export async function listTenders(params: {
   if (params.budgetMax) {
     qb.andWhere('activeVersion.estimatedBudget <= :budgetMax', { budgetMax: params.budgetMax });
   }
+}
+
+function mapTenderSummary(t: Tender): any {
+  const active = t.activeVersion;
+  if (!active) {
+    return {
+      id: t.id,
+      referenceNumber: t.referenceNo,
+      title: 'No Title Available',
+      description: '',
+      procurementType: '',
+      priority: 'Medium',
+      budgetMax: 0,
+      currency: 'USD',
+      openingDate: null,
+      closingDate: null,
+      status: t.publicationStatus,
+      category: null,
+      state: null,
+    };
+  }
+
+  return {
+    id: t.id,
+    referenceNumber: t.referenceNo,
+    title: getVal(active.title, 'No Title Available'),
+    description: getVal(active.description, ''),
+    procurementType: getVal(active.procurementType, ''),
+    priority: getVal(active.priority, 'Medium'),
+    budgetMax: getVal(active.estimatedBudget, 0),
+    currency: getVal(active.currency, 'USD'),
+    openingDate: getVal(active.openingDate, null),
+    closingDate: getVal(active.closingDate, null),
+    status: t.publicationStatus,
+    category: getVal(active.category, null),
+    state: getVal(active.state, null),
+  };
+}
+
+function mapTenderDetails(tender: Tender, hasAccess: boolean): any {
+  const active = tender.activeVersion;
+  if (!active) {
+    return {
+      id: tender.id,
+      referenceNumber: tender.referenceNo,
+      status: tender.status,
+      publicationStatus: tender.publicationStatus,
+      title: '',
+      description: '',
+      procurementType: '',
+      priority: 'Medium',
+      budgetMax: 0,
+      currency: 'USD',
+      department: '',
+      formattedAddress: '',
+      siteVisitRequired: false,
+      siteVisitDate: null,
+      siteVisitInstructions: '',
+      contactPerson: null,
+      contactEmail: null,
+      contactPhone: null,
+      openingDate: null,
+      closingDate: null,
+      projectDuration: '',
+      bidValidity: 0,
+      emdAmount: 0,
+      securityDeposit: 0,
+      paymentTerms: '',
+      evaluationMethod: '',
+      submissionMethod: '',
+      contractType: '',
+      procurementMethod: '',
+      eligibility: '',
+      specialConditions: '',
+      category: null,
+      state: null,
+      documents: [],
+      clarifications: tender.clarifications,
+      amendments: tender.amendments,
+    };
+  }
+
+  let contactPerson = null;
+  let contactEmail = null;
+  let contactPhone = null;
+
+  if (hasAccess) {
+    contactPerson = getVal(active.contactPerson, null);
+    contactEmail = getVal(active.contactEmail, null);
+    contactPhone = getVal(active.contactPhone, null);
+  }
+
+  const documents = getVal(active.documents, [] as TenderDocument[]);
+  const filteredDocs = [];
+  for (const doc of documents) {
+    const { isPublic } = doc;
+    const include = isPublic || hasAccess;
+    if (include) {
+      filteredDocs.push({
+        id: doc.id,
+        documentType: doc.documentType,
+        originalName: doc.documentOriginalName,
+        fileSize: doc.fileSize,
+        virusScanStatus: doc.virusScanStatus,
+        uploadedAt: doc.uploadedAt,
+      });
+    }
+  }
+
+  return {
+    id: tender.id,
+    referenceNumber: tender.referenceNo,
+    status: tender.status,
+    publicationStatus: tender.publicationStatus,
+    title: getVal(active.title, ''),
+    description: getVal(active.description, ''),
+    procurementType: getVal(active.procurementType, ''),
+    priority: getVal(active.priority, 'Medium'),
+    budgetMax: getVal(active.estimatedBudget, 0),
+    currency: getVal(active.currency, 'USD'),
+    department: getVal(active.department, ''),
+    formattedAddress: getVal(active.formattedAddress, ''),
+    siteVisitRequired: getVal(active.siteVisitRequired, false),
+    siteVisitDate: getVal(active.siteVisitDate, null),
+    siteVisitInstructions: getVal(active.siteVisitInstructions, ''),
+    contactPerson,
+    contactEmail,
+    contactPhone,
+    openingDate: getVal(active.openingDate, null),
+    closingDate: getVal(active.closingDate, null),
+    projectDuration: getVal(active.projectDuration, ''),
+    bidValidity: getVal(active.bidValidity, 0),
+    emdAmount: getVal(active.emdAmount, 0),
+    securityDeposit: getVal(active.securityDeposit, 0),
+    paymentTerms: getVal(active.paymentTerms, ''),
+    evaluationMethod: getVal(active.evaluationMethod, ''),
+    submissionMethod: getVal(active.submissionMethod, ''),
+    contractType: getVal(active.contractType, ''),
+    procurementMethod: getVal(active.procurementMethod, ''),
+    eligibility: getVal(active.eligibilityCriteria, ''),
+    specialConditions: getVal(active.specialConditions, ''),
+    category: getVal(active.category, null),
+    state: getVal(active.state, null),
+    documents: filteredDocs,
+    clarifications: tender.clarifications,
+    amendments: tender.amendments,
+  };
+}
+
+// ─── Public: List Tenders ─────────────────────────────────────────────────────
+
+export async function listTenders(
+  params: TenderSearchQueryDto,
+): Promise<{ tenders: any[]; total: number; page: number; limit: number }> {
+  const page = getVal(params.page, 1);
+  const limit = getVal(params.limit, 20);
+
+  const qb = tenderRepository
+    .createQueryBuilder('tender')
+    .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
+    .leftJoinAndSelect('activeVersion.category', 'category')
+    .leftJoinAndSelect('activeVersion.state', 'state')
+    .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
+    .andWhere('tender.publicationStatus IN (:...pubStatuses)', {
+      pubStatuses: [
+        TenderPublicationStatus.PUBLISHED,
+        TenderPublicationStatus.OPEN,
+        TenderPublicationStatus.CLOSING,
+      ],
+    });
+
+  applyTenderFilters(qb, params);
 
   const sortField = params.sort ? `activeVersion.${params.sort}` : 'tender.createdAt';
-  const sortOrder = params.order ?? 'DESC';
+  const sortOrder = getVal(params.order, 'DESC');
   qb.orderBy(sortField, sortOrder);
 
   qb.skip((page - 1) * limit).take(limit);
 
   const [tenders, total] = await qb.getManyAndCount();
 
-  // Map into flat structure for frontend previews
-  const mapped = tenders.map((t) => ({
-    id: t.id,
-    referenceNumber: t.referenceNo,
-    title: t.activeVersion?.title ?? 'No Title Available',
-    description: t.activeVersion?.description ?? '',
-    procurementType: t.activeVersion?.procurementType ?? '',
-    priority: t.activeVersion?.priority ?? 'Medium',
-    budgetMax: t.activeVersion?.estimatedBudget ?? 0,
-    currency: t.activeVersion?.currency ?? 'USD',
-    openingDate: t.activeVersion?.openingDate ?? null,
-    closingDate: t.activeVersion?.closingDate ?? null,
-    status: t.publicationStatus,
-    category: t.activeVersion?.category ?? null,
-    state: t.activeVersion?.state ?? null,
-  }));
+  const mapped = tenders.map(mapTenderSummary);
 
   return { tenders: mapped, total, page, limit };
 }
@@ -151,7 +303,8 @@ export async function getTenderBySlug(
 ): Promise<{ tender: any; hasAccess: boolean }> {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
-  const qb = tenderRepository.createQueryBuilder('tender')
+  const qb = tenderRepository
+    .createQueryBuilder('tender')
     .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
     .leftJoinAndSelect('activeVersion.category', 'category')
     .leftJoinAndSelect('activeVersion.state', 'state')
@@ -176,51 +329,7 @@ export async function getTenderBySlug(
     hasAccess = await hasAccessToTender(userId, tender.id);
   }
 
-  const mapped = {
-    id: tender.id,
-    referenceNumber: tender.referenceNo,
-    status: tender.status,
-    publicationStatus: tender.publicationStatus,
-    title: tender.activeVersion?.title ?? '',
-    description: tender.activeVersion?.description ?? '',
-    procurementType: tender.activeVersion?.procurementType ?? '',
-    priority: tender.activeVersion?.priority ?? 'Medium',
-    budgetMax: tender.activeVersion?.estimatedBudget ?? 0,
-    currency: tender.activeVersion?.currency ?? 'USD',
-    department: tender.activeVersion?.department ?? '',
-    formattedAddress: tender.activeVersion?.formattedAddress ?? '',
-    siteVisitRequired: tender.activeVersion?.siteVisitRequired ?? false,
-    siteVisitDate: tender.activeVersion?.siteVisitDate ?? null,
-    siteVisitInstructions: tender.activeVersion?.siteVisitInstructions ?? '',
-    contactPerson: hasAccess ? tender.activeVersion?.contactPerson : null,
-    contactEmail: hasAccess ? tender.activeVersion?.contactEmail : null,
-    contactPhone: hasAccess ? tender.activeVersion?.contactPhone : null,
-    openingDate: tender.activeVersion?.openingDate ?? null,
-    closingDate: tender.activeVersion?.closingDate ?? null,
-    projectDuration: tender.activeVersion?.projectDuration ?? '',
-    bidValidity: tender.activeVersion?.bidValidity ?? 0,
-    emdAmount: tender.activeVersion?.emdAmount ?? 0,
-    securityDeposit: tender.activeVersion?.securityDeposit ?? 0,
-    paymentTerms: tender.activeVersion?.paymentTerms ?? '',
-    evaluationMethod: tender.activeVersion?.evaluationMethod ?? '',
-    submissionMethod: tender.activeVersion?.submissionMethod ?? '',
-    contractType: tender.activeVersion?.contractType ?? '',
-    procurementMethod: tender.activeVersion?.procurementMethod ?? '',
-    eligibility: tender.activeVersion?.eligibilityCriteria ?? '',
-    specialConditions: tender.activeVersion?.specialConditions ?? '',
-    category: tender.activeVersion?.category ?? null,
-    state: tender.activeVersion?.state ?? null,
-    documents: (tender.activeVersion?.documents ?? []).filter((d: any) => d.isPublic || hasAccess).map((d) => ({
-      id: d.id,
-      documentType: d.documentType,
-      originalName: d.documentOriginalName,
-      fileSize: d.fileSize,
-      virusScanStatus: d.virusScanStatus,
-      uploadedAt: d.uploadedAt,
-    })),
-    clarifications: tender.clarifications,
-    amendments: tender.amendments,
-  };
+  const mapped = mapTenderDetails(tender, hasAccess);
 
   return { tender: mapped, hasAccess };
 }
@@ -241,11 +350,15 @@ export async function getDownloadUrl(
     throw new AppError('Document not found', 404, 'NOT_FOUND');
   }
 
-  const tenderId = doc.tenderVersion.tenderId;
+  const { tenderId } = doc.tenderVersion;
 
   const allowed = await hasAccessToTender(userId, tenderId);
   if (!allowed && !doc.isPublic) {
-    throw new AppError('Access denied: Active subscription or purchase required', 403, 'ACCESS_DENIED');
+    throw new AppError(
+      'Access denied: Active subscription or purchase required',
+      403,
+      'ACCESS_DENIED',
+    );
   }
 
   const url = await generateDownloadUrl(doc.documentS3Key, doc.documentOriginalName);
@@ -256,12 +369,16 @@ export async function getDownloadUrl(
 
   // Log download history (non-blocking)
   setImmediate(() => {
-    downloadHistoryRepository.save({
-      userId,
-      tenderId,
-      fileName: doc.documentOriginalName,
-      ipAddress: req.ip ?? null,
-    }).catch(() => {/* silent */ });
+    downloadHistoryRepository
+      .save({
+        userId,
+        tenderId,
+        fileName: doc.documentOriginalName,
+        ipAddress: req.ip ?? null,
+      })
+      .catch(() => {
+        /* silent */
+      });
   });
 
   return url;
@@ -269,10 +386,7 @@ export async function getDownloadUrl(
 
 // ─── Admin: Create Tender ─────────────────────────────────────────────────────
 
-export async function createTender(
-  dto: CreateTenderDto,
-  createdById: string,
-): Promise<Tender> {
+export async function createTender(dto: CreateTenderDto, createdById: string): Promise<Tender> {
   // Generate sequence reference number
   const [{ nextval }] = await appDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
   const referenceNo = `TDR-${new Date().getFullYear()}-${String(nextval).padStart(6, '0')}`;
@@ -318,14 +432,18 @@ export async function updateTender(
     throw new AppError('Tender not found', 404, 'NOT_FOUND');
   }
 
-  let active = tender.activeVersion;
+  const active = tender.activeVersion;
   if (!active) {
     throw new AppError('No active version found', 404, 'NO_ACTIVE_VERSION');
   }
 
   // Concurrency Check (Optimistic Locking)
   if (dto.dbVersion !== undefined && active.dbVersion !== dto.dbVersion) {
-    throw new AppError('Conflict: Tender was modified by another user', 409, 'CONCURRENCY_CONFLICT');
+    throw new AppError(
+      'Conflict: Tender was modified by another user',
+      409,
+      'CONCURRENCY_CONFLICT',
+    );
   }
 
   // If the active version is not in DRAFT mode, we must spawn a new version draft
@@ -346,9 +464,9 @@ export async function updateTender(
     // Copy documents to new version
     const docs = await tenderDocumentRepository.find({ where: { tenderVersionId: active.id } });
     for (const d of docs) {
+      const { id: _id, ...docData } = d;
       const copiedDoc = tenderDocumentRepository.create({
-        ...d,
-        id: undefined,
+        ...docData,
         tenderVersionId: savedVersion.id,
       });
       await tenderDocumentRepository.save(copiedDoc);
@@ -408,13 +526,18 @@ export async function updateTenderStatus(
 
 export async function getTenderStatistics(): Promise<any> {
   const totalTenders = await tenderRepository.count();
-  const draftCount = await tenderVersionRepository.count({ where: { status: TenderVersionStatus.DRAFT } });
-  const reviewCount = await tenderVersionRepository.count({ where: { status: TenderVersionStatus.UNDER_REVIEW } });
+  const draftCount = await tenderVersionRepository.count({
+    where: { status: TenderVersionStatus.DRAFT },
+  });
+  const reviewCount = await tenderVersionRepository.count({
+    where: { status: TenderVersionStatus.UNDER_REVIEW },
+  });
   const publishedCount = await tenderRepository.count({
     where: { publicationStatus: TenderPublicationStatus.PUBLISHED },
   });
 
-  const sumBudget = await tenderVersionRepository.createQueryBuilder('tv')
+  const sumBudget = await tenderVersionRepository
+    .createQueryBuilder('tv')
     .select('SUM(tv.estimated_budget)', 'sum')
     .getRawOne();
 
@@ -425,7 +548,7 @@ export async function getTenderStatistics(): Promise<any> {
     draftCount,
     reviewCount,
     publishedCount,
-    totalBudget: parseInt(sumBudget?.sum || '0', 10),
+    totalBudget: parseInt(sumBudget?.sum ?? '0', 10),
     totalParticipants,
   };
 }
@@ -442,7 +565,7 @@ export async function registerDocument(
     relations: ['activeVersion'],
   });
 
-  if (!tender || !tender.activeVersion) {
+  if (!tender?.activeVersion) {
     throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
   }
 
@@ -452,9 +575,9 @@ export async function registerDocument(
     documentS3Key: dto.s3Key,
     documentS3Bucket: dto.bucket,
     documentOriginalName: dto.originalName,
-    mimeType: dto.mimeType || 'application/pdf',
-    fileSize: dto.fileSize || 0,
-    checksum: dto.checksum || null,
+    mimeType: dto.mimeType ?? 'application/pdf',
+    fileSize: dto.fileSize ?? 0,
+    checksum: dto.checksum ?? null,
     virusScanStatus: 'Scanning', // Initiate scan state
     isPublic: dto.isPublic,
     uploadedById: userId,
@@ -585,7 +708,7 @@ export async function submitEvaluation(
     score: dto.score,
     maxScore: dto.maxScore,
     passed: dto.passed,
-    remarks: dto.remarks || null,
+    remarks: dto.remarks ?? null,
     evaluatedById,
   } as any) as unknown as TenderEvaluation;
 
@@ -603,7 +726,7 @@ export async function assignReviewers(
     relations: ['activeVersion'],
   });
 
-  if (!tender || !tender.activeVersion) {
+  if (!tender?.activeVersion) {
     throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
   }
 
@@ -720,9 +843,9 @@ export async function createTemplate(
 ): Promise<TenderTemplate> {
   const tenderTemplate = tenderTemplateRepository.create({
     templateScope: dto.templateScope,
-    departmentId: dto.departmentId || null,
+    departmentId: dto.departmentId ?? null,
     title: dto.title,
-    description: dto.description || null,
+    description: dto.description ?? null,
     payload: dto.payload,
     createdById: userId,
   });

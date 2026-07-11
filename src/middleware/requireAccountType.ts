@@ -1,6 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../core/AppError';
-import { AccountType } from '../types/enums';
+
+import type { AccountType } from '../types/enums';
+import type { NextFunction, Request, Response } from 'express';
 
 export const requireAccountType = (allowedType: AccountType) => {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -9,7 +10,10 @@ export const requireAccountType = (allowedType: AccountType) => {
     }
 
     if (req.user.accountType !== allowedType) {
-      req.log?.warn({ allowedType, userAccountType: req.user.accountType }, 'Forbidden: Access Denied');
+      req.log.warn(
+        { allowedType, userAccountType: req.user.accountType },
+        'Forbidden: Access Denied',
+      );
       return next(new AppError('Forbidden: Access Denied', 403, 'FORBIDDEN'));
     }
 

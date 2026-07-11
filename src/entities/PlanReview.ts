@@ -1,15 +1,16 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
-  JoinColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
+
+import { PlanReviewComment } from './PlanReviewComment';
 import { PlanVersion } from './PlanVersion';
 import { User } from './User';
-import { PlanReviewComment } from './PlanReviewComment';
 
 @Entity('plan_reviews')
 export class PlanReview {

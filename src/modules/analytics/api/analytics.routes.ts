@@ -1,6 +1,8 @@
 import { Router } from 'express';
+
 import { authenticate } from '../../../middleware/authenticate';
 import { requirePermission } from '../../../middleware/permissions';
+
 import * as controller from './analytics.controller';
 
 const router = Router();
@@ -204,7 +206,11 @@ router.get('/alerts', requirePermission('analytics.view'), controller.getAlertsL
  *       200:
  *         description: Alert marked resolved
  */
-router.post('/alerts/:alertId/resolve', requirePermission('analytics.view'), controller.resolveAlertTrigger);
+router.post(
+  '/alerts/:alertId/resolve',
+  requirePermission('analytics.view'),
+  controller.resolveAlertTrigger,
+);
 
 // ─── Asynchronous Exports & downloads ─────────────────────────────────────────
 
@@ -234,7 +240,11 @@ router.post('/alerts/:alertId/resolve', requirePermission('analytics.view'), con
  *       202:
  *         description: Export job enqueued successfully
  */
-router.post('/exports/request', requirePermission('analytics.export'), controller.requestDataExport);
+router.post(
+  '/exports/request',
+  requirePermission('analytics.export'),
+  controller.requestDataExport,
+);
 
 /**
  * @swagger
@@ -320,7 +330,15 @@ router.get('/exports/download/:filename', controller.downloadExportFile);
  *       200:
  *         description: Report schedules list resolved
  */
-router.post('/reports/schedules', requirePermission('analytics.reports'), controller.createReportSchedule);
-router.get('/reports/schedules', requirePermission('analytics.reports'), controller.listReportSchedules);
+router.post(
+  '/reports/schedules',
+  requirePermission('analytics.reports'),
+  controller.createReportSchedule,
+);
+router.get(
+  '/reports/schedules',
+  requirePermission('analytics.reports'),
+  controller.listReportSchedules,
+);
 
 export { router as analyticsRouter };

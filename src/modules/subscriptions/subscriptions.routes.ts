@@ -1,8 +1,10 @@
 import { Router } from 'express';
+
 import { authenticate } from '../../middleware/authenticate';
 import { validate } from '../../middleware/validate';
-import { CreateSubscriptionDto } from './subscriptions.dto';
+
 import * as controller from './subscriptions.controller';
+import { CreateSubscriptionDto } from './subscriptions.dto';
 
 const router = Router();
 

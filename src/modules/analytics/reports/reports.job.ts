@@ -1,9 +1,9 @@
-import { AppDataSource } from '../../../config/database';
-import { ScheduledReport } from '../../../entities/ScheduledReport';
+import { appDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
+import { ScheduledReport } from '../../../entities/ScheduledReport';
 
 export async function processScheduledReports(): Promise<void> {
-  const reportRepo = AppDataSource.getRepository(ScheduledReport);
+  const reportRepo = appDataSource.getRepository(ScheduledReport);
   const now = new Date();
 
   // Find reports whose nextRunAt is in the past
@@ -20,15 +20,15 @@ export async function processScheduledReports(): Promise<void> {
       logger.info({ reportId: report.id, name: report.reportName }, 'Triggering scheduled report');
 
       // 1. Gather stats (Simulate aggregating overview details for the report)
-      const usersCount = await AppDataSource.query('SELECT COUNT(*) FROM users');
-      const tendersCount = await AppDataSource.query('SELECT COUNT(*) FROM tenders');
+      const usersCount = await appDataSource.query('SELECT COUNT(*) FROM users');
+      const tendersCount = await appDataSource.query('SELECT COUNT(*) FROM tenders');
 
       const reportContent = `
         NexusBid BI Report Summary: ${report.reportName}
         ----------------------------------------------
         Timezone: ${report.timezone}
-        Total Active Users: ${usersCount[0]?.count || 0}
-        Total Published Tenders: ${tendersCount[0]?.count || 0}
+        Total Active Users: ${usersCount[0]?.count ?? 0}
+        Total Published Tenders: ${tendersCount[0]?.count ?? 0}
       `;
 
       // 2. Dispatch report to recipients

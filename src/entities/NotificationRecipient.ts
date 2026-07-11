@@ -1,15 +1,16 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
+
 import { Notification } from './Notification';
-import { User } from './User';
 import { Role } from './Role';
+import { User } from './User';
 
 @Entity('notification_recipients')
 @Index(['userId'])

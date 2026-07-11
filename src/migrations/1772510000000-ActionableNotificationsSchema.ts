@@ -1,13 +1,13 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class ActionableNotificationsSchema1772510000000 implements MigrationInterface {
   name = 'ActionableNotificationsSchema1772510000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Drop existing notifications table and its related index and enum
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notif_user_read"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "notifications" CASCADE`);
-    await queryRunner.query(`DROP TYPE IF EXISTS "public"."notifications_type_enum" CASCADE`);
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_notif_user_read"');
+    await queryRunner.query('DROP TABLE IF EXISTS "notifications" CASCADE');
+    await queryRunner.query('DROP TYPE IF EXISTS "public"."notifications_type_enum" CASCADE');
 
     // 2. Create the enhanced notifications table
     await queryRunner.query(`
@@ -55,21 +55,29 @@ export class ActionableNotificationsSchema1772510000000 implements MigrationInte
     `);
 
     // 5. Add indexes for performance optimization
-    await queryRunner.query(`CREATE INDEX "idx_notif_recip_user" ON "notification_recipients" ("user_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_notif_recip_role" ON "notification_recipients" ("role_id")`);
-    await queryRunner.query(`CREATE INDEX "idx_notif_recip_status" ON "notification_recipients" ("status")`);
-    await queryRunner.query(`CREATE INDEX "idx_notif_created_at" ON "notifications" ("created_at")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_recip_user" ON "notification_recipients" ("user_id")',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_recip_role" ON "notification_recipients" ("role_id")',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_recip_status" ON "notification_recipients" ("status")',
+    );
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_created_at" ON "notifications" ("created_at")',
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notif_created_at"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notif_recip_status"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notif_recip_role"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_notif_recip_user"`);
-    
-    await queryRunner.query(`DROP TABLE IF EXISTS "notification_actions" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "notification_recipients" CASCADE`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "notifications" CASCADE`);
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_notif_created_at"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_notif_recip_status"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_notif_recip_role"');
+    await queryRunner.query('DROP INDEX IF EXISTS "idx_notif_recip_user"');
+
+    await queryRunner.query('DROP TABLE IF EXISTS "notification_actions" CASCADE');
+    await queryRunner.query('DROP TABLE IF EXISTS "notification_recipients" CASCADE');
+    await queryRunner.query('DROP TABLE IF EXISTS "notifications" CASCADE');
 
     // Recreate original notifications enum and table to allow rollsback
     await queryRunner.query(`
@@ -90,6 +98,8 @@ export class ActionableNotificationsSchema1772510000000 implements MigrationInte
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")`);
+    await queryRunner.query(
+      'CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")',
+    );
   }
 }

@@ -1,8 +1,8 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
@@ -17,10 +17,17 @@ export class EvaluationTemplate {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ name: 'default_weight', type: 'numeric', precision: 5, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    name: 'default_weight',
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   defaultWeight: number;
 
   @Column({ name: 'max_score', type: 'int', default: 100 })

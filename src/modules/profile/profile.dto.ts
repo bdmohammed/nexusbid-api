@@ -24,7 +24,6 @@ export const UpdatePreferencesDto = z.object({
   newsletter: z.boolean().optional(),
 });
 
-
 export const RequestChangeDto = z.object({
   field: z.string().min(1, 'Field name is required'),
   value: z.string().min(1, 'New value is required'),

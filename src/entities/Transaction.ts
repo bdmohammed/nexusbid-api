@@ -1,12 +1,14 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  Entity,
   Index,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { TransactionType, TransactionStatus } from '../types/enums';
+
+import { TransactionStatus, TransactionType } from '../types/enums';
+
 import { User } from './User';
 
 @Entity('transactions')

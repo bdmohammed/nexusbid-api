@@ -25,7 +25,7 @@ const config: Config = {
   },
 
   // -- Global setup / teardown (run once, in a separate process) -------------
-  // globalSetup   : initializes AppDataSource + runs migrations on test DB
+  // globalSetup   : initializes appDataSource + runs migrations on test DB
   // globalTeardown: safety-net that destroys any lingering DataSource pool
   globalSetup: '<rootDir>/tests/jest.global-setup.ts',
   globalTeardown: '<rootDir>/tests/jest.global-teardown.ts',

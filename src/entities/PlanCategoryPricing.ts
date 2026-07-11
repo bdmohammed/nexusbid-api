@@ -1,13 +1,14 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
-  JoinColumn,
   CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { PlanVersion } from './PlanVersion';
+
 import { Category } from './Category';
+import { PlanVersion } from './PlanVersion';
 
 @Entity('plan_category_pricing')
 export class PlanCategoryPricing {

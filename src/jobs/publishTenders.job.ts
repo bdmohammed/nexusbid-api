@@ -1,16 +1,18 @@
-import { AppDataSource } from '../config/database';
+import { appDataSource } from '../config/database';
+import { logger } from '../config/logger';
 import { Tender } from '../entities/Tender';
 import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
-import { logger } from '../config/logger';
 
-const tenderRepo = AppDataSource.getRepository(Tender);
+const tenderRepo = appDataSource.getRepository(Tender);
 
 export async function publishTendersJob(): Promise<void> {
   const pendingTenders = await tenderRepo
     .createQueryBuilder('tender')
     .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
     .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
-    .andWhere('tender.publicationStatus = :pubStatus', { pubStatus: TenderPublicationStatus.SCHEDULED })
+    .andWhere('tender.publicationStatus = :pubStatus', {
+      pubStatus: TenderPublicationStatus.SCHEDULED,
+    })
     .andWhere('activeVersion.openingDate <= :now', { now: new Date() })
     .getMany();
 

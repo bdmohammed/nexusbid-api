@@ -1,14 +1,17 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
+
 import bcrypt from 'bcryptjs';
+
 import { appDataSource } from '../../config/database';
-import { User } from '../../entities/User';
-import { AppError } from '../../core/AppError';
 import { env } from '../../config/env';
+import { logger } from '../../config/logger';
+import { AppError } from '../../core/AppError';
 import { BCRYPT_ROUNDS } from '../../core/constants';
+import { User } from '../../entities/User';
 import { AccountType } from '../../types/enums';
+
 import { savePasswordToHistory } from './security.service';
 import { logSecurityEvent } from './securityLog.service';
-import { logger } from '../../config/logger';
 
 const userRepository = appDataSource.getRepository(User);
 
@@ -51,39 +54,30 @@ export function getAuthorizationUrl(provider: string, state: string): string {
 
   switch (provider) {
     case 'google':
-      return (
-        'https://accounts.google.com/o/oauth2/v2/auth?' +
-        new URLSearchParams({
-          client_id: env.GOOGLE_CLIENT_ID!,
-          redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: 'openid email profile',
-          state,
-        }).toString()
-      );
+      return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID!,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile',
+        state,
+      }).toString()}`;
 
     case 'github':
-      return (
-        'https://github.com/login/oauth/authorize?' +
-        new URLSearchParams({
-          client_id: env.GITHUB_CLIENT_ID!,
-          redirect_uri: redirectUri,
-          scope: 'user:email',
-          state,
-        }).toString()
-      );
+      return `https://github.com/login/oauth/authorize?${new URLSearchParams({
+        client_id: env.GITHUB_CLIENT_ID!,
+        redirect_uri: redirectUri,
+        scope: 'user:email',
+        state,
+      }).toString()}`;
 
     case 'microsoft':
-      return (
-        'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' +
-        new URLSearchParams({
-          client_id: env.MICROSOFT_CLIENT_ID!,
-          redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: 'openid email profile User.Read',
-          state,
-        }).toString()
-      );
+      return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${new URLSearchParams({
+        client_id: env.MICROSOFT_CLIENT_ID!,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile User.Read',
+        state,
+      }).toString()}`;
 
     default:
       throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
@@ -93,9 +87,12 @@ export function getAuthorizationUrl(provider: string, state: string): string {
 /**
  * Verifies code callback and fetches user profile from the provider.
  */
-export async function verifyCallbackAndGetUser(provider: string, code: string): Promise<OAuthProfile> {
+export async function verifyCallbackAndGetUser(
+  provider: string,
+  code: string,
+): Promise<OAuthProfile> {
   // Check if this is a mock request (starts with mock_code_ or provider credentials missing)
-  if (code.startsWith('mock_code_') || !isConfigured(provider)) {
+  if (code.startsWith('mock_code_') ?? !isConfigured(provider)) {
     return {
       providerId: `${provider}-mock-${crypto.randomBytes(6).toString('hex')}`,
       email: `mock.${provider}@example.com`,
@@ -180,10 +177,11 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
         },
       });
 
-      let email = userData.email;
+      let { email } = userData;
       if (emailsRes.ok) {
-        const emails: any[] = await emailsRes.json() as any;
-        const primaryEmail = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.verified);
+        const emails: any[] = (await emailsRes.json()) as any;
+        const primaryEmail =
+          emails.find((e) => e.primary && e.verified) ?? emails.find((e) => e.verified);
         if (primaryEmail) {
           email = primaryEmail.email;
         }
@@ -196,7 +194,7 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
       return {
         providerId: String(userData.id),
         email,
-        name: userData.name || userData.login,
+        name: userData.name ?? userData.login,
       };
     }
 
@@ -229,15 +227,19 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
 
       return {
         providerId: profile.id,
-        email: profile.mail || profile.userPrincipalName,
-        name: profile.displayName || profile.givenName || 'Microsoft User',
+        email: profile.mail ?? profile.userPrincipalName,
+        name: profile.displayName ?? profile.givenName ?? 'Microsoft User',
       };
     }
 
     throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
   } catch (error: any) {
     logger.error({ err: error, provider }, 'OAuth callback verification failure');
-    throw new AppError(`OAuth login failed with provider ${provider}: ${error.message}`, 401, 'OAUTH_VERIFICATION_FAILED');
+    throw new AppError(
+      `OAuth login failed with provider ${provider}: ${error.message}`,
+      401,
+      'OAUTH_VERIFICATION_FAILED',
+    );
   }
 }
 
@@ -247,7 +249,7 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
 export async function authenticateOAuthUser(
   provider: string,
   profile: OAuthProfile,
-  clientMetadata?: { userAgent: string | null; ipAddress: string | null }
+  clientMetadata?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<User> {
   // 1. Query by provider ID
   let user: User | null = null;

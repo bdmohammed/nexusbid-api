@@ -1,15 +1,16 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
-import { TenderParticipant } from './TenderParticipant';
-import { User } from './User';
+
 import { EvaluationTemplate } from './EvaluationTemplate';
+import { TenderParticipant } from './TenderParticipant';
 import { TenderSubmission } from './TenderSubmission';
+import { User } from './User';
 
 @Entity('tender_evaluations')
 export class TenderEvaluation {
@@ -26,7 +27,10 @@ export class TenderEvaluation {
   @Column({ name: 'submission_id', type: 'uuid', nullable: true })
   submissionId: string | null;
 
-  @ManyToOne(() => TenderSubmission, (sub) => sub.evaluations, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => TenderSubmission, (sub) => sub.evaluations, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'submission_id' })
   submission: TenderSubmission | null;
 
@@ -40,16 +44,28 @@ export class TenderEvaluation {
   @JoinColumn({ name: 'evaluation_template_id' })
   evaluationTemplate: EvaluationTemplate | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   weight: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0.00, transformer: {
-    to: (val: number) => val,
-    from: (val: string) => parseFloat(val)
-  }})
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0.0,
+    transformer: {
+      to: (val: number) => val,
+      from: (val: string) => parseFloat(val),
+    },
+  })
   score: number;
 
   @Column({ name: 'max_score', type: 'int', default: 100 })

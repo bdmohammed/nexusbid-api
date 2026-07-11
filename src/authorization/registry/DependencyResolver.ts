@@ -1,198 +1,159 @@
-// src/authorization/registry/DependencyResolver.ts
+import { ALL_PERMISSIONS } from './modules';
 
-import { ALL_PERMISSIONS } from "./modules";
-import { PermissionDefinition } from "./types";
+import type { PermissionDefinition } from './types';
 
 export interface ResolveOptions {
-    /**
-     * Automatically include dependencies.
-     *
-     * Default: true
-     */
-    includeDependencies?: boolean;
+  /**
+   * Automatically include dependencies.
+   *
+   * Default: true
+   */
+  includeDependencies?: boolean;
 
-    /**
-     * Throw if conflicting permissions exist.
-     *
-     * Default: true
-     */
-    validateConflicts?: boolean;
+  /**
+   * Throw if conflicting permissions exist.
+   *
+   * Default: true
+   */
+  validateConflicts?: boolean;
 }
 
 export interface DependencyResolution {
-    /**
-     * Final permission set.
-     */
-    permissions: Set<string>;
+  /**
+   * Final permission set.
+   */
+  permissions: Set<string>;
 
-    /**
-     * Auto-added dependencies.
-     */
-    added: Set<string>;
+  /**
+   * Auto-added dependencies.
+   */
+  added: Set<string>;
 
-    /**
-     * Missing permissions.
-     */
-    missing: Set<string>;
+  /**
+   * Missing permissions.
+   */
+  missing: Set<string>;
 
-    /**
-     * Conflicting permissions.
-     */
-    conflicts: Set<string>;
+  /**
+   * Conflicting permissions.
+   */
+  conflicts: Set<string>;
 }
 
 export class DependencyResolver {
-    private readonly permissionMap = new Map(
-        ALL_PERMISSIONS.map(permission => [
-            permission.key,
-            permission,
-        ]),
-    );
+  private readonly permissionMap = new Map(
+    ALL_PERMISSIONS.map((permission) => [permission.key, permission]),
+  );
 
-    resolve(
-        permissionKeys: string[],
-        options: ResolveOptions = {},
-    ): DependencyResolution {
+  resolve(permissionKeys: string[], options: ResolveOptions = {}): DependencyResolution {
+    const config = {
+      includeDependencies: true,
+      validateConflicts: true,
+      ...options,
+    };
 
-        const config = {
-            includeDependencies: true,
-            validateConflicts: true,
-            ...options,
-        };
+    const resolution: DependencyResolution = {
+      permissions: new Set(),
+      added: new Set(),
+      missing: new Set(),
+      conflicts: new Set(),
+    };
 
-        const resolution: DependencyResolution = {
-            permissions: new Set(),
-            added: new Set(),
-            missing: new Set(),
-            conflicts: new Set(),
-        };
-
-        for (const permissionKey of permissionKeys) {
-            this.resolvePermission(
-                permissionKey,
-                resolution,
-                new Set(),
-                config,
-            );
-        }
-
-        return resolution;
+    for (const permissionKey of permissionKeys) {
+      this.resolvePermission(permissionKey, resolution, new Set(), config);
     }
 
-    private resolvePermission(
-        permissionKey: string,
-        resolution: DependencyResolution,
-        visiting: Set<string>,
-        options: Required<ResolveOptions>,
-    ): void {
+    return resolution;
+  }
 
-        if (resolution.permissions.has(permissionKey)) {
-            return;
-        }
+  private resolveAllOfDependencies(
+    allOf: string[],
+    resolution: DependencyResolution,
+    visiting: Set<string>,
+    options: Required<ResolveOptions>,
+  ): void {
+    for (const dependency of allOf) {
+      if (!resolution.permissions.has(dependency)) {
+        resolution.added.add(dependency);
+      }
 
-        const permission =
-            this.permissionMap.get(permissionKey);
+      this.resolvePermission(dependency, resolution, visiting, options);
+    }
+  }
 
-        if (!permission) {
-            resolution.missing.add(permissionKey);
-            return;
-        }
+  private validateConflicts(conflictsWith: string[], resolution: DependencyResolution): void {
+    for (const conflict of conflictsWith) {
+      if (resolution.permissions.has(conflict)) {
+        resolution.conflicts.add(conflict);
+      }
+    }
+  }
 
-        if (visiting.has(permissionKey)) {
-            throw new Error(
-                `Circular dependency detected: ${permissionKey}`,
-            );
-        }
-
-        visiting.add(permissionKey);
-
-        //---------------------------------------
-        // Resolve ALL OF
-        //---------------------------------------
-
-        if (
-            options.includeDependencies &&
-            permission.dependencies?.allOf
-        ) {
-            for (const dependency of permission.dependencies.allOf) {
-
-                if (!resolution.permissions.has(dependency)) {
-                    resolution.added.add(dependency);
-                }
-
-                this.resolvePermission(
-                    dependency,
-                    resolution,
-                    visiting,
-                    options,
-                );
-            }
-        }
-
-        //---------------------------------------
-        // Validate CONFLICTS
-        //---------------------------------------
-
-        if (
-            options.validateConflicts &&
-            permission.dependencies?.conflictsWith
-        ) {
-
-            for (const conflict of permission.dependencies.conflictsWith) {
-
-                if (resolution.permissions.has(conflict)) {
-                    resolution.conflicts.add(conflict);
-                }
-
-            }
-
-        }
-
-        resolution.permissions.add(permissionKey);
-
-        visiting.delete(permissionKey);
+  private resolvePermission(
+    permissionKey: string,
+    resolution: DependencyResolution,
+    visiting: Set<string>,
+    options: Required<ResolveOptions>,
+  ): void {
+    if (resolution.permissions.has(permissionKey)) {
+      return;
     }
 
-    /**
-     * Returns every dependency recursively.
-     */
-    getDependencies(
-        permissionKey: string,
-    ): string[] {
+    const permission = this.permissionMap.get(permissionKey);
 
-        return [
-            ...this.resolve([permissionKey]).added,
-        ];
-
+    if (!permission) {
+      resolution.missing.add(permissionKey);
+      return;
     }
 
-    /**
-     * Returns every permission that depends
-     * on the supplied permission.
-     */
-    getDependents(
-        permissionKey: string,
-    ): PermissionDefinition[] {
-
-        return ALL_PERMISSIONS.filter(permission => {
-
-            return (
-                permission.dependencies?.allOf?.includes(permissionKey) ??
-                false
-            );
-
-        });
-
+    if (visiting.has(permissionKey)) {
+      throw new Error(`Circular dependency detected: ${permissionKey}`);
     }
 
-    /**
-     * Returns true if permission exists.
-     */
-    exists(
-        permissionKey: string,
-    ): boolean {
+    visiting.add(permissionKey);
 
-        return this.permissionMap.has(permissionKey);
+    // ---------------------------------------
+    // Resolve ALL OF
+    // ---------------------------------------
 
+    if (options.includeDependencies && permission.dependencies?.allOf) {
+      this.resolveAllOfDependencies(permission.dependencies.allOf, resolution, visiting, options);
     }
+
+    // ---------------------------------------
+    // Validate CONFLICTS
+    // ---------------------------------------
+
+    if (options.validateConflicts && permission.dependencies?.conflictsWith) {
+      this.validateConflicts(permission.dependencies.conflictsWith, resolution);
+    }
+
+    resolution.permissions.add(permissionKey);
+
+    visiting.delete(permissionKey);
+  }
+
+  /**
+   * Returns every dependency recursively.
+   */
+  getDependencies(permissionKey: string): string[] {
+    return [...this.resolve([permissionKey]).added];
+  }
+
+  /**
+   * Returns every permission that depends
+   * on the supplied permission.
+   */
+  getDependents(permissionKey: string): PermissionDefinition[] {
+    return ALL_PERMISSIONS.filter((permission) => {
+      return permission.dependencies?.allOf?.includes(permissionKey) ?? false;
+    });
+  }
+
+  /**
+   * Returns true if permission exists.
+   */
+  exists(permissionKey: string): boolean {
+    return this.permissionMap.has(permissionKey);
+  }
 }
