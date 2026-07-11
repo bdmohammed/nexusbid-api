@@ -6,7 +6,7 @@ import type { ContactFormDto } from './support.dto';
 
 /**
  * POST /api/v1/support/contact
- * Public endpoint — forwards contact form submissions to admin email via Resend.
+ * Public endpoint — forwards contact form submissions to admin email via Amazon SES.
  * Rate limited to 3 per IP per hour to prevent spam.
  * Never exposes the admin email to the public frontend.
  */

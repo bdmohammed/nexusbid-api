@@ -10,17 +10,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../config/logger';
 import { AppError } from '../../core/AppError';
 
-function assertPdfExtension(fileName: string): void {
-  if (!fileName.toLowerCase().endsWith('.pdf')) {
-    throw new AppError('Only PDF files are allowed', 400, 'INVALID_FILE_TYPE');
-  }
-}
-
 export async function generateUploadUrl(
   fileName: string,
 ): Promise<{ uploadUrl: string; documentKey: string; originalFileName: string }> {
-  assertPdfExtension(fileName);
-
   const sanitized = fileName.replace(/\s+/g, '_').toLowerCase();
   const documentKey = `tenders/${uuidv4()}-${sanitized}`;
   const uploadUrl = `http://localhost:3000/dummy-s3-upload/${documentKey}`;

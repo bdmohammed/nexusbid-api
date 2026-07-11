@@ -15,7 +15,7 @@ module.exports = {
       max_memory_restart: '512M',
       watch: false,
       env_production: {
-        NODE_ENV: 'production',
+        NODE_ENV: 'prod',
         PORT: 3000,
         // PM2 automatically sets NODE_APP_INSTANCE to 0, 1, 2, ... per worker
         // server.ts reads this to decide whether to start cron jobs

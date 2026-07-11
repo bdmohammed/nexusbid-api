@@ -26,12 +26,29 @@ const s3Client = new S3Client({
 });
 
 /**
- * Validates that a filename ends with .pdf (case-insensitive).
- * Throws AppError if not — this is enforced BEFORE generating any pre-signed URL.
+ * Helper to determine MIME type from filename extension.
  */
-function assertPdfExtension(fileName: string): void {
-  if (!fileName.toLowerCase().endsWith('.pdf')) {
-    throw new AppError('Only PDF files are allowed', 400, 'INVALID_FILE_TYPE');
+function getContentType(fileName: string): string {
+  const ext = fileName.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'gif': return 'image/gif';
+    case 'zip': return 'application/zip';
+    case 'tar': return 'application/x-tar';
+    case 'gz': return 'application/gzip';
+    case 'doc': return 'application/msword';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'xls': return 'application/vnd.ms-excel';
+    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case 'ppt': return 'application/vnd.ms-powerpoint';
+    case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case 'txt': return 'text/plain';
+    case 'csv': return 'text/csv';
+    case 'json': return 'application/json';
+    default: return 'application/octet-stream';
   }
 }
 
@@ -47,28 +64,17 @@ function sanitizeFileName(fileName: string): string {
 
 /**
  * Generates a pre-signed PUT URL for direct browser-to-S3 upload.
- *
- * The backend NEVER receives the file bytes — this is intentional.
- * It saves server RAM, CPU, and bandwidth.
- *
- * Flow:
- *   1. Frontend calls POST /api/v1/admin/tenders/upload-url with { fileName }
- *   2. Backend validates .pdf extension, returns { uploadUrl, documentKey }
- *   3. Frontend PUT-uploads directly to S3 using uploadUrl
- *   4. Frontend sends documentKey when creating/updating the tender
  */
 export async function generateUploadUrl(
   fileName: string,
 ): Promise<{ uploadUrl: string; documentKey: string; originalFileName: string }> {
-  assertPdfExtension(fileName);
-
   const sanitized = sanitizeFileName(fileName);
   const documentKey = `tenders/${uuidv4()}-${sanitized}`;
 
   const command = new PutObjectCommand({
     Bucket: env.AWS_S3_BUCKET,
     Key: documentKey,
-    ContentType: 'application/pdf',
+    ContentType: getContentType(fileName),
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, {
@@ -92,7 +98,7 @@ export async function generateDownloadUrl(
     Bucket: env.AWS_S3_BUCKET,
     Key: documentKey,
     ResponseContentDisposition: `attachment; filename="${originalFileName}"`,
-    ResponseContentType: 'application/pdf',
+    ResponseContentType: getContentType(originalFileName),
   });
 
   return getSignedUrl(s3Client, command, { expiresIn: S3_URL_EXPIRY.DOWNLOAD });
