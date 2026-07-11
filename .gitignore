@@ -1,39 +1,282 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-
-# Environment files
-# .env (global defaults) — safe to commit (no secrets)
-# .env.local, .env.dev — DO NOT commit if they contain real credentials
-# .env.uat, .env.prod — commit as templates only (inject real values via CI/CD)
-.env.*.local          # Personal local overrides — always ignored
-docker/ssl/           # Self-signed certs — never commit
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# OS
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# OSX
+#
 .DS_Store
 Thumbs.db
 
 # IDE
-.vscode/settings.json
+.vscode/
 .idea/
 *.swp
 *.swo
+*~
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.nx
+
+# Xcode
+#
+build/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+**/.xcode.env.local
+
+# Android/IntelliJ
+#
+build/
+.idea/
+.gradle/
+local.properties
+*.iml
+*.hprof
+.cxx/
+*.keystore
+!debug.keystore
+.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+*.aab
+*.apk
+output-metadata.json
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# fastlane
+#
+# It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
+# screenshots whenever they are needed.
+# For more information about the recommended setup visit:
+# https://docs.fastlane.tools/best-practices/source-control/
+
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+
+# Bundle artifact
+*.jsbundle
+
+# Ruby / CocoaPods
+**/Pods/
+**/vendor/bundle/
+
+# Temporary files created by Metro to check the health of the file watcher
+.metro-health-check*
+
+# testing
+coverage/
+.nyc_output/
+junit.xml
+*.lcov
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Log/OS Files/Temporary files
+*.tmp
+*.temp
+*.log
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Biome
+.biome-cache/
+
+# Jest
+.jest-cache/
+
+# Package managers
+yarn.lock
+package-lock.json
+pnpm-lock.yaml
+
+# env files (can opt-in for committing if needed)
+.env.*
+
+# Linting
+.eslintcache
 
 # TypeScript
 *.tsbuildinfo
+.tsbuildinfo
+next-env.d.ts
 
-# PM2
-.pm2/
 
-# Docker
-docker/data/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+testem.log
+/typings
 
-# Temp
-*.tmp
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+/coverage
+*.lcov
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Mac .DS_Store
+.DS_Store
+*.pem
+
+# Optional stylelint cache
+.stylelintcache
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variable files
+.env
+!apps/db-scripts/.env.local
+
+# yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+./yarn-error.log
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Build/tmp folders
+/.assets*
+/.tmp
+*/.tmp
+*/.chromium
+**/tmp
+**/dist
+/build
+/.assets
+/.test-results
+out-tsc
+
+# Test outputs
+test-reports
+
+# Repo files
+node_modules/
+packages/**/dist/
+packages/**/node_modules/
+apps/**/build/
+apps/**/.build/
+apps/**/.serverless/
+apps/**/node_modules/
+!apps/lambda-layers/dist/
+apps/**/dist/
+test/results/
+**/.assets/
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/snippets/
+
+/packages/types/dest/
+/packages/util/dest/
+/packages/util/logger.js
+/database/dumps/
+/apps/api/.esbuild/
+/apps/frontend/.storybook/
+
+/iac/terraform/main/.terraform/
+/iac/terraform/main/.terraform.lock.hcl
+/iac/terraform/mgmt/aws-dev/.terraform/
+/iac/terraform/mgmt/aws-dev/.terraform.lock.hcl
+/iac/terraform/mgmt/aws-prod/.terraform/
+/iac/terraform/mgmt/aws-prod/.terraform.lock.hcl
+/iac/terraform/**/plan.out
+.results
+.yarn
+.chromium
+/test/ui/@rerun.txt
+/test/utils/dist/
+/test/integration/src/suites/**/assets/
+.tmp
+.out
+.configs
+/**/plan
+/database/
+/docker/
+/apps/api/serverless.yml
+/**/.esbuild
+/**/junit.xml
+/scripts/ts/src/nuorder/images*
+/packages/db-prisma-schema/src/prisma
+/iac/terraform/main/modules/observability/rum.json
+/apps/orders/tmp/
+
+# vercel
+.vercel
+
+# next.js
+/.next
+/out
+/.sass-cache
+/connect.lock
+/libpeerconnection.log
+
+test-output
+!apps/web/user/app/.next
