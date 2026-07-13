@@ -4,18 +4,15 @@
 # Services: API (hot-reload) + PostgreSQL + Nginx (HTTP only)
 #
 # Usage:
-#   docker compose up --build          # Start all services, rebuild API image
+#   docker compose up --build          # Start all services (runs migrations & seeds automatically on boot)
 #   docker compose up                  # Start all services (no rebuild)
 #   docker compose up db               # Start only PostgreSQL
 #   docker compose down                # Stop and remove containers
 #   docker compose down -v             # Stop and remove containers + volumes
 #
-#   # Run database migrations and seeding when needed:
-#   docker compose --profile init run --rm api-init
-#
-# Environment loading (processed in order, later values override earlier ones):
-#   .env         — shared defaults (template: .env.example, committed)
-#   .env.local   — local developer overrides (git-ignored, never committed)
+# Environment loading:
+#   .env         — shared defaults (loaded by docker-compose.yml)
+#   .env.local   — local developer overrides (loaded by docker-compose.override.yml)
 #
 # The DOCKER=true variable triggers a host swap in src/config/env.ts:
 #   DATABASE_URL: ...@localhost:... → ...@db:...
@@ -40,7 +37,6 @@ x-api-common: &api-common
     dockerfile: docker/Dockerfile
   env_file:
     - .env
-    - .env.local
   environment:
     NODE_ENV: local
     DOCKER: "true"
