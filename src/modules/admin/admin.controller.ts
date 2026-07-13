@@ -2,10 +2,10 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../core/asyncHandler';
 import { sendOk, sendCreated, paginationMeta } from '../../core/response';
 import { AppError } from '../../core/AppError';
-import * as service from './admin.service';
 import { parse } from 'csv-parse/sync';
+import * as service from './admin.service';
 import { z } from 'zod';
-import { BatchCategoryDto, BatchStateDto } from './admin.dto';
+import { BatchStateDto } from './admin.dto';
 import type {
   BlockUserDto,
   ListUsersQueryDto,
@@ -13,9 +13,6 @@ import type {
   CreatePlanDto,
   UpdatePlanDto,
   AnalyticsQueryDto,
-  CreateCategoryDto,
-  UpdateCategoryDto,
-  CategoryQueryDto,
   CreateStateDto,
   UpdateStateDto,
   StateQueryDto,
@@ -270,122 +267,6 @@ export const getUserGrowth = asyncHandler(async (req: Request, res: Response) =>
   return sendOk(res, data);
 });
 
-// ─── Categories ──────────────────────────────────────────────────────────────
-
-export const listCategories = asyncHandler(async (req: Request, res: Response) => {
-  const query = req.validated as CategoryQueryDto;
-  const { categories, total } = await service.listAllCategories(query);
-  const stats = await service.getCategoryStats();
-  return sendOk(res, { categories, total, stats }, 'OK', paginationMeta(total, query.page, query.limit));
-});
-
-export const getCategoryHistory = asyncHandler(async (req: Request, res: Response) => {
-  const history = await service.getCategoryHistory(req.params['id']!);
-  return sendOk(res, history);
-});
-
-export const createCategory = asyncHandler(async (req: Request, res: Response) => {
-  const dto = req.validated as CreateCategoryDto;
-  const category = await service.createCategory(dto, req.user!.userId);
-  return sendCreated(res, category, 'Category created');
-});
-
-export const updateCategory = asyncHandler(async (req: Request, res: Response) => {
-  const dto = req.validated as UpdateCategoryDto;
-  const before = await service.getCategoryById(req.params['id']!);
-  res.locals['auditBefore'] = {
-    code: before.code,
-    name: before.name,
-    slug: before.slug,
-    description: before.description,
-    isActive: before.isActive
-  };
-  const category = await service.updateCategory(req.params['id']!, dto, req.user!.userId);
-  return sendOk(res, category, 'Category updated');
-});
-
-export const deleteCategory = asyncHandler(async (req: Request, res: Response) => {
-  const before = await service.getCategoryById(req.params['id']!);
-  res.locals['auditBefore'] = {
-    code: before.code,
-    name: before.name,
-    slug: before.slug,
-    description: before.description,
-    isActive: before.isActive
-  };
-  await service.deleteCategory(req.params['id']!, req.user!.userId);
-  return sendOk(res, null, 'Category deleted');
-});
-
-export const batchCategories = asyncHandler(async (req: Request, res: Response) => {
-  let items: any[] = [];
-  const contentType = req.headers['content-type'] || '';
-
-  if (contentType.includes('text/csv') || contentType.includes('text/plain')) {
-    if (typeof req.body !== 'string' || !req.body.trim()) {
-      throw new AppError('Empty or invalid CSV body', 400, 'INVALID_BATCH_BODY');
-    }
-
-    try {
-      const records = parse(req.body, {
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-      });
-
-      items = records.map((record: any) => {
-        const rawAction = record.action || 'upsert';
-        const action = rawAction.toLowerCase();
-        
-        return {
-          action: ['upsert', 'delete'].includes(action) ? action : 'upsert',
-          code: record.code ? String(record.code).trim() : '',
-          name: record.name ? String(record.name).trim() : undefined,
-          slug: record.slug ? String(record.slug).trim() : undefined,
-          description: record.description ? String(record.description).trim() : undefined,
-          isActive: record.is_active !== undefined ? (record.is_active === 'true' || record.is_active === '1') : undefined,
-        };
-      });
-    } catch (err: any) {
-      throw new AppError(`Failed to parse CSV file: ${err.message}`, 400, 'CSV_PARSE_FAILED');
-    }
-  } else if (contentType.includes('application/json')) {
-    if (!Array.isArray(req.body)) {
-      throw new AppError('JSON body must be an array of batch items', 400, 'INVALID_BATCH_BODY');
-    }
-    items = req.body.map((item: any) => ({
-      action: item.action || 'upsert',
-      code: item.code ? String(item.code).trim() : '',
-      name: item.name ? String(item.name).trim() : undefined,
-      slug: item.slug ? String(item.slug).trim() : undefined,
-      description: item.description ? String(item.description).trim() : undefined,
-      isActive: item.isActive !== undefined ? Boolean(item.isActive) : undefined,
-    }));
-  } else {
-    throw new AppError('Unsupported Content-Type. Use application/json or text/csv', 415, 'UNSUPPORTED_MEDIA_TYPE');
-  }
-
-  const MAX_BATCH_SIZE = 500;
-  if (items.length > MAX_BATCH_SIZE) {
-    throw new AppError(`Batch size exceeds maximum limit of ${MAX_BATCH_SIZE} items`, 400, 'BATCH_SIZE_EXCEEDED');
-  }
-
-  if (items.length === 0) {
-    throw new AppError('No items found in the batch payload', 400, 'EMPTY_BATCH');
-  }
-
-  const validationResult = BatchCategoryDto.safeParse(items);
-  if (!validationResult.success) {
-    throw new AppError(
-      'Validation failed for batch items',
-      422,
-      'VALIDATION_ERROR',
-    );
-  }
-
-  const result = await service.processBatchCategories(validationResult.data, req.user!.userId);
-  return sendOk(res, result, 'Batch processed successfully');
-});
 
 // ─── States ───────────────────────────────────────────────────────────────────
 

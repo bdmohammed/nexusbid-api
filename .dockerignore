@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — NexusBid API
+#
+# Excludes files that must NOT enter the Docker build context.
+# Without this file every .env.* secret, the full .git history, and
+# node_modules are sent to the Docker daemon on every build.
+#
+# Rule: exclude everything, then allow only what the build actually needs.
+# The Dockerfiles explicitly COPY: package*.json, tsconfig.json, src/
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Version control ───────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+
+# ── Node.js dependencies ──────────────────────────────────────────────────────
+# Always reinstalled inside the image via `npm ci`.
+# Sending this folder would balloon the build context by hundreds of MB.
+node_modules
+
+# ── Build output ──────────────────────────────────────────────────────────────
+# Rebuilt from source inside the image. Stale local dist/ must not leak in.
+dist
+
+# ── Environment files / Secrets ───────────────────────────────────────────────
+# CRITICAL: these files contain real credentials and must NEVER enter the image.
+# Secrets are injected at runtime via `env_file` in Docker Compose or via
+# AWS Secrets Manager / Parameter Store in production.
+.env
+.env.*
+!.env.example
+
+# ── Tests ─────────────────────────────────────────────────────────────────────
+tests/
+coverage/
+.nyc_output/
+junit.xml
+jest.config.ts
+tsconfig.test.json
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── Docker files (self-referential) ───────────────────────────────────────────
+# No reason for compose files or Dockerfiles to exist inside their own image.
+docker-compose*.yml
+.dockerignore
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS-generated files ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── CI/CD ─────────────────────────────────────────────────────────────────────
+.github/
+
+# ── Misc project files (not needed at runtime) ────────────────────────────────
+ecosystem.config.js
+scripts/
+*.md
+README*

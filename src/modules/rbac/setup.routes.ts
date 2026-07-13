@@ -1,22 +1,29 @@
-import { Router, Request, Response } from 'express';
-import { AppDataSource } from '../../config/database';
-import { User } from '../../entities/User';
-import { Role, RoleStatus } from '../../entities/Role';
-import { UserRole } from '../../entities/UserRole';
-import { Permission } from '../../entities/Permission';
-import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
-import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
-import { AccountType } from '../../types/enums';
-import { BCRYPT_ROUNDS } from '../../core/constants';
-import * as bcrypt from 'bcryptjs';
-import { z } from 'zod';
-import { asyncHandler } from '../../core/asyncHandler';
-import { logger } from '../../config/logger';
+import { Router, Request, Response } from "express";
+import { AppDataSource } from "../../config/database";
+import { User } from "../../database/entities/User";
+import { Role, RoleStatus } from "../../database/entities/Role";
+import { UserRole } from "../../database/entities/UserRole";
+import { Permission } from "../../database/entities/Permission";
+import {
+  RoleVersion,
+  RoleVersionStatus,
+} from "../../database/entities/RoleVersion";
+import { RoleVersionPermission } from "../../database/entities/RoleVersionPermission";
+import { AccountType } from "../../types/enums";
+import { BCRYPT_ROUNDS } from "../../core/constants";
+import * as bcrypt from "bcryptjs";
+import { z } from "zod";
+import { asyncHandler } from "../../core/asyncHandler";
+import { logger } from "../../config/logger";
 
 const SetupSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters"),
-  email: z.string().trim().toLowerCase().email("Please enter a valid email address"),
-  password: z.string().trim().min(8, "Password must be at least 8 characters")
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Please enter a valid email address"),
+  password: z.string().trim().min(8, "Password must be at least 8 characters"),
 });
 
 const setupRouter = Router();
@@ -61,35 +68,36 @@ const setupRouter = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 setupRouter.get(
-  '/check',
+  "/check",
   asyncHandler(async (req: Request, res: Response): Promise<any> => {
     const userRoleRepo = AppDataSource.getRepository(UserRole);
     const superAdminCount = await userRoleRepo.count({
       where: {
         role: {
-          slug: 'super-admin'
-        }
+          slug: "super-admin",
+        },
       },
-      relations: ['role']
+      relations: ["role"],
     });
 
     if (superAdminCount > 0) {
       return res.status(403).json({
         success: false,
-        message: 'Forbidden: One-Time Setup Wizard is disabled because an administrator already exists.',
+        message:
+          "Forbidden: One-Time Setup Wizard is disabled because an administrator already exists.",
         data: {
-          setupAllowed: false
-        }
+          setupAllowed: false,
+        },
       });
     }
 
     res.json({
       success: true,
       data: {
-        setupAllowed: true
-      }
+        setupAllowed: true,
+      },
     });
-  })
+  }),
 );
 
 /**
@@ -157,7 +165,7 @@ setupRouter.get(
  *         $ref: '#/components/responses/Forbidden'
  */
 setupRouter.post(
-  '/',
+  "/",
   asyncHandler(async (req: Request, res: Response): Promise<any> => {
     const userRoleRepo = AppDataSource.getRepository(UserRole);
 
@@ -165,16 +173,17 @@ setupRouter.post(
     const superAdminCount = await userRoleRepo.count({
       where: {
         role: {
-          slug: 'super-admin'
-        }
+          slug: "super-admin",
+        },
       },
-      relations: ['role']
+      relations: ["role"],
     });
 
     if (superAdminCount > 0) {
       return res.status(403).json({
         success: false,
-        message: 'Forbidden: One-Time Setup Wizard is disabled because an administrator already exists.'
+        message:
+          "Forbidden: One-Time Setup Wizard is disabled because an administrator already exists.",
       });
     }
 
@@ -189,17 +198,23 @@ setupRouter.post(
     try {
       const userRepo = queryRunner.manager.getRepository(User);
       const roleRepo = queryRunner.manager.getRepository(Role);
-      const transactionUserRoleRepo = queryRunner.manager.getRepository(UserRole);
+      const transactionUserRoleRepo =
+        queryRunner.manager.getRepository(UserRole);
       const permissionRepo = queryRunner.manager.getRepository(Permission);
       const roleVersionRepo = queryRunner.manager.getRepository(RoleVersion);
-      const roleVersionPermissionRepo = queryRunner.manager.getRepository(RoleVersionPermission);
+      const roleVersionPermissionRepo = queryRunner.manager.getRepository(
+        RoleVersionPermission,
+      );
 
       // Check if user already exists by email
       let adminUser = await userRepo.findOne({
-        where: { email: body.email }
+        where: { email: body.email },
       });
 
-      const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS.PASSWORD);
+      const passwordHash = await bcrypt.hash(
+        body.password,
+        BCRYPT_ROUNDS.PASSWORD,
+      );
 
       if (adminUser) {
         // Upgrade existing user to Admin type
@@ -215,21 +230,21 @@ setupRouter.post(
           email: body.email,
           passwordHash,
           accountType: AccountType.ADMIN,
-          emailVerified: true
+          emailVerified: true,
         });
         adminUser = await userRepo.save(adminUser);
       }
-      
+
       const savedUser = adminUser;
 
       // Create "Super Admin" Role if it does not exist
       let superAdminRole = await roleRepo.findOne({
-        where: { slug: 'super-admin' }
+        where: { slug: "super-admin" },
       });
 
       if (!superAdminRole) {
         superAdminRole = roleRepo.create({
-          slug: 'super-admin',
+          slug: "super-admin",
           isSystemRole: true,
           status: RoleStatus.ACTIVE,
         });
@@ -241,8 +256,9 @@ setupRouter.post(
         const superAdminVersion = roleVersionRepo.create({
           roleId: superAdminRole.id,
           version: 1,
-          name: 'Super Admin',
-          description: 'System Super Administrator. Has all system permissions by default.',
+          name: "Super Admin",
+          description:
+            "System Super Administrator. Has all system permissions by default.",
           status: RoleVersionStatus.APPROVED,
           createdByUserId: savedUser.id,
         });
@@ -252,14 +268,18 @@ setupRouter.post(
         await roleRepo.save(superAdminRole);
 
         // Assign All Permissions to Super Admin Role Version
-        const allPermissions = await permissionRepo.find({ relations: ['module'] });
-        const roleVersionPerms = allPermissions.map(p => roleVersionPermissionRepo.create({
-          roleVersionId: superAdminVersion.id,
-          permissionKey: p.key,
-          permissionName: p.name,
-          moduleSlug: p.module?.slug || 'other',
-          moduleName: p.module?.name || 'Other'
-        }));
+        const allPermissions = await permissionRepo.find({
+          relations: ["module"],
+        });
+        const roleVersionPerms = allPermissions.map((p) =>
+          roleVersionPermissionRepo.create({
+            roleVersionId: superAdminVersion.id,
+            permissionKey: p.key,
+            permissionName: p.name,
+            moduleSlug: p.module?.slug || "other",
+            moduleName: p.module?.name || "Other",
+          }),
+        );
 
         if (roleVersionPerms.length > 0) {
           await roleVersionPermissionRepo.save(roleVersionPerms);
@@ -268,7 +288,7 @@ setupRouter.post(
 
       // Assign Super Admin Role to First Admin User (check if assignment already exists to avoid duplicates)
       let assignment = await transactionUserRoleRepo.findOne({
-        where: { userId: savedUser.id, roleId: superAdminRole.id }
+        where: { userId: savedUser.id, roleId: superAdminRole.id },
       });
 
       if (!assignment) {
@@ -276,7 +296,7 @@ setupRouter.post(
           userId: savedUser.id,
           roleId: superAdminRole.id,
           assignedBy: savedUser,
-          assignedAt: new Date()
+          assignedAt: new Date(),
         });
         await transactionUserRoleRepo.save(assignment);
       }
@@ -286,16 +306,17 @@ setupRouter.post(
 
       logger.info(
         { email: savedUser.email },
-        'First administrator created successfully and assigned the Super Admin role',
+        "First administrator created successfully and assigned the Super Admin role",
       );
 
       res.status(201).json({
         success: true,
-        message: 'First Administrator created successfully and assigned the Super Admin role.',
+        message:
+          "First Administrator created successfully and assigned the Super Admin role.",
         data: {
           userId: savedUser.id,
-          email: savedUser.email
-        }
+          email: savedUser.email,
+        },
       });
     } catch (error) {
       // Rollback Transaction
@@ -305,7 +326,7 @@ setupRouter.post(
       // Release query runner
       await queryRunner.release();
     }
-  })
+  }),
 );
 
 export default setupRouter;

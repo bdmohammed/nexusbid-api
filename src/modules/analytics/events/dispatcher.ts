@@ -1,6 +1,6 @@
-import { AppDataSource } from '../../../config/database';
-import { AnalyticsEvent } from '../../../entities/AnalyticsEvent';
-import { logger } from '../../../config/logger';
+import { AppDataSource } from "../../../config/database";
+import { AnalyticsEvent } from "../../../database/entities/AnalyticsEvent";
+import { logger } from "../../../config/logger";
 
 const eventRepo = AppDataSource.getRepository(AnalyticsEvent);
 
@@ -24,61 +24,182 @@ export async function trackAnalyticsEvent(
       });
       await eventRepo.save(event);
     } catch (err) {
-      logger.error({ err, eventType }, 'Failed to track analytics event');
+      logger.error({ err, eventType }, "Failed to track analytics event");
     }
   });
 }
 
 // ─── Event Helpers ────────────────────────────────────────────────────────────
 
-export function trackUserRegistered(userId: string, country: string, device: string, browser: string): void {
-  trackAnalyticsEvent('USER_REGISTERED', userId, 'User', userId, { country, device, browser });
+export function trackUserRegistered(
+  userId: string,
+  country: string,
+  device: string,
+  browser: string,
+): void {
+  trackAnalyticsEvent("USER_REGISTERED", userId, "User", userId, {
+    country,
+    device,
+    browser,
+  });
 }
 
 export function trackUserVerified(userId: string): void {
-  trackAnalyticsEvent('USER_VERIFIED', userId, 'User', userId);
+  trackAnalyticsEvent("USER_VERIFIED", userId, "User", userId);
 }
 
-export function trackUserLoggedIn(userId: string, device: string, browser: string): void {
-  trackAnalyticsEvent('USER_LOGGED_IN', userId, 'User', userId, { device, browser });
+export function trackUserLoggedIn(
+  userId: string,
+  device: string,
+  browser: string,
+): void {
+  trackAnalyticsEvent("USER_LOGGED_IN", userId, "User", userId, {
+    device,
+    browser,
+  });
 }
 
-export function trackTenderCreated(tenderId: string, createdById: string, categoryId: string, tenderType: string, budget: number, country: string): void {
-  trackAnalyticsEvent('TENDER_CREATED', createdById, 'Tender', tenderId, { categoryId, tenderType, budget, country });
+export function trackTenderCreated(
+  tenderId: string,
+  createdById: string,
+  categoryId: string,
+  tenderType: string,
+  budget: number,
+  country: string,
+): void {
+  trackAnalyticsEvent("TENDER_CREATED", createdById, "Tender", tenderId, {
+    categoryId,
+    tenderType,
+    budget,
+    country,
+  });
 }
 
-export function trackTenderPublished(tenderId: string, publisherId: string, categoryId: string, tenderType: string, budget: number, country: string): void {
-  trackAnalyticsEvent('TENDER_PUBLISHED', publisherId, 'Tender', tenderId, { categoryId, tenderType, budget, country });
+export function trackTenderPublished(
+  tenderId: string,
+  publisherId: string,
+  categoryId: string,
+  tenderType: string,
+  budget: number,
+  country: string,
+): void {
+  trackAnalyticsEvent("TENDER_PUBLISHED", publisherId, "Tender", tenderId, {
+    categoryId,
+    tenderType,
+    budget,
+    country,
+  });
 }
 
-export function trackTenderAwarded(tenderId: string, awarderId: string, winnerId: string, finalPrice: number, evaluationTimeSeconds: number): void {
-  trackAnalyticsEvent('TENDER_AWARDED', awarderId, 'Tender', tenderId, { winnerId, finalPrice, evaluationTimeSeconds });
+export function trackTenderAwarded(
+  tenderId: string,
+  awarderId: string,
+  winnerId: string,
+  finalPrice: number,
+  evaluationTimeSeconds: number,
+): void {
+  trackAnalyticsEvent("TENDER_AWARDED", awarderId, "Tender", tenderId, {
+    winnerId,
+    finalPrice,
+    evaluationTimeSeconds,
+  });
 }
 
-export function trackSubscriptionCreated(userId: string, subscriptionId: string, planId: string, priceCents: number): void {
-  trackAnalyticsEvent('SUBSCRIPTION_CREATED', userId, 'Subscription', subscriptionId, { planId, priceCents });
+export function trackSubscriptionCreated(
+  userId: string,
+  subscriptionId: string,
+  planId: string,
+  priceCents: number,
+): void {
+  trackAnalyticsEvent(
+    "SUBSCRIPTION_CREATED",
+    userId,
+    "Subscription",
+    subscriptionId,
+    { planId, priceCents },
+  );
 }
 
-export function trackPaymentSuccessful(userId: string, transactionId: string, amountCents: number, currency: string, planId: string): void {
-  trackAnalyticsEvent('PAYMENT_SUCCESSFUL', userId, 'Transaction', transactionId, { amountCents, currency, planId });
+export function trackPaymentSuccessful(
+  userId: string,
+  transactionId: string,
+  amountCents: number,
+  currency: string,
+  planId: string,
+): void {
+  trackAnalyticsEvent(
+    "PAYMENT_SUCCESSFUL",
+    userId,
+    "Transaction",
+    transactionId,
+    { amountCents, currency, planId },
+  );
 }
 
-export function trackPaymentFailed(userId: string, transactionId: string, amountCents: number, currency: string, planId: string, error: string): void {
-  trackAnalyticsEvent('PAYMENT_FAILED', userId, 'Transaction', transactionId, { amountCents, currency, planId, error });
+export function trackPaymentFailed(
+  userId: string,
+  transactionId: string,
+  amountCents: number,
+  currency: string,
+  planId: string,
+  error: string,
+): void {
+  trackAnalyticsEvent("PAYMENT_FAILED", userId, "Transaction", transactionId, {
+    amountCents,
+    currency,
+    planId,
+    error,
+  });
 }
 
-export function trackTenderDownloaded(userId: string, tenderId: string, country: string): void {
-  trackAnalyticsEvent('TENDER_DOWNLOADED', userId, 'Tender', tenderId, { country });
+export function trackTenderDownloaded(
+  userId: string,
+  tenderId: string,
+  country: string,
+): void {
+  trackAnalyticsEvent("TENDER_DOWNLOADED", userId, "Tender", tenderId, {
+    country,
+  });
 }
 
-export function trackTenderViewed(userId: string | null, tenderId: string, country: string, device: string, browser: string): void {
-  trackAnalyticsEvent('TENDER_VIEWED', userId, 'Tender', tenderId, { country, device, browser });
+export function trackTenderViewed(
+  userId: string | null,
+  tenderId: string,
+  country: string,
+  device: string,
+  browser: string,
+): void {
+  trackAnalyticsEvent("TENDER_VIEWED", userId, "Tender", tenderId, {
+    country,
+    device,
+    browser,
+  });
 }
 
-export function trackPageView(userId: string | null, path: string, country: string, device: string, browser: string): void {
-  trackAnalyticsEvent('PAGE_VIEW', userId, 'Page', null, { path, country, device, browser });
+export function trackPageView(
+  userId: string | null,
+  path: string,
+  country: string,
+  device: string,
+  browser: string,
+): void {
+  trackAnalyticsEvent("PAGE_VIEW", userId, "Page", null, {
+    path,
+    country,
+    device,
+    browser,
+  });
 }
 
-export function trackSearch(userId: string | null, query: string, resultsCount: number, country: string): void {
-  trackAnalyticsEvent('SEARCH', userId, 'Search', null, { query, resultsCount, country });
+export function trackSearch(
+  userId: string | null,
+  query: string,
+  resultsCount: number,
+  country: string,
+): void {
+  trackAnalyticsEvent("SEARCH", userId, "Search", null, {
+    query,
+    resultsCount,
+    country,
+  });
 }

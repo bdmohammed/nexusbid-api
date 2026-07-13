@@ -1,14 +1,14 @@
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import { AppDataSource } from '../../config/database';
-import { User } from '../../entities/User';
-import { AppError } from '../../core/AppError';
-import { env } from '../../config/env';
-import { BCRYPT_ROUNDS } from '../../core/constants';
-import { AccountType } from '../../types/enums';
-import { savePasswordToHistory } from './security.service';
-import { logSecurityEvent } from './securityLog.service';
-import { logger } from '../../config/logger';
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import { AppDataSource } from "../../config/database";
+import { User } from "../../database/entities/User";
+import { AppError } from "../../core/AppError";
+import { env } from "../../config/env";
+import { BCRYPT_ROUNDS } from "../../core/constants";
+import { AccountType } from "../../types/enums";
+import { savePasswordToHistory } from "./security.service";
+import { logSecurityEvent } from "./securityLog.service";
+import { logger } from "../../config/logger";
 
 const userRepo = AppDataSource.getRepository(User);
 
@@ -22,15 +22,15 @@ export interface OAuthProfile {
  * Checks if a provider has client ID and secret configured.
  */
 function isConfigured(provider: string): boolean {
-  if (env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === "test") {
     return false; // Force mock mode in test environment
   }
   switch (provider) {
-    case 'google':
+    case "google":
       return !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
-    case 'github':
+    case "github":
       return !!(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
-    case 'microsoft':
+    case "microsoft":
       return !!(env.MICROSOFT_CLIENT_ID && env.MICROSOFT_CLIENT_SECRET);
     default:
       return false;
@@ -46,58 +46,61 @@ export function getAuthorizationUrl(provider: string, state: string): string {
 
   if (!isConfigured(provider)) {
     // Return direct redirect to our callback with mock parameters
-    return `${redirectUri}?code=mock_code_${provider}_${crypto.randomBytes(4).toString('hex')}&state=${state}`;
+    return `${redirectUri}?code=mock_code_${provider}_${crypto.randomBytes(4).toString("hex")}&state=${state}`;
   }
 
   switch (provider) {
-    case 'google':
+    case "google":
       return (
-        'https://accounts.google.com/o/oauth2/v2/auth?' +
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
         new URLSearchParams({
           client_id: env.GOOGLE_CLIENT_ID!,
           redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: 'openid email profile',
+          response_type: "code",
+          scope: "openid email profile",
           state,
         }).toString()
       );
 
-    case 'github':
+    case "github":
       return (
-        'https://github.com/login/oauth/authorize?' +
+        "https://github.com/login/oauth/authorize?" +
         new URLSearchParams({
           client_id: env.GITHUB_CLIENT_ID!,
           redirect_uri: redirectUri,
-          scope: 'user:email',
+          scope: "user:email",
           state,
         }).toString()
       );
 
-    case 'microsoft':
+    case "microsoft":
       return (
-        'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' +
+        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" +
         new URLSearchParams({
           client_id: env.MICROSOFT_CLIENT_ID!,
           redirect_uri: redirectUri,
-          response_type: 'code',
-          scope: 'openid email profile User.Read',
+          response_type: "code",
+          scope: "openid email profile User.Read",
           state,
         }).toString()
       );
 
     default:
-      throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
+      throw new AppError("Invalid OAuth provider", 400, "INVALID_PROVIDER");
   }
 }
 
 /**
  * Verifies code callback and fetches user profile from the provider.
  */
-export async function verifyCallbackAndGetUser(provider: string, code: string): Promise<OAuthProfile> {
+export async function verifyCallbackAndGetUser(
+  provider: string,
+  code: string,
+): Promise<OAuthProfile> {
   // Check if this is a mock request (starts with mock_code_ or provider credentials missing)
-  if (code.startsWith('mock_code_') || !isConfigured(provider)) {
+  if (code.startsWith("mock_code_") || !isConfigured(provider)) {
     return {
-      providerId: `${provider}-mock-${crypto.randomBytes(6).toString('hex')}`,
+      providerId: `${provider}-mock-${crypto.randomBytes(6).toString("hex")}`,
       email: `mock.${provider}@example.com`,
       name: `Mock ${provider.charAt(0).toUpperCase() + provider.slice(1)} User`,
     };
@@ -106,30 +109,37 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
   const redirectUri = `${env.API_URL}/api/v1/auth/oauth/${provider}/callback`;
 
   try {
-    if (provider === 'google') {
-      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    if (provider === "google") {
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
           client_id: env.GOOGLE_CLIENT_ID!,
           client_secret: env.GOOGLE_CLIENT_SECRET!,
           redirect_uri: redirectUri,
-          grant_type: 'authorization_code',
+          grant_type: "authorization_code",
         }),
       });
 
       if (!tokenRes.ok) {
-        throw new Error(`Google token exchange failed: ${await tokenRes.text()}`);
+        throw new Error(
+          `Google token exchange failed: ${await tokenRes.text()}`,
+        );
       }
       const tokenData: any = await tokenRes.json();
 
-      const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
+      const profileRes = await fetch(
+        "https://www.googleapis.com/oauth2/v3/userinfo",
+        {
+          headers: { Authorization: `Bearer ${tokenData.access_token}` },
+        },
+      );
 
       if (!profileRes.ok) {
-        throw new Error(`Google userinfo fetch failed: ${await profileRes.text()}`);
+        throw new Error(
+          `Google userinfo fetch failed: ${await profileRes.text()}`,
+        );
       }
       const profile: any = await profileRes.json();
 
@@ -140,30 +150,35 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
       };
     }
 
-    if (provider === 'github') {
-      const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
+    if (provider === "github") {
+      const tokenRes = await fetch(
+        "https://github.com/login/oauth/access_token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+          },
+          body: new URLSearchParams({
+            code,
+            client_id: env.GITHUB_CLIENT_ID!,
+            client_secret: env.GITHUB_CLIENT_SECRET!,
+            redirect_uri: redirectUri,
+          }),
         },
-        body: new URLSearchParams({
-          code,
-          client_id: env.GITHUB_CLIENT_ID!,
-          client_secret: env.GITHUB_CLIENT_SECRET!,
-          redirect_uri: redirectUri,
-        }),
-      });
+      );
 
       if (!tokenRes.ok) {
-        throw new Error(`GitHub token exchange failed: ${await tokenRes.text()}`);
+        throw new Error(
+          `GitHub token exchange failed: ${await tokenRes.text()}`,
+        );
       }
       const tokenData: any = await tokenRes.json();
 
-      const userRes = await fetch('https://api.github.com/user', {
+      const userRes = await fetch("https://api.github.com/user", {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
-          'User-Agent': 'NexusBid',
+          "User-Agent": "NexusBid",
         },
       });
 
@@ -173,24 +188,28 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
       const userData: any = await userRes.json();
 
       // Retrieve primary/verified email
-      const emailsRes = await fetch('https://api.github.com/user/emails', {
+      const emailsRes = await fetch("https://api.github.com/user/emails", {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
-          'User-Agent': 'NexusBid',
+          "User-Agent": "NexusBid",
         },
       });
 
       let email = userData.email;
       if (emailsRes.ok) {
-        const emails: any[] = await emailsRes.json() as any;
-        const primaryEmail = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.verified);
+        const emails: any[] = (await emailsRes.json()) as any;
+        const primaryEmail =
+          emails.find((e) => e.primary && e.verified) ||
+          emails.find((e) => e.verified);
         if (primaryEmail) {
           email = primaryEmail.email;
         }
       }
 
       if (!email) {
-        throw new Error('No verified email associated with this GitHub account.');
+        throw new Error(
+          "No verified email associated with this GitHub account.",
+        );
       }
 
       return {
@@ -200,44 +219,55 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
       };
     }
 
-    if (provider === 'microsoft') {
-      const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          code,
-          client_id: env.MICROSOFT_CLIENT_ID!,
-          client_secret: env.MICROSOFT_CLIENT_SECRET!,
-          redirect_uri: redirectUri,
-          grant_type: 'authorization_code',
-        }),
-      });
+    if (provider === "microsoft") {
+      const tokenRes = await fetch(
+        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: env.MICROSOFT_CLIENT_ID!,
+            client_secret: env.MICROSOFT_CLIENT_SECRET!,
+            redirect_uri: redirectUri,
+            grant_type: "authorization_code",
+          }),
+        },
+      );
 
       if (!tokenRes.ok) {
-        throw new Error(`Microsoft token exchange failed: ${await tokenRes.text()}`);
+        throw new Error(
+          `Microsoft token exchange failed: ${await tokenRes.text()}`,
+        );
       }
       const tokenData: any = await tokenRes.json();
 
-      const profileRes = await fetch('https://graph.microsoft.com/v1.0/me', {
+      const profileRes = await fetch("https://graph.microsoft.com/v1.0/me", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
 
       if (!profileRes.ok) {
-        throw new Error(`Microsoft Graph profile fetch failed: ${await profileRes.text()}`);
+        throw new Error(
+          `Microsoft Graph profile fetch failed: ${await profileRes.text()}`,
+        );
       }
       const profile: any = await profileRes.json();
 
       return {
         providerId: profile.id,
         email: profile.mail || profile.userPrincipalName,
-        name: profile.displayName || profile.givenName || 'Microsoft User',
+        name: profile.displayName || profile.givenName || "Microsoft User",
       };
     }
 
-    throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
+    throw new AppError("Invalid OAuth provider", 400, "INVALID_PROVIDER");
   } catch (err: any) {
-    logger.error({ err, provider }, 'OAuth callback verification failure');
-    throw new AppError(`OAuth login failed with provider ${provider}: ${err.message}`, 401, 'OAUTH_VERIFICATION_FAILED');
+    logger.error({ err, provider }, "OAuth callback verification failure");
+    throw new AppError(
+      `OAuth login failed with provider ${provider}: ${err.message}`,
+      401,
+      "OAUTH_VERIFICATION_FAILED",
+    );
   }
 }
 
@@ -247,21 +277,30 @@ export async function verifyCallbackAndGetUser(provider: string, code: string): 
 export async function authenticateOAuthUser(
   provider: string,
   profile: OAuthProfile,
-  details?: { userAgent: string | null; ipAddress: string | null }
+  details?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<User> {
   // 1. Query by provider ID
   let user: User | null = null;
-  if (provider === 'google') {
+  if (provider === "google") {
     user = await userRepo.findOne({ where: { googleId: profile.providerId } });
-  } else if (provider === 'github') {
+  } else if (provider === "github") {
     user = await userRepo.findOne({ where: { githubId: profile.providerId } });
-  } else if (provider === 'microsoft') {
-    user = await userRepo.findOne({ where: { microsoftId: profile.providerId } });
+  } else if (provider === "microsoft") {
+    user = await userRepo.findOne({
+      where: { microsoftId: profile.providerId },
+    });
   }
 
   if (user) {
+    if (user.accountType === AccountType.SYSTEM) {
+      throw new AppError("Account not found", 401, "ACCOUNT_NOT_FOUND");
+    }
     if (user.isBlocked) {
-      throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
+      throw new AppError(
+        "Account suspended. Contact support.",
+        403,
+        "ACCOUNT_BLOCKED",
+      );
     }
     // Update last login
     user.lastLoginAt = new Date();
@@ -270,7 +309,7 @@ export async function authenticateOAuthUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.success',
+      event: "login.success",
       ipAddress: details?.ipAddress ?? null,
       userAgent: details?.userAgent ?? null,
       details: { method: `oauth_${provider}` },
@@ -285,16 +324,23 @@ export async function authenticateOAuthUser(
   });
 
   if (user) {
+    if (user.accountType === AccountType.SYSTEM) {
+      throw new AppError("Account not found", 401, "ACCOUNT_NOT_FOUND");
+    }
     if (user.isBlocked) {
-      throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
+      throw new AppError(
+        "Account suspended. Contact support.",
+        403,
+        "ACCOUNT_BLOCKED",
+      );
     }
 
     // Link provider account
-    if (provider === 'google') {
+    if (provider === "google") {
       user.googleId = profile.providerId;
-    } else if (provider === 'github') {
+    } else if (provider === "github") {
       user.githubId = profile.providerId;
-    } else if (provider === 'microsoft') {
+    } else if (provider === "microsoft") {
       user.microsoftId = profile.providerId;
     }
 
@@ -308,10 +354,10 @@ export async function authenticateOAuthUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.success',
+      event: "login.success",
       ipAddress: details?.ipAddress ?? null,
       userAgent: details?.userAgent ?? null,
-      details: { method: `oauth_${provider}`, action: 'linked' },
+      details: { method: `oauth_${provider}`, action: "linked" },
     });
 
     return user;
@@ -319,7 +365,7 @@ export async function authenticateOAuthUser(
 
   // 3. Register a new user (Auto-registration)
   // Generate random, high-entropy password since they log in via OAuth
-  const tempPassword = crypto.randomBytes(32).toString('hex');
+  const tempPassword = crypto.randomBytes(32).toString("hex");
   const passwordHash = await bcrypt.hash(tempPassword, BCRYPT_ROUNDS.PASSWORD);
 
   const newUserDto: Partial<User> = {
@@ -332,11 +378,11 @@ export async function authenticateOAuthUser(
     lastLoginAt: new Date(),
   };
 
-  if (provider === 'google') {
+  if (provider === "google") {
     newUserDto.googleId = profile.providerId;
-  } else if (provider === 'github') {
+  } else if (provider === "github") {
     newUserDto.githubId = profile.providerId;
-  } else if (provider === 'microsoft') {
+  } else if (provider === "microsoft") {
     newUserDto.microsoftId = profile.providerId;
   }
 
@@ -350,7 +396,7 @@ export async function authenticateOAuthUser(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'register.success',
+    event: "register.success",
     ipAddress: details?.ipAddress ?? null,
     userAgent: details?.userAgent ?? null,
     details: { method: `oauth_${provider}` },
@@ -359,7 +405,7 @@ export async function authenticateOAuthUser(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'login.success',
+    event: "login.success",
     ipAddress: details?.ipAddress ?? null,
     userAgent: details?.userAgent ?? null,
     details: { method: `oauth_${provider}` },

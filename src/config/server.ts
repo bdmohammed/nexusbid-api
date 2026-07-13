@@ -34,6 +34,16 @@ async function bootstrap(): Promise<void> {
     await AppDataSource.initialize();
     logger.info('Database connected');
     
+    // Run database seeding if in local/dev environments
+    if (env.NODE_ENV === 'local' || env.NODE_ENV === 'dev') {
+      try {
+        const { runSeeds } = require('../database/seeds/seed');
+        await runSeeds(AppDataSource);
+      } catch (seedErr) {
+        logger.error({ err: seedErr }, 'Database seeding failed');
+      }
+    }
+
     // Initialize real-time notification listener bindings
     const { setupNotificationListeners } = require('../modules/notifications/services/notifications.service');
     setupNotificationListeners();

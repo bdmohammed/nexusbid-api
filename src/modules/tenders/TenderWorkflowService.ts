@@ -1,12 +1,16 @@
-import { AppDataSource } from '../../config/database';
-import { Tender } from '../../entities/Tender';
-import { TenderVersion } from '../../entities/TenderVersion';
-import { TenderReview } from '../../entities/TenderReview';
-import { TenderReviewAssignment } from '../../entities/TenderReviewAssignment';
-import { TenderReviewComment } from '../../entities/TenderReviewComment';
-import { TenderAmendment } from '../../entities/TenderAmendment';
-import { AppError } from '../../core/AppError';
-import { TenderLifecycleStatus, TenderVersionStatus, TenderPublicationStatus } from '../../types/enums';
+import { AppDataSource } from "../../config/database";
+import { Tender } from "../../database/entities/Tender";
+import { TenderVersion } from "../../database/entities/TenderVersion";
+import { TenderReview } from "../../database/entities/TenderReview";
+import { TenderReviewAssignment } from "../../database/entities/TenderReviewAssignment";
+import { TenderReviewComment } from "../../database/entities/TenderReviewComment";
+import { TenderAmendment } from "../../database/entities/TenderAmendment";
+import { AppError } from "../../core/AppError";
+import {
+  TenderLifecycleStatus,
+  TenderVersionStatus,
+  TenderPublicationStatus,
+} from "../../types/enums";
 
 export class TenderWorkflowService {
   /**
@@ -18,8 +22,14 @@ export class TenderWorkflowService {
   ): boolean {
     const allowed: Record<TenderVersionStatus, TenderVersionStatus[]> = {
       [TenderVersionStatus.DRAFT]: [TenderVersionStatus.SUBMITTED],
-      [TenderVersionStatus.SUBMITTED]: [TenderVersionStatus.REVIEW_ASSIGNED, TenderVersionStatus.DRAFT],
-      [TenderVersionStatus.REVIEW_ASSIGNED]: [TenderVersionStatus.UNDER_REVIEW, TenderVersionStatus.DRAFT],
+      [TenderVersionStatus.SUBMITTED]: [
+        TenderVersionStatus.REVIEW_ASSIGNED,
+        TenderVersionStatus.DRAFT,
+      ],
+      [TenderVersionStatus.REVIEW_ASSIGNED]: [
+        TenderVersionStatus.UNDER_REVIEW,
+        TenderVersionStatus.DRAFT,
+      ],
       [TenderVersionStatus.UNDER_REVIEW]: [
         TenderVersionStatus.APPROVED,
         TenderVersionStatus.REJECTED,
@@ -40,15 +50,27 @@ export class TenderWorkflowService {
     current: TenderPublicationStatus,
     next: TenderPublicationStatus,
   ): boolean {
-    const allowed: Record<TenderPublicationStatus, TenderPublicationStatus[]> = {
-      [TenderPublicationStatus.SCHEDULED]: [TenderPublicationStatus.PUBLISHED],
-      [TenderPublicationStatus.PUBLISHED]: [TenderPublicationStatus.OPEN, TenderPublicationStatus.CLOSED],
-      [TenderPublicationStatus.OPEN]: [TenderPublicationStatus.CLOSING, TenderPublicationStatus.CLOSED],
-      [TenderPublicationStatus.CLOSING]: [TenderPublicationStatus.CLOSED],
-      [TenderPublicationStatus.CLOSED]: [TenderPublicationStatus.AWARDED, TenderPublicationStatus.COMPLETED],
-      [TenderPublicationStatus.AWARDED]: [TenderPublicationStatus.COMPLETED],
-      [TenderPublicationStatus.COMPLETED]: [],
-    };
+    const allowed: Record<TenderPublicationStatus, TenderPublicationStatus[]> =
+      {
+        [TenderPublicationStatus.SCHEDULED]: [
+          TenderPublicationStatus.PUBLISHED,
+        ],
+        [TenderPublicationStatus.PUBLISHED]: [
+          TenderPublicationStatus.OPEN,
+          TenderPublicationStatus.CLOSED,
+        ],
+        [TenderPublicationStatus.OPEN]: [
+          TenderPublicationStatus.CLOSING,
+          TenderPublicationStatus.CLOSED,
+        ],
+        [TenderPublicationStatus.CLOSING]: [TenderPublicationStatus.CLOSED],
+        [TenderPublicationStatus.CLOSED]: [
+          TenderPublicationStatus.AWARDED,
+          TenderPublicationStatus.COMPLETED,
+        ],
+        [TenderPublicationStatus.AWARDED]: [TenderPublicationStatus.COMPLETED],
+        [TenderPublicationStatus.COMPLETED]: [],
+      };
 
     return allowed[current]?.includes(next) ?? false;
   }
@@ -58,21 +80,21 @@ export class TenderWorkflowService {
    */
   static compareVersions(v1: TenderVersion, v2: TenderVersion) {
     const fieldsToCompare: (keyof TenderVersion)[] = [
-      'title',
-      'description',
-      'procurementType',
-      'priority',
-      'estimatedBudget',
-      'currency',
-      'department',
-      'formattedAddress',
-      'siteVisitRequired',
-      'openingDate',
-      'closingDate',
-      'emdAmount',
-      'securityDeposit',
-      'paymentTerms',
-      'visibility',
+      "title",
+      "description",
+      "procurementType",
+      "priority",
+      "estimatedBudget",
+      "currency",
+      "department",
+      "formattedAddress",
+      "siteVisitRequired",
+      "openingDate",
+      "closingDate",
+      "emdAmount",
+      "securityDeposit",
+      "paymentTerms",
+      "visibility",
     ];
 
     const added: any = {};

@@ -3,78 +3,83 @@ import { DataSource } from "typeorm";
 import { env } from "./env";
 
 // ─── Entity Imports ───────────────────────────────────────────────────────────
-import { AlertPreference } from "../entities/AlertPreference";
-import { AuditLog } from "../entities/AuditLog";
-import { Category } from "../entities/Category";
-import { DownloadHistory } from "../entities/DownloadHistory";
-import { EmailToken } from "../entities/EmailToken";
-import { FeatureFlag } from "../entities/FeatureFlag";
-import { Notification } from "../entities/Notification";
-import { Plan } from "../entities/Plan";
-import { PurchasedTender } from "../entities/PurchasedTender";
-import { SavedTender } from "../entities/SavedTender";
-import { State } from "../entities/State";
-import { StaticPage } from "../entities/StaticPage";
-import { Subscription } from "../entities/Subscription";
-import { SupportTicket } from "../entities/SupportTicket";
-import { Tender } from "../entities/Tender";
-import { Transaction } from "../entities/Transaction";
-import { User } from "../entities/User";
-import { UserSession } from "../entities/UserSession";
-import { WebhookEvent } from "../entities/WebhookEvent";
-import { PermissionModule } from "../entities/PermissionModule";
-import { Permission } from "../entities/Permission";
-import { Role } from "../entities/Role";
-import { UserRole } from "../entities/UserRole";
-import { RoleVersion } from "../entities/RoleVersion";
-import { RoleVersionPermission } from "../entities/RoleVersionPermission";
-import { RoleReview } from "../entities/RoleReview";
-import { RoleReviewAssignment } from "../entities/RoleReviewAssignment";
-import { RoleReviewComment } from "../entities/RoleReviewComment";
-import { PasswordHistory } from "../entities/PasswordHistory";
-import { UserDevice } from "../entities/UserDevice";
-import { SecurityLog } from "../entities/SecurityLog";
-import { UserNote } from "../entities/UserNote";
-import { TenderVersion } from "../entities/TenderVersion";
-import { TenderDocument } from "../entities/TenderDocument";
-import { TenderReview } from "../entities/TenderReview";
-import { TenderReviewAssignment } from "../entities/TenderReviewAssignment";
-import { TenderReviewComment } from "../entities/TenderReviewComment";
-import { TenderCommittee } from "../entities/TenderCommittee";
-import { TenderParticipant } from "../entities/TenderParticipant";
-import { TenderEvaluation } from "../entities/TenderEvaluation";
-import { TenderWatcher } from "../entities/TenderWatcher";
-import { TenderInvitation } from "../entities/TenderInvitation";
-import { TenderTemplate } from "../entities/TenderTemplate";
-import { TenderQuestion } from "../entities/TenderQuestion";
-import { TenderClarification } from "../entities/TenderClarification";
-import { TenderAmendment } from "../entities/TenderAmendment";
-import { EvaluationTemplate } from "../entities/EvaluationTemplate";
-import { TenderSubmission } from "../entities/TenderSubmission";
-import { PlanVersion } from "../entities/PlanVersion";
-import { FeatureCatalog } from "../entities/FeatureCatalog";
-import { PlanFeature } from "../entities/PlanFeature";
-import { PlanCountryPricing } from "../entities/PlanCountryPricing";
-import { PlanCategoryPricing } from "../entities/PlanCategoryPricing";
-import { Coupon } from "../entities/Coupon";
-import { PlanReview } from "../entities/PlanReview";
-import { PlanReviewComment } from "../entities/PlanReviewComment";
-import { SubscriptionMigration } from "../entities/SubscriptionMigration";
-import { AnalyticsEvent } from "../entities/AnalyticsEvent";
-import { AnalyticsMetric } from "../entities/AnalyticsMetric";
-import { UserDashboardLayout } from "../entities/UserDashboardLayout";
-import { ExportJob } from "../entities/ExportJob";
-import { AnalyticsAlert } from "../entities/AnalyticsAlert";
-import { ScheduledReport } from "../entities/ScheduledReport";
-import { TenderDailyMetrics } from "../entities/TenderDailyMetrics";
-import { UserDailyMetrics } from "../entities/UserDailyMetrics";
-import { SubscriptionDailyMetrics } from "../entities/SubscriptionDailyMetrics";
-import { TrafficDailyMetrics } from "../entities/TrafficDailyMetrics";
-import { AuditRetentionPolicy } from "../entities/AuditRetentionPolicy";
+import { AlertPreference } from "../database/entities/AlertPreference";
+import { AuditLog } from "../database/entities/AuditLog";
+import { Category } from "../database/entities/Category";
+import { DownloadHistory } from "../database/entities/DownloadHistory";
+import { EmailToken } from "../database/entities/EmailToken";
+import { FeatureFlag } from "../database/entities/FeatureFlag";
+import { Notification } from "../database/entities/Notification";
+import { Plan } from "../database/entities/Plan";
+import { PurchasedTender } from "../database/entities/PurchasedTender";
+import { SavedTender } from "../database/entities/SavedTender";
+import { State } from "../database/entities/State";
+import { StaticPage } from "../database/entities/StaticPage";
+import { Subscription } from "../database/entities/Subscription";
+import { SupportTicket } from "../database/entities/SupportTicket";
+import { Tender } from "../database/entities/Tender";
+import { Transaction } from "../database/entities/Transaction";
+import { User } from "../database/entities/User";
+import { UserSession } from "../database/entities/UserSession";
+import { WebhookEvent } from "../database/entities/WebhookEvent";
+import { PermissionModule } from "../database/entities/PermissionModule";
+import { Permission } from "../database/entities/Permission";
+import { Role } from "../database/entities/Role";
+import { UserRole } from "../database/entities/UserRole";
+import { RoleVersion } from "../database/entities/RoleVersion";
+import { RoleVersionPermission } from "../database/entities/RoleVersionPermission";
+import { RoleReview } from "../database/entities/RoleReview";
+import { RoleReviewAssignment } from "../database/entities/RoleReviewAssignment";
+import { RoleReviewComment } from "../database/entities/RoleReviewComment";
+import { PasswordHistory } from "../database/entities/PasswordHistory";
+import { UserDevice } from "../database/entities/UserDevice";
+import { SecurityLog } from "../database/entities/SecurityLog";
+import { UserNote } from "../database/entities/UserNote";
+import { TenderVersion } from "../database/entities/TenderVersion";
+import { TenderDocument } from "../database/entities/TenderDocument";
+import { TenderReview } from "../database/entities/TenderReview";
+import { TenderReviewAssignment } from "../database/entities/TenderReviewAssignment";
+import { TenderReviewComment } from "../database/entities/TenderReviewComment";
+import { TenderCommittee } from "../database/entities/TenderCommittee";
+import { TenderParticipant } from "../database/entities/TenderParticipant";
+import { TenderEvaluation } from "../database/entities/TenderEvaluation";
+import { TenderWatcher } from "../database/entities/TenderWatcher";
+import { TenderInvitation } from "../database/entities/TenderInvitation";
+import { TenderTemplate } from "../database/entities/TenderTemplate";
+import { TenderQuestion } from "../database/entities/TenderQuestion";
+import { TenderClarification } from "../database/entities/TenderClarification";
+import { TenderAmendment } from "../database/entities/TenderAmendment";
+import { EvaluationTemplate } from "../database/entities/EvaluationTemplate";
+import { TenderSubmission } from "../database/entities/TenderSubmission";
+import { PlanVersion } from "../database/entities/PlanVersion";
+import { FeatureCatalog } from "../database/entities/FeatureCatalog";
+import { PlanFeature } from "../database/entities/PlanFeature";
+import { PlanCountryPricing } from "../database/entities/PlanCountryPricing";
+import { PlanCategoryPricing } from "../database/entities/PlanCategoryPricing";
+import { Coupon } from "../database/entities/Coupon";
+import { PlanReview } from "../database/entities/PlanReview";
+import { PlanReviewComment } from "../database/entities/PlanReviewComment";
+import { SubscriptionMigration } from "../database/entities/SubscriptionMigration";
+import { AnalyticsEvent } from "../database/entities/AnalyticsEvent";
+import { AnalyticsMetric } from "../database/entities/AnalyticsMetric";
+import { UserDashboardLayout } from "../database/entities/UserDashboardLayout";
+import { ExportJob } from "../database/entities/ExportJob";
+import { AnalyticsAlert } from "../database/entities/AnalyticsAlert";
+import { ScheduledReport } from "../database/entities/ScheduledReport";
+import { TenderDailyMetrics } from "../database/entities/TenderDailyMetrics";
+import { UserDailyMetrics } from "../database/entities/UserDailyMetrics";
+import { SubscriptionDailyMetrics } from "../database/entities/SubscriptionDailyMetrics";
+import { TrafficDailyMetrics } from "../database/entities/TrafficDailyMetrics";
+import { AuditRetentionPolicy } from "../database/entities/AuditRetentionPolicy";
 import { SnakeNamingStrategy } from "./namingStrategy";
 import { TypeOrmPinoLogger } from "./databaseLogger";
-import { NotificationRecipient } from "../entities/NotificationRecipient";
-import { NotificationAction } from "../entities/NotificationAction";
+import { NotificationRecipient } from "../database/entities/NotificationRecipient";
+import { NotificationAction } from "../database/entities/NotificationAction";
+import { CategoryVersion } from "../database/entities/CategoryVersion";
+import { CategoryReview } from "../database/entities/CategoryReview";
+import { CategoryReviewAssignment } from "../database/entities/CategoryReviewAssignment";
+import { CategoryReviewComment } from "../database/entities/CategoryReviewComment";
+import { SeedHistory } from "../database/entities/seed-history.entity";
 
 export const AppDataSource = new DataSource({
   type: "postgres",
@@ -101,6 +106,10 @@ export const AppDataSource = new DataSource({
     AlertPreference,
     AuditLog,
     Category,
+    CategoryVersion,
+    CategoryReview,
+    CategoryReviewAssignment,
+    CategoryReviewComment,
     DownloadHistory,
     EmailToken,
     FeatureFlag,
@@ -168,14 +177,15 @@ export const AppDataSource = new DataSource({
     TrafficDailyMetrics,
     NotificationRecipient,
     NotificationAction,
+    SeedHistory,
   ],
 
   migrations: [
     // Production: compiled JS files
     // Development (ts-node): TypeScript source files
     process.env["NODE_ENV"] === "prod"
-      ? "dist/migrations/*.js"
-      : "src/migrations/*.ts",
+      ? "dist/database/migrations/*.js"
+      : "src/database/migrations/*.ts",
   ],
 
   /**

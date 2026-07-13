@@ -72,58 +72,7 @@ export const AnalyticsQueryDto = z.object({
 });
 export type AnalyticsQueryDto = z.infer<typeof AnalyticsQueryDto>;
 
-export const CreateCategoryDto = z.object({
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits').optional(),
-  name: z.string().min(1).max(200),
-  slug: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).nullable().optional(),
-  isActive: z.boolean().optional(),
-});
-export type CreateCategoryDto = z.infer<typeof CreateCategoryDto>;
 
-export const UpdateCategoryDto = z.object({
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits').optional(),
-  name: z.string().min(1).max(200).optional(),
-  slug: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).nullable().optional(),
-  isActive: z.boolean().optional(),
-});
-export type UpdateCategoryDto = z.infer<typeof UpdateCategoryDto>;
-
-export const BatchCategoryItemDto = z.object({
-  action: z.enum(['upsert', 'delete']).default('upsert'),
-  code: z.string().regex(/^\d{3}$/, 'Category code must be exactly 3 digits'),
-  name: z.string().min(1).max(200).optional(),
-  slug: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).nullable().optional(),
-  isActive: z.boolean().optional(),
-}).refine(data => {
-  if (data.action === 'upsert' && !data.name) {
-    return false;
-  }
-  return true;
-}, {
-  message: 'Name is required for upsert operation',
-  path: ['name'],
-});
-export type BatchCategoryItemDto = z.infer<typeof BatchCategoryItemDto>;
-
-export const BatchCategoryDto = z.array(BatchCategoryItemDto);
-export type BatchCategoryDto = z.infer<typeof BatchCategoryDto>;
-
-export const CategoryQueryDto = z.object({
-  search: z.string().optional(),
-  code: z.string().optional(),
-  slug: z.string().optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
-  createdBy: z.string().uuid().optional(),
-  dateFrom: z.string().date().optional(),
-  dateTo: z.string().date().optional(),
-  unusedOnly: z.preprocess((val) => val === 'true' || val === true, z.boolean()).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
-export type CategoryQueryDto = z.infer<typeof CategoryQueryDto>;
 
 export const CreateStateDto = z.object({
   code: z.string().min(1).max(20).regex(/^[A-Za-z0-9-]+$/, 'State code must be alphanumeric or contain hyphens'),

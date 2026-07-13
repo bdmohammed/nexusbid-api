@@ -1,11 +1,11 @@
-import crypto from 'crypto';
-import { IsNull, MoreThan } from 'typeorm';
-import { AppDataSource } from '../config/database';
-import { EmailToken } from '../entities/EmailToken';
-import { User } from '../entities/User';
-import { AppError } from '../core/AppError';
-import { EMAIL_TOKEN_TTL } from '../core/constants';
-import { EmailTokenType } from '../types/enums';
+import crypto from "crypto";
+import { IsNull, MoreThan } from "typeorm";
+import { AppDataSource } from "../config/database";
+import { EmailToken } from "../database/entities/EmailToken";
+import { User } from "../database/entities/User";
+import { AppError } from "../core/AppError";
+import { EMAIL_TOKEN_TTL } from "../core/constants";
+import { EmailTokenType } from "../types/enums";
 
 const tokenRepo = AppDataSource.getRepository(EmailToken);
 
@@ -21,11 +21,12 @@ export async function createEmailToken(
   userId: string,
   type: EmailTokenType,
 ): Promise<string> {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
   const ttl =
-    type === EmailTokenType.PASSWORD_RESET || type === EmailTokenType.SYSTEM_OWNER_APPROVAL
+    type === EmailTokenType.PASSWORD_RESET ||
+    type === EmailTokenType.SYSTEM_OWNER_APPROVAL
       ? EMAIL_TOKEN_TTL.PASSWORD_RESET
       : EMAIL_TOKEN_TTL.VERIFICATION;
 
@@ -50,7 +51,7 @@ export async function verifyAndConsumeToken(
   rawToken: string,
   type: EmailTokenType,
 ): Promise<string> {
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
   // Find the exact non-expired, non-used token of this type matching the hash
   const matched = await tokenRepo.findOne({
@@ -63,11 +64,7 @@ export async function verifyAndConsumeToken(
   });
 
   if (!matched) {
-    throw new AppError(
-      'Invalid or expired token',
-      400,
-      'INVALID_TOKEN',
-    );
+    throw new AppError("Invalid or expired token", 400, "INVALID_TOKEN");
   }
 
   // Mark as used
@@ -99,7 +96,7 @@ export async function getValidTokenDetails(
   rawToken: string,
   type: EmailTokenType,
 ): Promise<EmailToken & { user: User }> {
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
   const matched = await tokenRepo.findOne({
     where: {
       tokenHash,
@@ -107,14 +104,12 @@ export async function getValidTokenDetails(
       usedAt: IsNull() as unknown as Date,
       expiresAt: MoreThan(new Date()),
     },
-    relations: ['user'],
+    relations: ["user"],
   });
 
   if (!matched || !matched.user) {
-    throw new AppError('Invalid or expired token', 400, 'INVALID_TOKEN');
+    throw new AppError("Invalid or expired token", 400, "INVALID_TOKEN");
   }
 
   return matched as EmailToken & { user: User };
 }
-
-

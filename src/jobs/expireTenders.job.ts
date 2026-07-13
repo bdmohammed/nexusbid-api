@@ -1,7 +1,7 @@
-import { AppDataSource } from '../config/database';
-import { Tender } from '../entities/Tender';
-import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
-import { logger } from '../config/logger';
+import { AppDataSource } from "../config/database";
+import { Tender } from "../database/entities/Tender";
+import { TenderLifecycleStatus, TenderPublicationStatus } from "../types/enums";
+import { logger } from "../config/logger";
 
 const tenderRepo = AppDataSource.getRepository(Tender);
 
@@ -11,13 +11,17 @@ const tenderRepo = AppDataSource.getRepository(Tender);
  */
 export async function expireTendersJob(): Promise<void> {
   const passedTenders = await tenderRepo
-    .createQueryBuilder('tender')
-    .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
-    .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
-    .andWhere('tender.publicationStatus IN (:...pubStatuses)', {
-      pubStatuses: [TenderPublicationStatus.PUBLISHED, TenderPublicationStatus.OPEN, TenderPublicationStatus.CLOSING],
+    .createQueryBuilder("tender")
+    .leftJoinAndSelect("tender.activeVersion", "activeVersion")
+    .where("tender.status = :status", { status: TenderLifecycleStatus.ACTIVE })
+    .andWhere("tender.publicationStatus IN (:...pubStatuses)", {
+      pubStatuses: [
+        TenderPublicationStatus.PUBLISHED,
+        TenderPublicationStatus.OPEN,
+        TenderPublicationStatus.CLOSING,
+      ],
     })
-    .andWhere('activeVersion.closingDate < :now', { now: new Date() })
+    .andWhere("activeVersion.closingDate < :now", { now: new Date() })
     .getMany();
 
   for (const t of passedTenders) {
@@ -25,5 +29,8 @@ export async function expireTendersJob(): Promise<void> {
     await tenderRepo.save(t);
   }
 
-  logger.info({ affected: passedTenders.length }, 'Expire/close tenders job complete');
+  logger.info(
+    { affected: passedTenders.length },
+    "Expire/close tenders job complete",
+  );
 }

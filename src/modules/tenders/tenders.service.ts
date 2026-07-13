@@ -1,27 +1,33 @@
-import { AppDataSource } from '../../config/database';
-import { Tender } from '../../entities/Tender';
-import { TenderVersion } from '../../entities/TenderVersion';
-import { TenderDocument } from '../../entities/TenderDocument';
-import { TenderReview } from '../../entities/TenderReview';
-import { TenderReviewAssignment } from '../../entities/TenderReviewAssignment';
-import { TenderReviewComment } from '../../entities/TenderReviewComment';
-import { TenderCommittee } from '../../entities/TenderCommittee';
-import { TenderParticipant } from '../../entities/TenderParticipant';
-import { TenderEvaluation } from '../../entities/TenderEvaluation';
-import { TenderWatcher } from '../../entities/TenderWatcher';
-import { TenderInvitation } from '../../entities/TenderInvitation';
-import { TenderTemplate } from '../../entities/TenderTemplate';
-import { TenderQuestion } from '../../entities/TenderQuestion';
-import { TenderClarification } from '../../entities/TenderClarification';
-import { TenderAmendment } from '../../entities/TenderAmendment';
-import { EvaluationTemplate } from '../../entities/EvaluationTemplate';
-import { DownloadHistory } from '../../entities/DownloadHistory';
-import { AppError } from '../../core/AppError';
-import { TenderLifecycleStatus, TenderVersionStatus, TenderPublicationStatus } from '../../types/enums';
-import { hasAccessToTender } from '../../utils/access';
-import { generateDownloadUrl } from '../../services/s3.service';
-import { logger } from '../../config/logger';
-import { domainEvents, TENDER_EVENTS } from '../../utils/domainEvents';
+import { AppDataSource } from "../../config/database";
+import { Tender } from "../../database/entities/Tender";
+import { Category } from "../../database/entities/Category";
+import { TenderVersion } from "../../database/entities/TenderVersion";
+import { TenderDocument } from "../../database/entities/TenderDocument";
+import { TenderReview } from "../../database/entities/TenderReview";
+import { TenderReviewAssignment } from "../../database/entities/TenderReviewAssignment";
+import { TenderReviewComment } from "../../database/entities/TenderReviewComment";
+import { TenderCommittee } from "../../database/entities/TenderCommittee";
+import { TenderParticipant } from "../../database/entities/TenderParticipant";
+import { TenderEvaluation } from "../../database/entities/TenderEvaluation";
+import { TenderWatcher } from "../../database/entities/TenderWatcher";
+import { TenderInvitation } from "../../database/entities/TenderInvitation";
+import { TenderTemplate } from "../../database/entities/TenderTemplate";
+import { TenderQuestion } from "../../database/entities/TenderQuestion";
+import { TenderClarification } from "../../database/entities/TenderClarification";
+import { TenderAmendment } from "../../database/entities/TenderAmendment";
+import { EvaluationTemplate } from "../../database/entities/EvaluationTemplate";
+import { DownloadHistory } from "../../database/entities/DownloadHistory";
+import { AppError } from "../../core/AppError";
+import {
+  TenderLifecycleStatus,
+  TenderVersionStatus,
+  TenderPublicationStatus,
+  CategoryStatus,
+} from "../../types/enums";
+import { hasAccessToTender } from "../../utils/access";
+import { generateDownloadUrl } from "../../services/s3.service";
+import { logger } from "../../config/logger";
+import { domainEvents, TENDER_EVENTS } from "../../utils/domainEvents";
 import type {
   CreateTenderDto,
   UpdateTenderDto,
@@ -38,8 +44,8 @@ import type {
   TenderWatcherDto,
   TenderInvitationDto,
   TenderTemplateDto,
-} from './tenders.dto';
-import type { Request } from 'express';
+} from "./tenders.dto";
+import type { Request } from "express";
 
 const tenderRepo = AppDataSource.getRepository(Tender);
 const versionRepo = AppDataSource.getRepository(TenderVersion);
@@ -70,53 +76,102 @@ export async function listTenders(params: {
   budgetMax?: number;
   page?: number;
   limit?: number;
-  sort?: 'createdAt' | 'closingDate' | 'estimatedBudget';
-  order?: 'ASC' | 'DESC';
+  sort?: "createdAt" | "closingDate" | "estimatedBudget";
+  order?: "ASC" | "DESC";
 }): Promise<{ tenders: any[]; total: number; page: number; limit: number }> {
   const page = params.page ?? 1;
   const limit = params.limit ?? 20;
 
-  const qb = tenderRepo.createQueryBuilder('tender')
-    .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
-    .leftJoinAndSelect('activeVersion.category', 'category')
-    .leftJoinAndSelect('activeVersion.state', 'state')
-    .where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE })
-    .andWhere('tender.publicationStatus IN (:...pubStatuses)', {
-      pubStatuses: [TenderPublicationStatus.PUBLISHED, TenderPublicationStatus.OPEN, TenderPublicationStatus.CLOSING],
+  const qb = tenderRepo
+    .createQueryBuilder("tender")
+    .leftJoinAndSelect("tender.activeVersion", "activeVersion")
+    .leftJoinAndSelect("activeVersion.category", "category")
+    .leftJoinAndSelect("activeVersion.state", "state")
+    .where("tender.status = :status", { status: TenderLifecycleStatus.ACTIVE })
+    .andWhere("tender.publicationStatus IN (:...pubStatuses)", {
+      pubStatuses: [
+        TenderPublicationStatus.PUBLISHED,
+        TenderPublicationStatus.OPEN,
+        TenderPublicationStatus.CLOSING,
+      ],
     });
 
   if (params.q) {
-    qb.andWhere('(activeVersion.title ILIKE :q OR activeVersion.description ILIKE :q OR tender.referenceNo ILIKE :q)', {
-      q: `%${params.q}%`,
-    });
+    qb.andWhere(
+      "(activeVersion.title ILIKE :q OR activeVersion.description ILIKE :q OR tender.referenceNo ILIKE :q)",
+      {
+        q: `%${params.q}%`,
+      },
+    );
   }
 
   if (params.categoryId) {
-    qb.andWhere('activeVersion.categoryId = :categoryId', { categoryId: params.categoryId });
+    const chosenCategory = await AppDataSource.getRepository(Category).findOne({
+      where: { id: params.categoryId },
+    });
+    if (chosenCategory) {
+      const subCategories = await AppDataSource.getRepository(Category).find({
+        where: { status: CategoryStatus.ACTIVE },
+        select: ["id", "path"],
+      });
+      const matchingIds = subCategories
+        .filter(
+          (c) =>
+            c.path === chosenCategory.path ||
+            (c.path && c.path.startsWith(`${chosenCategory.path}/`)),
+        )
+        .map((c) => c.id);
+
+      if (matchingIds.length > 0) {
+        qb.andWhere("activeVersion.categoryId IN (:...categoryIds)", {
+          categoryIds: matchingIds,
+        });
+      } else {
+        qb.andWhere("activeVersion.categoryId = :categoryId", {
+          categoryId: params.categoryId,
+        });
+      }
+    } else {
+      qb.andWhere("activeVersion.categoryId = :categoryId", {
+        categoryId: params.categoryId,
+      });
+    }
   }
 
   if (params.stateId) {
-    qb.andWhere('activeVersion.stateId = :stateId', { stateId: params.stateId });
+    qb.andWhere("activeVersion.stateId = :stateId", {
+      stateId: params.stateId,
+    });
   }
 
   if (params.priority) {
-    qb.andWhere('activeVersion.priority = :priority', { priority: params.priority });
+    qb.andWhere("activeVersion.priority = :priority", {
+      priority: params.priority,
+    });
   }
 
   if (params.procurementType) {
-    qb.andWhere('activeVersion.procurementType = :procurementType', { procurementType: params.procurementType });
+    qb.andWhere("activeVersion.procurementType = :procurementType", {
+      procurementType: params.procurementType,
+    });
   }
 
   if (params.budgetMin) {
-    qb.andWhere('activeVersion.estimatedBudget >= :budgetMin', { budgetMin: params.budgetMin });
+    qb.andWhere("activeVersion.estimatedBudget >= :budgetMin", {
+      budgetMin: params.budgetMin,
+    });
   }
 
   if (params.budgetMax) {
-    qb.andWhere('activeVersion.estimatedBudget <= :budgetMax', { budgetMax: params.budgetMax });
+    qb.andWhere("activeVersion.estimatedBudget <= :budgetMax", {
+      budgetMax: params.budgetMax,
+    });
   }
 
-  const sortField = params.sort ? `activeVersion.${params.sort}` : 'tender.createdAt';
-  const sortOrder = params.order ?? 'DESC';
+  const sortField = params.sort
+    ? `activeVersion.${params.sort}`
+    : "tender.createdAt";
+  const sortOrder = params.order ?? "DESC";
   qb.orderBy(sortField, sortOrder);
 
   qb.skip((page - 1) * limit).take(limit);
@@ -127,12 +182,12 @@ export async function listTenders(params: {
   const mapped = tenders.map((t) => ({
     id: t.id,
     referenceNumber: t.referenceNo,
-    title: t.activeVersion?.title ?? 'No Title Available',
-    description: t.activeVersion?.description ?? '',
-    procurementType: t.activeVersion?.procurementType ?? '',
-    priority: t.activeVersion?.priority ?? 'Medium',
+    title: t.activeVersion?.title ?? "No Title Available",
+    description: t.activeVersion?.description ?? "",
+    procurementType: t.activeVersion?.procurementType ?? "",
+    priority: t.activeVersion?.priority ?? "Medium",
     budgetMax: t.activeVersion?.estimatedBudget ?? 0,
-    currency: t.activeVersion?.currency ?? 'USD',
+    currency: t.activeVersion?.currency ?? "USD",
     openingDate: t.activeVersion?.openingDate ?? null,
     closingDate: t.activeVersion?.closingDate ?? null,
     status: t.publicationStatus,
@@ -149,26 +204,30 @@ export async function getTenderBySlug(
   slug: string,
   userId?: string,
 ): Promise<{ tender: any; hasAccess: boolean }> {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      slug,
+    );
 
-  const qb = tenderRepo.createQueryBuilder('tender')
-    .leftJoinAndSelect('tender.activeVersion', 'activeVersion')
-    .leftJoinAndSelect('activeVersion.category', 'category')
-    .leftJoinAndSelect('activeVersion.state', 'state')
-    .leftJoinAndSelect('activeVersion.documents', 'documents')
-    .leftJoinAndSelect('tender.clarifications', 'clarifications')
-    .leftJoinAndSelect('tender.amendments', 'amendments');
+  const qb = tenderRepo
+    .createQueryBuilder("tender")
+    .leftJoinAndSelect("tender.activeVersion", "activeVersion")
+    .leftJoinAndSelect("activeVersion.category", "category")
+    .leftJoinAndSelect("activeVersion.state", "state")
+    .leftJoinAndSelect("activeVersion.documents", "documents")
+    .leftJoinAndSelect("tender.clarifications", "clarifications")
+    .leftJoinAndSelect("tender.amendments", "amendments");
 
   if (isUuid) {
-    qb.where('tender.id = :slug', { slug });
+    qb.where("tender.id = :slug", { slug });
   } else {
-    qb.where('tender.referenceNo = :slug', { slug });
+    qb.where("tender.referenceNo = :slug", { slug });
   }
 
   const tender = await qb.getOne();
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError("Tender not found", 404, "NOT_FOUND");
   }
 
   let hasAccess = false;
@@ -181,43 +240,45 @@ export async function getTenderBySlug(
     referenceNumber: tender.referenceNo,
     status: tender.status,
     publicationStatus: tender.publicationStatus,
-    title: tender.activeVersion?.title ?? '',
-    description: tender.activeVersion?.description ?? '',
-    procurementType: tender.activeVersion?.procurementType ?? '',
-    priority: tender.activeVersion?.priority ?? 'Medium',
+    title: tender.activeVersion?.title ?? "",
+    description: tender.activeVersion?.description ?? "",
+    procurementType: tender.activeVersion?.procurementType ?? "",
+    priority: tender.activeVersion?.priority ?? "Medium",
     budgetMax: tender.activeVersion?.estimatedBudget ?? 0,
-    currency: tender.activeVersion?.currency ?? 'USD',
-    department: tender.activeVersion?.department ?? '',
-    formattedAddress: tender.activeVersion?.formattedAddress ?? '',
+    currency: tender.activeVersion?.currency ?? "USD",
+    department: tender.activeVersion?.department ?? "",
+    formattedAddress: tender.activeVersion?.formattedAddress ?? "",
     siteVisitRequired: tender.activeVersion?.siteVisitRequired ?? false,
     siteVisitDate: tender.activeVersion?.siteVisitDate ?? null,
-    siteVisitInstructions: tender.activeVersion?.siteVisitInstructions ?? '',
+    siteVisitInstructions: tender.activeVersion?.siteVisitInstructions ?? "",
     contactPerson: hasAccess ? tender.activeVersion?.contactPerson : null,
     contactEmail: hasAccess ? tender.activeVersion?.contactEmail : null,
     contactPhone: hasAccess ? tender.activeVersion?.contactPhone : null,
     openingDate: tender.activeVersion?.openingDate ?? null,
     closingDate: tender.activeVersion?.closingDate ?? null,
-    projectDuration: tender.activeVersion?.projectDuration ?? '',
+    projectDuration: tender.activeVersion?.projectDuration ?? "",
     bidValidity: tender.activeVersion?.bidValidity ?? 0,
     emdAmount: tender.activeVersion?.emdAmount ?? 0,
     securityDeposit: tender.activeVersion?.securityDeposit ?? 0,
-    paymentTerms: tender.activeVersion?.paymentTerms ?? '',
-    evaluationMethod: tender.activeVersion?.evaluationMethod ?? '',
-    submissionMethod: tender.activeVersion?.submissionMethod ?? '',
-    contractType: tender.activeVersion?.contractType ?? '',
-    procurementMethod: tender.activeVersion?.procurementMethod ?? '',
-    eligibility: tender.activeVersion?.eligibilityCriteria ?? '',
-    specialConditions: tender.activeVersion?.specialConditions ?? '',
+    paymentTerms: tender.activeVersion?.paymentTerms ?? "",
+    evaluationMethod: tender.activeVersion?.evaluationMethod ?? "",
+    submissionMethod: tender.activeVersion?.submissionMethod ?? "",
+    contractType: tender.activeVersion?.contractType ?? "",
+    procurementMethod: tender.activeVersion?.procurementMethod ?? "",
+    eligibility: tender.activeVersion?.eligibilityCriteria ?? "",
+    specialConditions: tender.activeVersion?.specialConditions ?? "",
     category: tender.activeVersion?.category ?? null,
     state: tender.activeVersion?.state ?? null,
-    documents: (tender.activeVersion?.documents ?? []).filter((d: any) => d.isPublic || hasAccess).map((d) => ({
-      id: d.id,
-      documentType: d.documentType,
-      originalName: d.documentOriginalName,
-      fileSize: d.fileSize,
-      virusScanStatus: d.virusScanStatus,
-      uploadedAt: d.uploadedAt,
-    })),
+    documents: (tender.activeVersion?.documents ?? [])
+      .filter((d: any) => d.isPublic || hasAccess)
+      .map((d) => ({
+        id: d.id,
+        documentType: d.documentType,
+        originalName: d.documentOriginalName,
+        fileSize: d.fileSize,
+        virusScanStatus: d.virusScanStatus,
+        uploadedAt: d.uploadedAt,
+      })),
     clarifications: tender.clarifications,
     amendments: tender.amendments,
   };
@@ -234,21 +295,28 @@ export async function getDownloadUrl(
 ): Promise<string> {
   const doc = await documentRepo.findOne({
     where: { id: documentId },
-    relations: ['tenderVersion', 'tenderVersion.tender'],
+    relations: ["tenderVersion", "tenderVersion.tender"],
   });
 
   if (!doc) {
-    throw new AppError('Document not found', 404, 'NOT_FOUND');
+    throw new AppError("Document not found", 404, "NOT_FOUND");
   }
 
   const tenderId = doc.tenderVersion.tenderId;
 
   const allowed = await hasAccessToTender(userId, tenderId);
   if (!allowed && !doc.isPublic) {
-    throw new AppError('Access denied: Active subscription or purchase required', 403, 'ACCESS_DENIED');
+    throw new AppError(
+      "Access denied: Active subscription or purchase required",
+      403,
+      "ACCESS_DENIED",
+    );
   }
 
-  const url = await generateDownloadUrl(doc.documentS3Key, doc.documentOriginalName);
+  const url = await generateDownloadUrl(
+    doc.documentS3Key,
+    doc.documentOriginalName,
+  );
 
   // Increment download counter
   doc.downloadCount += 1;
@@ -256,15 +324,48 @@ export async function getDownloadUrl(
 
   // Log download history (non-blocking)
   setImmediate(() => {
-    downloadRepo.save({
-      userId,
-      tenderId,
-      fileName: doc.documentOriginalName,
-      ipAddress: req.ip ?? null,
-    }).catch(() => {/* silent */ });
+    downloadRepo
+      .save({
+        userId,
+        tenderId,
+        fileName: doc.documentOriginalName,
+        ipAddress: req.ip ?? null,
+      })
+      .catch(() => {
+        /* silent */
+      });
   });
 
   return url;
+}
+
+// Helper to validate category of a tender (must exist, be active, and be a leaf node)
+async function validateTenderCategory(categoryId?: string): Promise<void> {
+  if (!categoryId) return;
+  const cat = await AppDataSource.getRepository(Category).findOne({
+    where: { id: categoryId },
+  });
+  if (!cat) {
+    throw new AppError(
+      "Selected category not found",
+      404,
+      "CATEGORY_NOT_FOUND",
+    );
+  }
+  if (cat.status !== CategoryStatus.ACTIVE) {
+    throw new AppError(
+      "Selected category is not active",
+      400,
+      "CATEGORY_INACTIVE",
+    );
+  }
+  if (cat.activeChildren > 0) {
+    throw new AppError(
+      "Tenders can only be assigned to leaf-node categories. This category contains subcategories.",
+      400,
+      "CATEGORY_NOT_LEAF",
+    );
+  }
 }
 
 // ─── Admin: Create Tender ─────────────────────────────────────────────────────
@@ -273,9 +374,14 @@ export async function createTender(
   dto: CreateTenderDto,
   createdById: string,
 ): Promise<Tender> {
+  if (dto.categoryId) {
+    await validateTenderCategory(dto.categoryId);
+  }
   // Generate sequence reference number
-  const [{ nextval }] = await AppDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
-  const referenceNo = `TDR-${new Date().getFullYear()}-${String(nextval).padStart(6, '0')}`;
+  const [{ nextval }] = await AppDataSource.query(
+    "SELECT nextval('tender_ref_seq') as nextval",
+  );
+  const referenceNo = `TDR-${new Date().getFullYear()}-${String(nextval).padStart(6, "0")}`;
 
   const tender = tenderRepo.create({
     referenceNo,
@@ -309,23 +415,30 @@ export async function updateTender(
   dto: UpdateTenderDto,
   createdById: string,
 ): Promise<Tender> {
+  if (dto.categoryId) {
+    await validateTenderCategory(dto.categoryId);
+  }
   const tender = await tenderRepo.findOne({
     where: { id },
-    relations: ['activeVersion'],
+    relations: ["activeVersion"],
   });
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError("Tender not found", 404, "NOT_FOUND");
   }
 
   let active = tender.activeVersion;
   if (!active) {
-    throw new AppError('No active version found', 404, 'NO_ACTIVE_VERSION');
+    throw new AppError("No active version found", 404, "NO_ACTIVE_VERSION");
   }
 
   // Concurrency Check (Optimistic Locking)
   if (dto.dbVersion !== undefined && active.dbVersion !== dto.dbVersion) {
-    throw new AppError('Conflict: Tender was modified by another user', 409, 'CONCURRENCY_CONFLICT');
+    throw new AppError(
+      "Conflict: Tender was modified by another user",
+      409,
+      "CONCURRENCY_CONFLICT",
+    );
   }
 
   // If the active version is not in DRAFT mode, we must spawn a new version draft
@@ -344,7 +457,9 @@ export async function updateTender(
     const savedVersion = await versionRepo.save(newVersion);
 
     // Copy documents to new version
-    const docs = await documentRepo.find({ where: { tenderVersionId: active.id } });
+    const docs = await documentRepo.find({
+      where: { tenderVersionId: active.id },
+    });
     for (const d of docs) {
       const copiedDoc = documentRepo.create({
         ...d,
@@ -376,11 +491,11 @@ export async function updateTenderStatus(
 ): Promise<Tender> {
   const tender = await tenderRepo.findOne({
     where: { id },
-    relations: ['activeVersion'],
+    relations: ["activeVersion"],
   });
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError("Tender not found", 404, "NOT_FOUND");
   }
 
   if (dto.status && tender.activeVersion) {
@@ -396,9 +511,15 @@ export async function updateTenderStatus(
 
   // Dispatch decoupled domain events
   if (dto.status === TenderVersionStatus.SUBMITTED) {
-    domainEvents.dispatch(TENDER_EVENTS.SUBMITTED, { tender: savedTender, actorId });
+    domainEvents.dispatch(TENDER_EVENTS.SUBMITTED, {
+      tender: savedTender,
+      actorId,
+    });
   } else if (dto.status === TenderVersionStatus.APPROVED) {
-    domainEvents.dispatch(TENDER_EVENTS.APPROVED, { tender: savedTender, actorId });
+    domainEvents.dispatch(TENDER_EVENTS.APPROVED, {
+      tender: savedTender,
+      actorId,
+    });
   }
 
   return savedTender;
@@ -408,14 +529,19 @@ export async function updateTenderStatus(
 
 export async function getTenderStatistics(): Promise<any> {
   const totalTenders = await tenderRepo.count();
-  const draftCount = await versionRepo.count({ where: { status: TenderVersionStatus.DRAFT } });
-  const reviewCount = await versionRepo.count({ where: { status: TenderVersionStatus.UNDER_REVIEW } });
+  const draftCount = await versionRepo.count({
+    where: { status: TenderVersionStatus.DRAFT },
+  });
+  const reviewCount = await versionRepo.count({
+    where: { status: TenderVersionStatus.UNDER_REVIEW },
+  });
   const publishedCount = await tenderRepo.count({
     where: { publicationStatus: TenderPublicationStatus.PUBLISHED },
   });
 
-  const sumBudget = await versionRepo.createQueryBuilder('tv')
-    .select('SUM(tv.estimated_budget)', 'sum')
+  const sumBudget = await versionRepo
+    .createQueryBuilder("tv")
+    .select("SUM(tv.estimated_budget)", "sum")
     .getRawOne();
 
   const totalParticipants = await participantRepo.count();
@@ -425,7 +551,7 @@ export async function getTenderStatistics(): Promise<any> {
     draftCount,
     reviewCount,
     publishedCount,
-    totalBudget: parseInt(sumBudget?.sum || '0', 10),
+    totalBudget: parseInt(sumBudget?.sum || "0", 10),
     totalParticipants,
   };
 }
@@ -439,11 +565,11 @@ export async function registerDocument(
 ): Promise<TenderDocument> {
   const tender = await tenderRepo.findOne({
     where: { id: tenderId },
-    relations: ['activeVersion'],
+    relations: ["activeVersion"],
   });
 
   if (!tender || !tender.activeVersion) {
-    throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
+    throw new AppError("Tender active version not found", 404, "NOT_FOUND");
   }
 
   const doc = documentRepo.create({
@@ -452,10 +578,10 @@ export async function registerDocument(
     documentS3Key: dto.s3Key,
     documentS3Bucket: dto.bucket,
     documentOriginalName: dto.originalName,
-    mimeType: dto.mimeType || 'application/pdf',
+    mimeType: dto.mimeType || "application/pdf",
     fileSize: dto.fileSize || 0,
     checksum: dto.checksum || null,
-    virusScanStatus: 'Scanning', // Initiate scan state
+    virusScanStatus: "Scanning", // Initiate scan state
     isPublic: dto.isPublic,
     uploadedById: userId,
   });
@@ -465,9 +591,12 @@ export async function registerDocument(
   // Stub background virus scanner simulation
   setImmediate(() => {
     setTimeout(async () => {
-      saved.virusScanStatus = 'Clean';
+      saved.virusScanStatus = "Clean";
       await documentRepo.save(saved);
-      logger.info({ docId: saved.id }, 'Mock malware virus scan complete: CLEAN');
+      logger.info(
+        { docId: saved.id },
+        "Mock malware virus scan complete: CLEAN",
+      );
     }, 5000);
   });
 
@@ -498,7 +627,7 @@ export async function answerQuestion(
 ): Promise<TenderQuestion> {
   const question = await questionRepo.findOne({ where: { id: questionId } });
   if (!question) {
-    throw new AppError('Question not found', 404, 'NOT_FOUND');
+    throw new AppError("Question not found", 404, "NOT_FOUND");
   }
 
   question.answerText = dto.answerText;
@@ -566,7 +695,9 @@ export async function submitEvaluation(
   evaluatedById: string,
 ): Promise<TenderEvaluation> {
   const templateRepo = AppDataSource.getRepository(EvaluationTemplate);
-  let template = await templateRepo.findOne({ where: { name: dto.criteriaName } });
+  let template = await templateRepo.findOne({
+    where: { name: dto.criteriaName },
+  });
   if (!template) {
     template = templateRepo.create({
       name: dto.criteriaName,
@@ -600,17 +731,17 @@ export async function assignReviewers(
 ): Promise<TenderReview> {
   const tender = await tenderRepo.findOne({
     where: { id: tenderId },
-    relations: ['activeVersion'],
+    relations: ["activeVersion"],
   });
 
   if (!tender || !tender.activeVersion) {
-    throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
+    throw new AppError("Tender active version not found", 404, "NOT_FOUND");
   }
 
   // Create review session
   const review = reviewRepo.create({
     tenderVersionId: tender.activeVersion.id,
-    status: 'assigned',
+    status: "assigned",
   });
 
   const savedReview = await reviewRepo.save(review);
@@ -637,11 +768,11 @@ export async function submitReviewComment(
 ): Promise<TenderReviewComment> {
   const review = await reviewRepo.findOne({
     where: { id: reviewId },
-    relations: ['tenderVersion', 'tenderVersion.tender'],
+    relations: ["tenderVersion", "tenderVersion.tender"],
   });
 
   if (!review) {
-    throw new AppError('Review session not found', 404, 'NOT_FOUND');
+    throw new AppError("Review session not found", 404, "NOT_FOUND");
   }
 
   const comment = commentRepo.create({
@@ -679,9 +810,9 @@ export async function toggleWatcher(
   }
 
   const channels: string[] = [];
-  if (dto.notifyEmail) channels.push('EMAIL');
-  if (dto.notifyInApp) channels.push('IN_APP');
-  if (dto.notifySms) channels.push('SMS');
+  if (dto.notifyEmail) channels.push("EMAIL");
+  if (dto.notifyInApp) channels.push("IN_APP");
+  if (dto.notifySms) channels.push("SMS");
 
   const watcher = watcherRepo.create({
     tenderId,
@@ -705,7 +836,7 @@ export async function inviteVendor(
   const inv = invitationRepo.create({
     tenderId,
     email: dto.email,
-    status: 'invited',
+    status: "invited",
     expiresAt,
   });
 
@@ -732,9 +863,11 @@ export async function createTemplate(
 
 // ─── Diff / Version comparison ───────────────────────────────────────────────
 
-export async function getTenderVersions(tenderId: string): Promise<TenderVersion[]> {
+export async function getTenderVersions(
+  tenderId: string,
+): Promise<TenderVersion[]> {
   return versionRepo.find({
     where: { tenderId },
-    order: { version: 'DESC' },
+    order: { version: "DESC" },
   });
 }

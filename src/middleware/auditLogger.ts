@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
-import { AppDataSource } from '../config/database';
-import { AuditLog } from '../entities/AuditLog';
-import { asyncHandler } from '../core/asyncHandler';
+import { Request, Response, NextFunction } from "express";
+import { AppDataSource } from "../config/database";
+import { AuditLog } from "../database/entities/AuditLog";
+import { asyncHandler } from "../core/asyncHandler";
 
 const auditLogRepo = AppDataSource.getRepository(AuditLog);
 
@@ -31,14 +31,15 @@ export const auditLogger = (action: string, entityType: string) =>
         auditLogRepo
           .save({
             actorId: req.user?.userId ?? null,
-            actorEmail: req.user?.email ?? 'unknown',
+            actorEmail: req.user?.email ?? "unknown",
             action,
             entityType,
-            entityId: req.params['id'] ?? null,
-            before: (res.locals['auditBefore'] as Record<string, unknown>) ?? null,
-            after: (data as Record<string, unknown>)?.['data'] ?? null,
+            entityId: req.params["id"] ?? null,
+            before:
+              (res.locals["auditBefore"] as Record<string, unknown>) ?? null,
+            after: (data as Record<string, unknown>)?.["data"] ?? null,
             requestId: req.requestId ?? null,
-            userAgent: req.headers['user-agent'] ?? null,
+            userAgent: req.headers["user-agent"] ?? null,
             ipAddress: req.ip ?? null,
           })
           .catch(() => {

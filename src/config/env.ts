@@ -24,7 +24,7 @@ if (process.env["DOCKER"] === "true" && process.env["DATABASE_URL"]) {
 // ─── Zod Schema ──────────────────────────────────────────────────────────────
 const envSchema = z.object({
   // App
-  APP_NAME: z.string().default("rfp-backend"),
+  APP_NAME: z.string().default("nexusbid-api"),
   NODE_ENV: z.enum(["local", "dev", "uat", "prod", "test"]).default("local"),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])

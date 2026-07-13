@@ -1,7 +1,7 @@
-import { AppDataSource } from '../config/database';
-import { Subscription } from '../entities/Subscription';
-import { SubscriptionStatus } from '../types/enums';
-import { logger } from '../config/logger';
+import { AppDataSource } from "../config/database";
+import { Subscription } from "../database/entities/Subscription";
+import { SubscriptionStatus } from "../types/enums";
+import { logger } from "../config/logger";
 
 const subRepo = AppDataSource.getRepository(Subscription);
 
@@ -16,12 +16,12 @@ export async function expireSubscriptionsJob(): Promise<void> {
     .createQueryBuilder()
     .update(Subscription)
     .set({ status: SubscriptionStatus.EXPIRED })
-    .where('status = :status', { status: SubscriptionStatus.ACTIVE })
+    .where("status = :status", { status: SubscriptionStatus.ACTIVE })
     .andWhere('"endDate" < :now', { now: new Date() })
     .execute();
 
   logger.info(
     { affected: result.affected },
-    'Expire subscriptions job: subscriptions expired',
+    "Expire subscriptions job: subscriptions expired",
   );
 }

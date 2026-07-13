@@ -143,7 +143,7 @@ export async function sendContactFormEmail(opts: {
 }): Promise<void> {
   const { html, text } = getContactFormTemplate(opts);
   await send({
-    to: env.NEXUSBID_SYSTEM_ADMIN_EMAIL || "",
+    to: env.FROM_EMAIL || "",
     subject: `NexusBid Contact Form: ${opts.senderName}`,
     html,
     text,

@@ -1,63 +1,145 @@
-version: '3.9'
-
-# ─── Local Docker Compose ──────────────────────────────────────────────────────
-# Usage: docker compose up --build
-# NODE_ENV=local  →  no real AWS/PayPal/email (dummy mode)
-# DOCKER=true     →  DATABASE_URL host auto-swapped localhost → db
-# Nginx: HTTP only (port 80) — no SSL certs needed
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — NexusBid Development Stack
 #
-# For dev env:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-# For prod env: docker compose -f docker-compose.prod.yml up
-# ──────────────────────────────────────────────────────────────────────────────
+# Services: API (hot-reload) + PostgreSQL + Nginx (HTTP only)
+#
+# Usage:
+#   docker compose up --build          # Start all services, rebuild API image
+#   docker compose up                  # Start all services (no rebuild)
+#   docker compose up db               # Start only PostgreSQL
+#   docker compose down                # Stop and remove containers
+#   docker compose down -v             # Stop and remove containers + volumes
+#
+#   # Run database migrations and seeding when needed:
+#   docker compose --profile init run --rm api-init
+#
+# Environment loading (processed in order, later values override earlier ones):
+#   .env         — shared defaults (template: .env.example, committed)
+#   .env.local   — local developer overrides (git-ignored, never committed)
+#
+# The DOCKER=true variable triggers a host swap in src/config/env.ts:
+#   DATABASE_URL: ...@localhost:... → ...@db:...
+# This allows a single .env.local to work both natively and inside Docker.
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  # Isolated bridge network. All services communicate by service name (e.g.
+  # the API connects to Postgres via host "db", nginx proxies to "api:3000").
+  nexusbid-net:
+    driver: bridge
+
+volumes:
+  # Named volume: data persists across `docker compose down` restarts.
+  # Use `docker compose down -v` to wipe the database during schema resets.
+  postgres_data:
+
+# Reusable configuration block for API services to avoid duplication
+x-api-common: &api-common
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  env_file:
+    - .env
+    - .env.local
+  environment:
+    NODE_ENV: local
+    DOCKER: "true"
+    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nexusbid_dev}
+  volumes:
+    - ./src:/app/src
+  networks:
+    - nexusbid-net
 
 services:
-  api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    ports:
-      - '3000:3000'
-    environment:
-      NODE_ENV: local
-      DOCKER: 'true'
-      # DATABASE_URL host is automatically swapped from localhost → db by env.ts when DOCKER=true
-    env_file:
-      - .env
-      - .env.local
-    volumes:
-      - ./src:/app/src     # Hot reload — ts-node watches src/
+
+  # ── API Initialization (Migrations & Seeding) ──────────────────────────────
+  # A short-lived service that runs once to migrate and seed the database.
+  # Run explicitly via: docker compose --profile init run --rm api-init
+  api-init:
+    <<: *api-common
+    profiles:
+      - init
+    restart: "no"
+    command: ["sh", "-c", "npm run migration:run && npm run seed"]
     depends_on:
       db:
         condition: service_healthy
-    restart: unless-stopped
 
+  # ── API ─────────────────────────────────────────────────────────────────────
+  api:
+    <<: *api-common
+    ports:
+      # Direct port exposure for debugging with Postman / curl (bypasses nginx).
+      # Remove this in production — traffic should only enter through nginx.
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy   # Wait for postgres to accept connections
+    restart: unless-stopped
+    healthcheck:
+      # Calls the real health endpoint — same check used by nginx before
+      # routing traffic. start-period is long because ts-node compiles on
+      # cold start before the HTTP server binds.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  # Development-only database. In production, use Amazon RDS.
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: rfp
-      POSTGRES_PASSWORD: rfp
-      POSTGRES_DB: nexusbid_dev
+      # Parameterised via shell / .env file. Defaults match the dev .env.example
+      # values so the stack starts without any manual configuration.
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusbid_dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - '5432:5432'
+      # Expose to the host so developers can connect with TablePlus, psql, etc.
+      # Not needed by the API itself (it uses the internal Docker network).
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - nexusbid-net
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U rfp -d nexusbid_dev']
+      # pg_isready exits 0 only when Postgres is accepting connections.
+      # The API's depends_on.condition: service_healthy waits for this.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexusbid_dev}"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── Nginx ─────────────────────────────────────────────────────────────────────
+  # HTTP-only reverse proxy for local development.
+  # - Provides the same rate-limiting and routing as production
+  # - No SSL required locally (use docker-compose.ssl.yml override for HTTPS)
+  # Pinned to a specific major.minor version — avoids silent behaviour changes.
   nginx:
-    image: nginx:alpine
+    image: nginx:1.28-alpine
     ports:
-      - '80:80'
-      # Port 443 not exposed — no SSL in local env
+      - "80:80"
+      # Port 443 not exposed here — HTTP only in local dev.
+      # For HTTPS testing: docker compose -f docker-compose.yml -f docker-compose.ssl.yml up
     volumes:
       - ./docker/nginx.local.conf:/etc/nginx/nginx.conf:ro
-      # No SSL volume — HTTP only for local/dev
+    networks:
+      - nexusbid-net
     depends_on:
-      - api
+      api:
+        condition: service_healthy   # Wait for the API to pass its health check
     restart: unless-stopped
-
-volumes:
-  postgres_data:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"

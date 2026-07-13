@@ -1,13 +1,13 @@
-import { SelectQueryBuilder } from 'typeorm';
-import { Tender } from '../entities/Tender';
-import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
+import { SelectQueryBuilder } from "typeorm";
+import { Tender } from "../database/entities/Tender";
+import { TenderLifecycleStatus, TenderPublicationStatus } from "../types/enums";
 
 export interface TenderSearchParams {
   q?: string;
   categoryId?: string;
   stateId?: string;
-  before?: string;  // ISO date string
-  after?: string;   // ISO date string
+  before?: string; // ISO date string
+  after?: string; // ISO date string
   featured?: boolean;
   sort?: string;
   order?: string;
@@ -20,11 +20,13 @@ export function buildTenderSearchQuery(
   params: TenderSearchParams,
 ): { qb: SelectQueryBuilder<Tender>; page: number; limit: number } {
   // CRITICAL: Always enforce ACTIVE status and PUBLISHED publication status for public search
-  qb.where('tender.status = :status', { status: TenderLifecycleStatus.ACTIVE });
-  qb.andWhere('tender.publicationStatus = :pubStatus', { pubStatus: TenderPublicationStatus.PUBLISHED });
+  qb.where("tender.status = :status", { status: TenderLifecycleStatus.ACTIVE });
+  qb.andWhere("tender.publicationStatus = :pubStatus", {
+    pubStatus: TenderPublicationStatus.PUBLISHED,
+  });
 
   // Ensure activeVersion is joined
-  qb.leftJoinAndSelect('tender.activeVersion', 'activeVersion');
+  qb.leftJoinAndSelect("tender.activeVersion", "activeVersion");
 
   if (params.q && params.q.trim().length > 0) {
     const searchTerm = params.q.trim();
@@ -34,7 +36,7 @@ export function buildTenderSearchQuery(
         to_tsvector('english', activeVersion.title || ' ' || COALESCE(activeVersion.description, '')),
         plainto_tsquery('english', :query)
       )`,
-      'rank',
+      "rank",
     );
 
     qb.andWhere(
@@ -46,36 +48,40 @@ export function buildTenderSearchQuery(
       { query: searchTerm, ilike: `%${searchTerm}%` },
     );
 
-    qb.orderBy('rank', 'DESC');
+    qb.orderBy("rank", "DESC");
   }
 
   if (params.categoryId) {
-    qb.andWhere('activeVersion.categoryId = :cat', { cat: params.categoryId });
+    qb.andWhere("activeVersion.categoryId = :cat", { cat: params.categoryId });
   }
 
   if (params.stateId) {
-    qb.andWhere('activeVersion.stateId = :state', { state: params.stateId });
+    qb.andWhere("activeVersion.stateId = :state", { state: params.stateId });
   }
 
   if (params.before) {
-    qb.andWhere('activeVersion.closingDate <= :before', { before: new Date(params.before) });
+    qb.andWhere("activeVersion.closingDate <= :before", {
+      before: new Date(params.before),
+    });
   }
 
   if (params.after) {
-    qb.andWhere('activeVersion.closingDate >= :after', { after: new Date(params.after) });
+    qb.andWhere("activeVersion.closingDate >= :after", {
+      after: new Date(params.after),
+    });
   }
 
   // Default sort when not searching by text
   if (!params.q) {
-    const validSorts = ['createdAt', 'closingDate', 'estimatedBudget'] as const;
+    const validSorts = ["createdAt", "closingDate", "estimatedBudget"] as const;
     type ValidSort = (typeof validSorts)[number];
     const sort = validSorts.includes(params.sort as ValidSort)
       ? (params.sort as any)
-      : 'createdAt';
-    const direction = params.order === 'ASC' ? 'ASC' : ('DESC' as const);
+      : "createdAt";
+    const direction = params.order === "ASC" ? "ASC" : ("DESC" as const);
 
-    if (sort === 'createdAt') {
-      qb.orderBy('tender.createdAt', direction);
+    if (sort === "createdAt") {
+      qb.orderBy("tender.createdAt", direction);
     } else {
       qb.orderBy(`activeVersion.${sort}`, direction);
     }

@@ -1,18 +1,18 @@
-import { AppDataSource } from '../../config/database';
-import { Plan } from '../../entities/Plan';
-import { PlanVersion } from '../../entities/PlanVersion';
-import { FeatureCatalog } from '../../entities/FeatureCatalog';
-import { PlanFeature } from '../../entities/PlanFeature';
-import { PlanCountryPricing } from '../../entities/PlanCountryPricing';
-import { PlanCategoryPricing } from '../../entities/PlanCategoryPricing';
-import { Coupon } from '../../entities/Coupon';
-import { PlanReview } from '../../entities/PlanReview';
-import { PlanReviewComment } from '../../entities/PlanReviewComment';
-import { SubscriptionMigration } from '../../entities/SubscriptionMigration';
-import { Subscription } from '../../entities/Subscription';
-import { Transaction } from '../../entities/Transaction';
-import { AppError } from '../../core/AppError';
-import { logger } from '../../config/logger';
+import { AppDataSource } from "../../config/database";
+import { Plan } from "../../database/entities/Plan";
+import { PlanVersion } from "../../database/entities/PlanVersion";
+import { FeatureCatalog } from "../../database/entities/FeatureCatalog";
+import { PlanFeature } from "../../database/entities/PlanFeature";
+import { PlanCountryPricing } from "../../database/entities/PlanCountryPricing";
+import { PlanCategoryPricing } from "../../database/entities/PlanCategoryPricing";
+import { Coupon } from "../../database/entities/Coupon";
+import { PlanReview } from "../../database/entities/PlanReview";
+import { PlanReviewComment } from "../../database/entities/PlanReviewComment";
+import { SubscriptionMigration } from "../../database/entities/SubscriptionMigration";
+import { Subscription } from "../../database/entities/Subscription";
+import { Transaction } from "../../database/entities/Transaction";
+import { AppError } from "../../core/AppError";
+import { logger } from "../../config/logger";
 
 const planRepo = AppDataSource.getRepository(Plan);
 const versionRepo = AppDataSource.getRepository(PlanVersion);
@@ -31,8 +31,13 @@ const transactionRepo = AppDataSource.getRepository(Transaction);
 
 export async function listAllPlans(): Promise<Plan[]> {
   return planRepo.find({
-    relations: ['activeVersion', 'activeVersion.features', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
-    order: { createdAt: 'DESC' },
+    relations: [
+      "activeVersion",
+      "activeVersion.features",
+      "activeVersion.countryPricing",
+      "activeVersion.categoryPricing",
+    ],
+    order: { createdAt: "DESC" },
   });
 }
 
@@ -40,53 +45,50 @@ export async function getPlanById(id: string): Promise<Plan> {
   const plan = await planRepo.findOne({
     where: { id },
     relations: [
-      'versions',
-      'versions.features',
-      'versions.countryPricing',
-      'versions.categoryPricing',
-      'versions.reviews',
-      'versions.reviews.comments',
-      'versions.reviews.comments.author',
-      'activeVersion',
-      'activeVersion.features',
-      'activeVersion.countryPricing',
-      'activeVersion.categoryPricing'
+      "versions",
+      "versions.features",
+      "versions.countryPricing",
+      "versions.categoryPricing",
+      "versions.reviews",
+      "versions.reviews.comments",
+      "versions.reviews.comments.author",
+      "activeVersion",
+      "activeVersion.features",
+      "activeVersion.countryPricing",
+      "activeVersion.categoryPricing",
     ],
   });
-  if (!plan) throw new AppError('Plan not found', 404, 'NOT_FOUND');
+  if (!plan) throw new AppError("Plan not found", 404, "NOT_FOUND");
   return plan;
 }
 
-export async function createPlan(
-  dto: any,
-  createdById: string
-): Promise<Plan> {
+export async function createPlan(dto: any, createdById: string): Promise<Plan> {
   return AppDataSource.transaction(async (manager) => {
     const count = await manager.count(Plan);
-    const referenceNo = `PLN-${(count + 1).toString().padStart(3, '0')}`;
+    const referenceNo = `PLN-${(count + 1).toString().padStart(3, "0")}`;
 
     const plan = manager.create(Plan, {
       referenceNo,
-      status: 'ACTIVE',
+      status: "ACTIVE",
     });
     const savedPlan = await manager.save(Plan, plan);
 
     const version = manager.create(PlanVersion, {
       planId: savedPlan.id,
       version: 1,
-      status: 'DRAFT',
+      status: "DRAFT",
       name: dto.name,
       subtitle: dto.subtitle || null,
       description: dto.description || null,
       priceCents: dto.priceCents,
-      currency: dto.currency || 'USD',
+      currency: dto.currency || "USD",
       durationDays: dto.durationDays,
       trialDays: dto.trialDays || 0,
       setupFeeCents: dto.setupFeeCents || 0,
       isRecurring: dto.isRecurring !== undefined ? dto.isRecurring : true,
       isFeatured: dto.isFeatured || false,
       badge: dto.badge || null,
-      planType: dto.planType || 'all-access',
+      planType: dto.planType || "all-access",
       targetStateId: dto.targetStateId || null,
       targetCountry: dto.targetCountry || null,
       targetCategoryId: dto.targetCategoryId || null,
@@ -141,21 +143,33 @@ export async function createPlan(
 
 export async function createPlanVersionDraft(
   planId: string,
-  createdById: string
+  createdById: string,
 ): Promise<PlanVersion> {
   const plan = await planRepo.findOne({
     where: { id: planId },
-    relations: ['versions', 'activeVersion'],
+    relations: ["versions", "activeVersion"],
   });
-  if (!plan) throw new AppError('Plan not found', 404, 'NOT_FOUND');
+  if (!plan) throw new AppError("Plan not found", 404, "NOT_FOUND");
 
   // Verify no current draft exists
-  const existingDraft = plan.versions.find((v) => v.status === 'DRAFT' || v.status === 'SUBMITTED' || v.status === 'UNDER_REVIEW');
+  const existingDraft = plan.versions.find(
+    (v) =>
+      v.status === "DRAFT" ||
+      v.status === "SUBMITTED" ||
+      v.status === "UNDER_REVIEW",
+  );
   if (existingDraft) {
-    throw new AppError('A draft or review version already exists for this plan', 400, 'DRAFT_EXISTS');
+    throw new AppError(
+      "A draft or review version already exists for this plan",
+      400,
+      "DRAFT_EXISTS",
+    );
   }
 
-  const latestVersion = plan.versions.reduce((max, v) => (v.version > max ? v.version : max), 0);
+  const latestVersion = plan.versions.reduce(
+    (max, v) => (v.version > max ? v.version : max),
+    0,
+  );
 
   return AppDataSource.transaction(async (manager) => {
     const activeVer = plan.activeVersion;
@@ -164,7 +178,7 @@ export async function createPlanVersionDraft(
     const draft = manager.create(PlanVersion, {
       planId,
       version: latestVersion + 1,
-      status: 'DRAFT',
+      status: "DRAFT",
       name: baseVer.name,
       subtitle: baseVer.subtitle,
       description: baseVer.description,
@@ -186,7 +200,9 @@ export async function createPlanVersionDraft(
     const savedDraft = await manager.save(PlanVersion, draft);
 
     // Copy features
-    const features = await featureRepo.find({ where: { planVersionId: baseVer.id } });
+    const features = await featureRepo.find({
+      where: { planVersionId: baseVer.id },
+    });
     for (const f of features) {
       const pf = manager.create(PlanFeature, {
         planVersionId: savedDraft.id,
@@ -197,7 +213,9 @@ export async function createPlanVersionDraft(
     }
 
     // Copy country pricing
-    const countryPricing = await countryPricingRepo.find({ where: { planVersionId: baseVer.id } });
+    const countryPricing = await countryPricingRepo.find({
+      where: { planVersionId: baseVer.id },
+    });
     for (const cp of countryPricing) {
       const planCp = manager.create(PlanCountryPricing, {
         planVersionId: savedDraft.id,
@@ -209,7 +227,9 @@ export async function createPlanVersionDraft(
     }
 
     // Copy category pricing
-    const categoryPricing = await categoryPricingRepo.find({ where: { planVersionId: baseVer.id } });
+    const categoryPricing = await categoryPricingRepo.find({
+      where: { planVersionId: baseVer.id },
+    });
     for (const catP of categoryPricing) {
       const planCatP = manager.create(PlanCategoryPricing, {
         planVersionId: savedDraft.id,
@@ -225,19 +245,25 @@ export async function createPlanVersionDraft(
 
 // ─── Plan Review Flows ──────────────────────────────────────────────────────
 
-export async function submitPlanForReview(versionId: string): Promise<PlanVersion> {
+export async function submitPlanForReview(
+  versionId: string,
+): Promise<PlanVersion> {
   const version = await versionRepo.findOne({ where: { id: versionId } });
-  if (!version) throw new AppError('Version not found', 404, 'NOT_FOUND');
-  if (version.status !== 'DRAFT') {
-    throw new AppError('Only draft versions can be submitted for review', 400, 'INVALID_STATUS');
+  if (!version) throw new AppError("Version not found", 404, "NOT_FOUND");
+  if (version.status !== "DRAFT") {
+    throw new AppError(
+      "Only draft versions can be submitted for review",
+      400,
+      "INVALID_STATUS",
+    );
   }
 
-  version.status = 'SUBMITTED';
+  version.status = "SUBMITTED";
   await versionRepo.save(version);
 
   const review = reviewRepo.create({
     planVersionId: version.id,
-    status: 'SUBMITTED',
+    status: "SUBMITTED",
   });
   await reviewRepo.save(review);
 
@@ -246,21 +272,28 @@ export async function submitPlanForReview(versionId: string): Promise<PlanVersio
 
 export async function assignPlanReviewer(
   reviewId: string,
-  reviewerId: string
+  reviewerId: string,
 ): Promise<PlanReview> {
-  const review = await reviewRepo.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
-  if (!review) throw new AppError('Review not found', 404, 'NOT_FOUND');
+  const review = await reviewRepo.findOne({
+    where: { id: reviewId },
+    relations: ["planVersion"],
+  });
+  if (!review) throw new AppError("Review not found", 404, "NOT_FOUND");
 
   // Enforce reviewer cannot approve their own plan changes
   if (review.planVersion.createdById === reviewerId) {
-    throw new AppError('Reviewers cannot review or approve their own plan modifications', 400, 'SELF_REVIEW_FORBIDDEN');
+    throw new AppError(
+      "Reviewers cannot review or approve their own plan modifications",
+      400,
+      "SELF_REVIEW_FORBIDDEN",
+    );
   }
 
   review.assignedReviewerId = reviewerId;
-  review.status = 'UNDER_REVIEW';
+  review.status = "UNDER_REVIEW";
   await reviewRepo.save(review);
 
-  review.planVersion.status = 'UNDER_REVIEW';
+  review.planVersion.status = "UNDER_REVIEW";
   await versionRepo.save(review.planVersion);
 
   return review;
@@ -270,13 +303,20 @@ export async function submitPlanReviewAction(
   reviewId: string,
   authorId: string,
   commentText: string,
-  action: 'APPROVE' | 'REQUEST_CHANGES'
+  action: "APPROVE" | "REQUEST_CHANGES",
 ): Promise<PlanReview> {
-  const review = await reviewRepo.findOne({ where: { id: reviewId }, relations: ['planVersion'] });
-  if (!review) throw new AppError('Review not found', 404, 'NOT_FOUND');
+  const review = await reviewRepo.findOne({
+    where: { id: reviewId },
+    relations: ["planVersion"],
+  });
+  if (!review) throw new AppError("Review not found", 404, "NOT_FOUND");
 
   if (review.assignedReviewerId !== authorId) {
-    throw new AppError('You are not assigned to review this plan version', 403, 'FORBIDDEN');
+    throw new AppError(
+      "You are not assigned to review this plan version",
+      403,
+      "FORBIDDEN",
+    );
   }
 
   return AppDataSource.transaction(async (manager) => {
@@ -287,13 +327,13 @@ export async function submitPlanReviewAction(
     });
     await manager.save(PlanReviewComment, comment);
 
-    if (action === 'APPROVE') {
-      review.status = 'APPROVED';
-      review.planVersion.status = 'APPROVED';
+    if (action === "APPROVE") {
+      review.status = "APPROVED";
+      review.planVersion.status = "APPROVED";
       review.planVersion.approvedById = authorId;
     } else {
-      review.status = 'CHANGES_REQUESTED';
-      review.planVersion.status = 'DRAFT';
+      review.status = "CHANGES_REQUESTED";
+      review.planVersion.status = "DRAFT";
     }
 
     await manager.save(PlanReview, review);
@@ -304,14 +344,21 @@ export async function submitPlanReviewAction(
 }
 
 export async function publishPlanVersion(versionId: string): Promise<Plan> {
-  const version = await versionRepo.findOne({ where: { id: versionId }, relations: ['plan'] });
-  if (!version) throw new AppError('Version not found', 404, 'NOT_FOUND');
-  if (version.status !== 'APPROVED') {
-    throw new AppError('Only approved plan versions can be published', 400, 'NOT_APPROVED');
+  const version = await versionRepo.findOne({
+    where: { id: versionId },
+    relations: ["plan"],
+  });
+  if (!version) throw new AppError("Version not found", 404, "NOT_FOUND");
+  if (version.status !== "APPROVED") {
+    throw new AppError(
+      "Only approved plan versions can be published",
+      400,
+      "NOT_APPROVED",
+    );
   }
 
   return AppDataSource.transaction(async (manager) => {
-    version.status = 'PUBLISHED';
+    version.status = "PUBLISHED";
     await manager.save(PlanVersion, version);
 
     const plan = version.plan;
@@ -330,12 +377,12 @@ export async function createCoupon(dto: any): Promise<Coupon> {
 }
 
 export async function listCoupons(): Promise<Coupon[]> {
-  return couponRepo.find({ order: { createdAt: 'DESC' } });
+  return couponRepo.find({ order: { createdAt: "DESC" } });
 }
 
 export async function toggleCouponStatus(id: string): Promise<Coupon> {
   const coupon = await couponRepo.findOne({ where: { id } });
-  if (!coupon) throw new AppError('Coupon not found', 404, 'NOT_FOUND');
+  if (!coupon) throw new AppError("Coupon not found", 404, "NOT_FOUND");
 
   coupon.isActive = !coupon.isActive;
   return couponRepo.save(coupon);
@@ -346,12 +393,12 @@ export async function toggleCouponStatus(id: string): Promise<Coupon> {
 export async function initiateSubscriptionMigration(
   sourcePlanVersionId: string,
   targetPlanVersionId: string,
-  createdById: string
+  createdById: string,
 ): Promise<SubscriptionMigration> {
   const migration = migrationRepo.create({
     sourcePlanVersionId,
     targetPlanVersionId,
-    status: 'PENDING',
+    status: "PENDING",
     createdById,
   });
   await migrationRepo.save(migration);
@@ -359,8 +406,11 @@ export async function initiateSubscriptionMigration(
   // Trigger migration immediately in background for dev/local
   setImmediate(async () => {
     try {
-      logger.info({ migrationId: migration.id }, 'Subscription migration background execution started');
-      migration.status = 'RUNNING';
+      logger.info(
+        { migrationId: migration.id },
+        "Subscription migration background execution started",
+      );
+      migration.status = "RUNNING";
       migration.startedAt = new Date();
       await migrationRepo.save(migration);
 
@@ -373,13 +423,22 @@ export async function initiateSubscriptionMigration(
         await subRepo.save(sub);
       }
 
-      migration.status = 'COMPLETED';
+      migration.status = "COMPLETED";
       migration.completedAt = new Date();
       await migrationRepo.save(migration);
-      logger.info({ migrationId: migration.id, migratedCount: affectedSubscriptions.length }, 'Subscription migration completed successfully');
+      logger.info(
+        {
+          migrationId: migration.id,
+          migratedCount: affectedSubscriptions.length,
+        },
+        "Subscription migration completed successfully",
+      );
     } catch (err) {
-      logger.error({ migrationId: migration.id, err }, 'Subscription migration execution failed');
-      migration.status = 'FAILED';
+      logger.error(
+        { migrationId: migration.id, err },
+        "Subscription migration execution failed",
+      );
+      migration.status = "FAILED";
       migration.completedAt = new Date();
       await migrationRepo.save(migration);
     }
@@ -391,24 +450,32 @@ export async function initiateSubscriptionMigration(
 // ─── Analytics & Catalog ────────────────────────────────────────────────────
 
 export async function getFeatureCatalog(): Promise<FeatureCatalog[]> {
-  return catalogRepo.find({ order: { name: 'ASC' } });
+  return catalogRepo.find({ order: { name: "ASC" } });
 }
 
-export async function createFeatureCatalogItem(dto: any): Promise<FeatureCatalog> {
+export async function createFeatureCatalogItem(
+  dto: any,
+): Promise<FeatureCatalog> {
   const item = catalogRepo.create(dto as any) as unknown as FeatureCatalog;
   return catalogRepo.save(item);
 }
 
 export async function getSubscriptionsDashboardStats(): Promise<any> {
   const totalRevenueRow = await transactionRepo
-    .createQueryBuilder('t')
-    .select('SUM(t.amountCents)', 'total')
+    .createQueryBuilder("t")
+    .select("SUM(t.amountCents)", "total")
     .where("t.status = 'success'")
     .getRawOne();
-  const totalRevenue = totalRevenueRow ? parseInt(totalRevenueRow.total, 10) || 0 : 0;
+  const totalRevenue = totalRevenueRow
+    ? parseInt(totalRevenueRow.total, 10) || 0
+    : 0;
 
-  const activeSubCount = await subRepo.count({ where: { status: 'active' as any } });
-  const expiredSubCount = await subRepo.count({ where: { status: 'expired' as any } });
+  const activeSubCount = await subRepo.count({
+    where: { status: "active" as any },
+  });
+  const expiredSubCount = await subRepo.count({
+    where: { status: "expired" as any },
+  });
 
   // Mock trend details for KPIs
   return {
@@ -420,9 +487,15 @@ export async function getSubscriptionsDashboardStats(): Promise<any> {
     renewalsThisMonth: Math.round(activeSubCount * 0.08),
     expired: expiredSubCount,
     trialUsers: Math.round(activeSubCount * 0.25),
-    churnRate: '4.2%',
-    arpu: activeSubCount > 0 ? (totalRevenue / 100 / activeSubCount).toFixed(2) : 0,
-    ltv: activeSubCount > 0 ? (totalRevenue / 100 / activeSubCount * 18).toFixed(2) : 0,
-    failedPayments: await transactionRepo.count({ where: { status: 'failed' as any } }),
+    churnRate: "4.2%",
+    arpu:
+      activeSubCount > 0 ? (totalRevenue / 100 / activeSubCount).toFixed(2) : 0,
+    ltv:
+      activeSubCount > 0
+        ? ((totalRevenue / 100 / activeSubCount) * 18).toFixed(2)
+        : 0,
+    failedPayments: await transactionRepo.count({
+      where: { status: "failed" as any },
+    }),
   };
 }

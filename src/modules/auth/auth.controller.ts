@@ -15,8 +15,8 @@ import type {
 } from "./auth.dto";
 import { AppError } from "../../core/AppError";
 import { AppDataSource } from "../../config/database";
-import { User } from "../../entities/User";
-import { EmailToken } from "../../entities/EmailToken";
+import { User } from "../../database/entities/User";
+import { EmailToken } from "../../database/entities/EmailToken";
 import { EmailTokenType } from "../../types/enums";
 import { createEmailToken } from "../../services/token.service";
 import { sendAdminVerificationEmail } from "../../services/email.service";

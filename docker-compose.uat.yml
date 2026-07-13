@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.uat.yml — NexusBid UAT Stack Override
+#
+# Usage:
+#   # 1. Run UAT migrations and seed the database
+#   docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml --profile init run --rm api-init
+#
+#   # 2. Start the UAT application stack
+#   docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml up -d
+#
+# Overrides:
+#   - Loads .env.uat instead of .env.prod
+#   - Sets NODE_ENV=uat
+#   - Updates service labels to "uat"
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  api-init:
+    env_file:
+      - .env.uat
+    environment:
+      NODE_ENV: uat
+
+  api:
+    env_file:
+      - .env.uat
+    environment:
+      NODE_ENV: uat
+    labels:
+      com.nexusbid.service: "api"
+      com.nexusbid.env: "uat"
+
+  nginx:
+    labels:
+      com.nexusbid.service: "nginx"
+      com.nexusbid.env: "uat"

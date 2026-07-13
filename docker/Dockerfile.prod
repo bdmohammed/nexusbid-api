@@ -1,38 +1,168 @@
-# Production multi-stage Dockerfile
-# Stage 1: Build TypeScript → JavaScript
-# Stage 2: Minimal runtime image (no devDependencies, no TypeScript)
+# ─────────────────────────────────────────────────────────────────────────────
+# Production Dockerfile — Three-Stage Build
+#
+# Stage 1 (deps):    Install ALL npm dependencies. Cached independently so
+#                    a source-only change never triggers a re-install.
+# Stage 2 (builder): Copy deps, compile TypeScript → JavaScript.
+# Stage 3 (runner):  Fresh Alpine base, production deps only, compiled dist/.
+#
+# The final image contains NO TypeScript source, NO devDependencies, and
+# NO build tooling. It runs as a non-root user with dumb-init as PID 1.
+#
+# Build (local):
+#   DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.prod -t nexusbid-api .
+#
+# Build (CI — inject metadata):
+#   DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.prod \
+#     --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+#     --build-arg GIT_REVISION=$(git rev-parse --short HEAD) \
+#     --build-arg VERSION=$(node -p "require('./package.json').version") \
+#     -t nexusbid-api:latest .
+# ─────────────────────────────────────────────────────────────────────────────
 
-# ── Builder ───────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+
+# ── Stage 1: deps ─────────────────────────────────────────────────────────────
+# Dedicated dependency installation stage. Separating this from the builder
+# gives the best possible layer cache behaviour:
+#
+#   - Source change only  → deps fully cached, builder re-runs tsc, fast.
+#   - package.json change → deps re-installs, builder re-runs tsc.
+#
+# Without this stage the builder would re-install on every source change
+# because `npm ci` and `COPY src` lived in the same stage.
+FROM node:20-alpine AS deps
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
 
-COPY tsconfig.json ./
-COPY src ./src
+# BuildKit cache mount: the ~/.npm registry cache is stored on the Docker
+# host between builds. On an unchanged lockfile, packages are served from
+# the local cache — no network round-trips, no re-download of tarballs.
+# The mount is ephemeral — it never gets baked into a layer.
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
-RUN npm run build
 
-# ── Runner ────────────────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+# ── Stage 2: builder ──────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Non-root user for security
-RUN addgroup --system nexusbid && \
-    adduser  --system --ingroup nexusbid nexusbid
+# Copy the pre-installed node_modules from deps — no second npm ci needed.
+# This layer is only invalidated when the deps stage changes (i.e. lockfile).
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY src ./src
 
-COPY --from=builder /app/dist         ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package.json ./
+# `tsc` reads tsconfig.json and emits to ./dist as configured.
+# Output: dist/config/server.js (entry point) + dist/migrations/*.js
+RUN npm run build
 
-USER nexusbid
+
+# ── Stage 3: runner (final image) ────────────────────────────────────────────
+FROM node:20-alpine AS runner
+
+# ── Build-time metadata (injected by CI/CD) ───────────────────────────────────
+# Leave blank for local builds — the image still works without them.
+ARG BUILD_DATE=""
+ARG GIT_REVISION=""
+ARG VERSION="1.0.0"
+
+# ── OCI image labels ──────────────────────────────────────────────────────────
+# Stored in the image manifest and visible in Amazon ECR + `docker inspect`.
+# Enables version tracking, rollback identification, and supply-chain auditing.
+LABEL org.opencontainers.image.title="NexusBid API" \
+      org.opencontainers.image.description="NexusBid — USA Government RFP/Tender Marketplace REST API" \
+      org.opencontainers.image.authors="NexusBid Team" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.base.name="docker.io/library/node:20-alpine"
+
+# ── dumb-init ─────────────────────────────────────────────────────────────────
+# Lightweight init system (4 KB). Acts as PID 1 and correctly forwards OS
+# signals (SIGTERM, SIGINT) to the Node.js process.
+#
+# Without an init process, `docker stop` sends SIGTERM to PID 1 (node).
+# Node.js ignores SIGTERM when it is PID 1 in some environments, causing
+# Docker to wait 10 s then force-kill — bypassing the graceful shutdown
+# handler in server.ts (DB connection close, in-flight request draining).
+RUN apk add --no-cache dumb-init
+
+# ── Timezone ──────────────────────────────────────────────────────────────────
+# Explicit UTC prevents locale-dependent timestamp bugs in cron jobs,
+# TypeORM, and date-based query filters regardless of host configuration.
+ENV TZ=UTC
+
+# ── Node environment ──────────────────────────────────────────────────────────
+# Baked into the image so it can never be accidentally overridden to 'local'
+# or 'dev' at runtime, which would enable pino-pretty and skip CSRF checks.
+ENV NODE_ENV=prod
+
+# ── Node memory tuning ────────────────────────────────────────────────────────
+# Cap the V8 heap at 384 MB, leaving ~128 MB headroom for the OS, libuv,
+# and native modules inside the 512 MB container memory limit.
+# Adjust this value if the resource limit in docker-compose.prod.yml changes.
+ENV NODE_OPTIONS="--max-old-space-size=384"
+
+# ── Non-root user ─────────────────────────────────────────────────────────────
+# Running as root inside a container is a security risk. If a vulnerability
+# allows container escape, a root process has full host privileges.
+#
+# Numeric UID/GID (1001) instead of names for compatibility with future
+# Kubernetes SecurityContext `runAsUser` / `runAsGroup` fields.
+RUN addgroup --system --gid 1001 nexusbid && \
+    adduser  --system --uid 1001 --ingroup nexusbid --no-create-home nexusbid
+
+WORKDIR /app
+
+# ── Install production dependencies only ──────────────────────────────────────
+# Fresh install from the lock file — no devDependencies (TypeScript, jest,
+# nodemon, ts-node, type stubs, etc.). This is the single biggest driver of
+# image size reduction vs copying node_modules from the builder stage.
+#
+# `--omit=dev` is the modern equivalent of the deprecated `--only=production`.
+# BuildKit cache mount: same npm cache as deps stage — no re-download.
+# `npm cache clean --force` after install removes residual cache from the layer.
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev && \
+    npm cache clean --force
+
+# ── Copy compiled application from builder ────────────────────────────────────
+# Only the compiled output enters the final image — no TypeScript source,
+# no tsconfig.json, no test files, no devDependencies.
+#
+# --chown ensures the runtime user owns these files from creation.
+# Setting ownership here is cheaper than a separate `RUN chown -R` layer.
+COPY --from=builder --chown=nexusbid:nexusbid /app/dist ./dist
+
+# Transfer node_modules ownership to the runtime user.
+RUN chown -R nexusbid:nexusbid /app/node_modules
 
 EXPOSE 3000
 
-# PM2 is installed globally in the prod environment
-# Use: pm2-runtime ecosystem.config.js
-# Or for simple single-worker: node dist/config/server.js
+# ── Health check ──────────────────────────────────────────────────────────────
+# Calls the real /api/v1/health endpoint which performs a live DB query
+# (SELECT 1). This verifies actual application readiness, not just that the
+# process is alive. Docker and orchestrators use this to gate traffic.
+#
+# wget is Alpine-native — no curl installation needed.
+# --start-period: allow time for DB connection + TypeORM migration run on boot.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/v1/health || exit 1
+
+# ── Drop to non-root user ─────────────────────────────────────────────────────
+# Must come after all `RUN` instructions that require root (apk, adduser, chown).
+USER nexusbid
+
+# ── Entrypoint & command ──────────────────────────────────────────────────────
+# ENTRYPOINT: dumb-init as PID 1 — wraps the CMD and forwards signals.
+# CMD: start the compiled server directly with Node.js (no PM2, no shell).
+#
+# Using exec form (JSON array) for both: no shell wrapping, no extra process,
+# signals go directly to the target process.
+ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "dist/config/server.js"]
