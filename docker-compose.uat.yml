@@ -1,27 +1,18 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# docker-compose.uat.yml — NexusBid UAT Stack Override
-#
-# Usage:
-#   # 1. Run UAT migrations and seed the database
-#   docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml --profile init run --rm api-init
-#
-#   # 2. Start the UAT application stack
-#   docker compose -f docker-compose.prod.yml -f docker-compose.uat.yml up -d
-#
-# Overrides:
-#   - Loads .env.uat instead of .env.prod
-#   - Sets NODE_ENV=uat
-#   - Updates service labels to "uat"
+# docker-compose.uat.yml
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-
   api-init:
     env_file:
       - .env.uat
     environment:
       NODE_ENV: uat
       DOCKER: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nexusbid}
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
     env_file:
@@ -29,11 +20,37 @@ services:
     environment:
       NODE_ENV: uat
       DOCKER: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nexusbid}
+    depends_on:
+      db:
+        condition: service_healthy
     labels:
       com.nexusbid.service: "api"
       com.nexusbid.env: "uat"
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusbid}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nexusbid-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexusbid}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   nginx:
     labels:
       com.nexusbid.service: "nginx"
       com.nexusbid.env: "uat"
+  
+volumes:
+    postgres_data:
