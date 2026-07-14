@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { AppDataSource } from "../../config/database";
 import { TenderVersion } from "../../database/entities/TenderVersion";
 import { Tender } from "../../database/entities/Tender";

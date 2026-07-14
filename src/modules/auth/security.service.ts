@@ -1,7 +1,7 @@
 import * as bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { AppDataSource } from "../../config/database";
-import { User } from "../../database/entities/User";
+import type { User } from "../../database/entities/User";
 import { PasswordHistory } from "../../database/entities/PasswordHistory";
 import { UserDevice } from "../../database/entities/UserDevice";
 import { AppError } from "../../core/AppError";

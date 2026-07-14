@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import type { Response } from 'express';
 import { getTraceId } from '../config/requestContext';
 
 interface ApiResponse<T = unknown> {

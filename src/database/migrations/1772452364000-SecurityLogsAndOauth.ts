@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class SecurityLogsAndOauth1772452364000 implements MigrationInterface {
-  name = 'SecurityLogsAndOauth1772452364000';
+  name = "SecurityLogsAndOauth1772452364000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Add fields to users table

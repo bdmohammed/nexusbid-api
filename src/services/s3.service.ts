@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
-import { AppError } from '../core/AppError';
+import type { AppError } from '../core/AppError';
 import { env } from '../config/env';
 import { S3_URL_EXPIRY } from '../core/constants';
 

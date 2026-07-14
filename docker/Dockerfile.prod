@@ -40,8 +40,7 @@ COPY package*.json ./
 # host between builds. On an unchanged lockfile, packages are served from
 # the local cache — no network round-trips, no re-download of tarballs.
 # The mount is ephemeral — it never gets baked into a layer.
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+RUN npm ci
 
 
 # ── Stage 2: builder ──────────────────────────────────────────────────────────
@@ -127,8 +126,7 @@ WORKDIR /app
 # BuildKit cache mount: same npm cache as deps stage — no re-download.
 # `npm cache clean --force` after install removes residual cache from the layer.
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev && \
+RUN npm ci --omit=dev && \
     npm cache clean --force
 
 # ── Copy compiled application from builder ────────────────────────────────────

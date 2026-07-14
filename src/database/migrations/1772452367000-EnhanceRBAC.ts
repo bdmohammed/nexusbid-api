@@ -1,20 +1,26 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class EnhanceRBAC1772452367000 implements MigrationInterface {
-  name = 'EnhanceRBAC1772452367000';
+  name = "EnhanceRBAC1772452367000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.startTransaction();
     try {
       // 0. Alter notifications type enum
       await queryRunner.query(
-        `ALTER TYPE "public"."notifications_type_enum" ADD VALUE IF NOT EXISTS 'role_workflow'`
+        `ALTER TYPE "public"."notifications_type_enum" ADD VALUE IF NOT EXISTS 'role_workflow'`,
       );
 
       // 1. Alter Roles Table — Add columns (make nullable initially to support migration)
-      await queryRunner.query(`ALTER TABLE "roles" ADD "status" VARCHAR(50) DEFAULT 'ACTIVE'`);
-      await queryRunner.query(`ALTER TABLE "roles" ADD "active_version_id" UUID DEFAULT NULL`);
-      await queryRunner.query(`ALTER TABLE "roles" ADD "is_default_role" BOOLEAN DEFAULT FALSE`);
+      await queryRunner.query(
+        `ALTER TABLE "roles" ADD "status" VARCHAR(50) DEFAULT 'ACTIVE'`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" ADD "active_version_id" UUID DEFAULT NULL`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" ADD "is_default_role" BOOLEAN DEFAULT FALSE`,
+      );
 
       // 2. Create role_versions table
       await queryRunner.query(`
@@ -121,7 +127,9 @@ export class EnhanceRBAC1772452367000 implements MigrationInterface {
       `);
 
       // 10. Make status NOT NULL and add Foreign Key constraint for active_version_id
-      await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "status" SET NOT NULL`);
+      await queryRunner.query(
+        `ALTER TABLE "roles" ALTER COLUMN "status" SET NOT NULL`,
+      );
       await queryRunner.query(`
         ALTER TABLE "roles" 
         ADD CONSTRAINT "fk_roles_active_version" 
@@ -129,19 +137,41 @@ export class EnhanceRBAC1772452367000 implements MigrationInterface {
       `);
 
       // 11. Drop replaced columns and tables
-      await queryRunner.query(`DROP TABLE IF EXISTS "role_permissions" CASCADE`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "name"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "description"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "is_active"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "deleted_at"`);
+      await queryRunner.query(
+        `DROP TABLE IF EXISTS "role_permissions" CASCADE`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "name"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "description"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "is_active"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "deleted_at"`,
+      );
 
       // 12. Create Indexes
-      await queryRunner.query(`CREATE INDEX "idx_role_versions_role" ON "role_versions" ("role_id")`);
-      await queryRunner.query(`CREATE INDEX "idx_role_versions_status" ON "role_versions" ("status")`);
-      await queryRunner.query(`CREATE INDEX "idx_role_version_permissions_version" ON "role_version_permissions" ("role_version_id")`);
-      await queryRunner.query(`CREATE INDEX "idx_role_reviews_version" ON "role_reviews" ("role_version_id")`);
-      await queryRunner.query(`CREATE INDEX "idx_role_reviews_status" ON "role_reviews" ("status")`);
-      await queryRunner.query(`CREATE INDEX "idx_review_assignments_reviewer" ON "role_review_assignments" ("reviewer_id")`);
+      await queryRunner.query(
+        `CREATE INDEX "idx_role_versions_role" ON "role_versions" ("role_id")`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX "idx_role_versions_status" ON "role_versions" ("status")`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX "idx_role_version_permissions_version" ON "role_version_permissions" ("role_version_id")`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX "idx_role_reviews_version" ON "role_reviews" ("role_version_id")`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX "idx_role_reviews_status" ON "role_reviews" ("status")`,
+      );
+      await queryRunner.query(
+        `CREATE INDEX "idx_review_assignments_reviewer" ON "role_review_assignments" ("reviewer_id")`,
+      );
 
       await queryRunner.commitTransaction();
     } catch (err) {
@@ -157,8 +187,12 @@ export class EnhanceRBAC1772452367000 implements MigrationInterface {
       // Re-create dropped tables and columns first
       await queryRunner.query(`ALTER TABLE "roles" ADD "name" VARCHAR(100)`);
       await queryRunner.query(`ALTER TABLE "roles" ADD "description" TEXT`);
-      await queryRunner.query(`ALTER TABLE "roles" ADD "is_active" BOOLEAN DEFAULT TRUE`);
-      await queryRunner.query(`ALTER TABLE "roles" ADD "deleted_at" TIMESTAMPTZ DEFAULT NULL`);
+      await queryRunner.query(
+        `ALTER TABLE "roles" ADD "is_active" BOOLEAN DEFAULT TRUE`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" ADD "deleted_at" TIMESTAMPTZ DEFAULT NULL`,
+      );
 
       // Populate roles table data back from active version (or Version 1 if active is null)
       await queryRunner.query(`
@@ -176,7 +210,9 @@ export class EnhanceRBAC1772452367000 implements MigrationInterface {
       `);
 
       // Ensure name is NOT NULL
-      await queryRunner.query(`ALTER TABLE "roles" ALTER COLUMN "name" SET NOT NULL`);
+      await queryRunner.query(
+        `ALTER TABLE "roles" ALTER COLUMN "name" SET NOT NULL`,
+      );
 
       // Re-create old role_permissions table
       await queryRunner.query(`
@@ -203,17 +239,31 @@ export class EnhanceRBAC1772452367000 implements MigrationInterface {
       `);
 
       // Drop new tables
-      await queryRunner.query(`DROP TABLE IF EXISTS "role_review_comments" CASCADE`);
-      await queryRunner.query(`DROP TABLE IF EXISTS "role_review_assignments" CASCADE`);
+      await queryRunner.query(
+        `DROP TABLE IF EXISTS "role_review_comments" CASCADE`,
+      );
+      await queryRunner.query(
+        `DROP TABLE IF EXISTS "role_review_assignments" CASCADE`,
+      );
       await queryRunner.query(`DROP TABLE IF EXISTS "role_reviews" CASCADE`);
-      await queryRunner.query(`DROP TABLE IF EXISTS "role_version_permissions" CASCADE`);
+      await queryRunner.query(
+        `DROP TABLE IF EXISTS "role_version_permissions" CASCADE`,
+      );
       await queryRunner.query(`DROP TABLE IF EXISTS "role_versions" CASCADE`);
 
       // Remove new columns and constraints from roles
-      await queryRunner.query(`ALTER TABLE "roles" DROP CONSTRAINT IF EXISTS "fk_roles_active_version"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "status"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "active_version_id"`);
-      await queryRunner.query(`ALTER TABLE "roles" DROP COLUMN IF EXISTS "is_default_role"`);
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP CONSTRAINT IF EXISTS "fk_roles_active_version"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "status"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "active_version_id"`,
+      );
+      await queryRunner.query(
+        `ALTER TABLE "roles" DROP COLUMN IF EXISTS "is_default_role"`,
+      );
 
       await queryRunner.commitTransaction();
     } catch (err) {

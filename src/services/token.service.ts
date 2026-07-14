@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { IsNull, MoreThan } from "typeorm";
 import { AppDataSource } from "../config/database";
 import { EmailToken } from "../database/entities/EmailToken";
-import { User } from "../database/entities/User";
+import type { User } from "../database/entities/User";
 import { AppError } from "../core/AppError";
 import { EMAIL_TOKEN_TTL } from "../core/constants";
 import { EmailTokenType } from "../types/enums";

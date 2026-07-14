@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/system.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const systemModule: ModuleDefinition = {
   slug: "system",

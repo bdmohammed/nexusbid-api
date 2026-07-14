@@ -1,7 +1,7 @@
 // src/authorization/registry/DependencyResolver.ts
 
 import { ALL_PERMISSIONS } from "./modules";
-import { PermissionDefinition } from "./types";
+import type { PermissionDefinition } from "./types";
 
 export interface ResolveOptions {
     /**

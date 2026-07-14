@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "../config/database";
 import { UserRole } from "../database/entities/UserRole";
 import { RoleVersionPermission } from "../database/entities/RoleVersionPermission";

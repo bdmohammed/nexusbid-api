@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/users.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const usersModule: ModuleDefinition = {
   slug: "users",

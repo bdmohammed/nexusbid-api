@@ -1,7 +1,7 @@
 // src/authorization/registry/PermissionGraph.ts
 
 import { ALL_PERMISSIONS } from "./modules";
-import { PermissionDefinition } from "./types";
+import type { PermissionDefinition } from "./types";
 
 export class PermissionGraph {
     private readonly permissionMap = new Map<

@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/support.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const supportModule: ModuleDefinition = {
   slug: "support",

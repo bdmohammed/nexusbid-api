@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { RbacService } from "../rbac.service";
 import { AppDataSource } from "../../../config/database";
 import { RoleReview } from "../../../database/entities/RoleReview";

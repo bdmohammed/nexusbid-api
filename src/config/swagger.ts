@@ -1,6 +1,6 @@
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
-import { RequestHandler } from "express";
+import type { RequestHandler } from "express";
 import { env } from "./env";
 
 const serverUrls: Record<string, { url: string; description: string }[]> = {

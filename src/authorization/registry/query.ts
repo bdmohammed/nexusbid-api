@@ -7,7 +7,7 @@ import {
   ALL_PERMISSIONS,
 } from "./modules";
 
-import {
+import type {
   ModuleDefinition,
   PermissionDefinition,
 } from "./types";

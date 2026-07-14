@@ -1,4 +1,4 @@
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const dashboardModule: ModuleDefinition = {
   slug: "dashboard",

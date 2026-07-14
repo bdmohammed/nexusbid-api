@@ -4,19 +4,13 @@ import { CategoryVersion } from "../../database/entities/CategoryVersion";
 import { CategoryReview } from "../../database/entities/CategoryReview";
 import { CategoryReviewAssignment } from "../../database/entities/CategoryReviewAssignment";
 import { CategoryReviewComment } from "../../database/entities/CategoryReviewComment";
-import { User } from "../../database/entities/User";
+import type { User } from "../../database/entities/User";
 import { TenderVersion } from "../../database/entities/TenderVersion";
 import { AppError } from "../../core/AppError";
-import {
-  CategoryStatus,
-  CategoryWorkflowStatus,
-  CategoryReviewStatus,
-  CategoryReviewAssignmentStatus,
-  ReviewPolicy,
-} from "../../types/enums";
+import { CategoryStatus, type CategoryWorkflowStatus, CategoryReviewStatus, CategoryReviewAssignmentStatus, ReviewPolicy } from "../../types/enums";
 import { generateSlug } from "../../utils/slug";
 import { CacheService } from "../../services/cache.service";
-import { EntityManager } from "typeorm";
+import type { EntityManager } from "typeorm";
 
 const categoryRepo = AppDataSource.getRepository(Category);
 const versionRepo = AppDataSource.getRepository(CategoryVersion);

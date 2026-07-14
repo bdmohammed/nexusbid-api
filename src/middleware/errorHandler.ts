@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { QueryFailedError } from 'typeorm';
 import { AppError } from '../core/AppError';

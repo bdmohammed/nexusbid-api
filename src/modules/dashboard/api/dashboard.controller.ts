@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { asyncHandler } from '../../../core/asyncHandler';
 import { AppError } from '../../../core/AppError';
 import * as dashboardService from '../services/dashboard.service';

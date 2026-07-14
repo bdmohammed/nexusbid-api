@@ -1,6 +1,6 @@
 // src/cache/RedisCacheProvider.ts
 
-import { CacheProvider } from "./CacheProvider";
+import type { CacheProvider } from "./CacheProvider";
 
 /**
  * Minimal Redis client interface.

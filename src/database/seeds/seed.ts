@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import * as fs from "fs";
 import * as path from "path";
-import { DataSource } from "typeorm";
+import type { DataSource } from "typeorm";
 import { AppDataSource } from "../../config/database";
 import { SeedHistory } from "../entities/seed-history.entity";
 import * as crypto from "crypto";

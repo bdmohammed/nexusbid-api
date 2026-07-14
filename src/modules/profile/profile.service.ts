@@ -13,7 +13,7 @@ import {
   AccountType,
 } from "../../types/enums";
 import { AppError } from "../../core/AppError";
-import { MoreThan } from "typeorm";
+import type { MoreThan } from "typeorm";
 
 const userRepo = AppDataSource.getRepository(User);
 const sessionRepo = AppDataSource.getRepository(UserSession);

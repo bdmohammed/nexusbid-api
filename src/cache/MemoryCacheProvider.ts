@@ -1,6 +1,6 @@
 // src/cache/MemoryCacheProvider.ts
 
-import { CacheProvider } from "./CacheProvider";
+import type { CacheProvider } from "./CacheProvider";
 
 interface CacheEntry<T> {
     value: T;

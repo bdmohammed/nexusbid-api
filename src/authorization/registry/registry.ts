@@ -1,6 +1,6 @@
 // src/authorization/registry/registry.ts
 
-import { RegistryDefinition } from "./types";
+import type { RegistryDefinition } from "./types";
 import {
   MODULES,
   ALL_PERMISSIONS,

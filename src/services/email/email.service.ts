@@ -1,9 +1,9 @@
 import { env } from "../../config/env";
 import { logger } from "../../config/logger";
-import { EmailProvider } from "./email.provider";
+import type { EmailProvider } from "./email.provider";
 import { SesProvider } from "./providers/ses.provider";
 import { DummyEmailProvider } from "./providers/dummy.provider";
-import { EmailOptions } from "./types/email.types";
+import type { EmailOptions } from "./types/email.types";
 
 import { getVerificationTemplate } from "./templates/verification";
 import { getAdminVerificationTemplate } from "./templates/adminVerification";

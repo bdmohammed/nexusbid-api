@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateBillingTables1700000000004 implements MigrationInterface {
-  name = 'CreateBillingTables1700000000004';
+  name = "CreateBillingTables1700000000004";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Plans
@@ -38,8 +38,12 @@ export class CreateBillingTables1700000000004 implements MigrationInterface {
         "created_at"               TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_subs_user_status" ON "subscriptions" ("user_id", "status")`);
-    await queryRunner.query(`CREATE INDEX "idx_subs_end_status"  ON "subscriptions" ("end_date", "status")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_subs_user_status" ON "subscriptions" ("user_id", "status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_subs_end_status"  ON "subscriptions" ("end_date", "status")`,
+    );
 
     // Transactions
     await queryRunner.query(`
@@ -64,7 +68,9 @@ export class CreateBillingTables1700000000004 implements MigrationInterface {
         "created_at"        TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_txn_user_created" ON "transactions" ("user_id", "created_at")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_txn_user_created" ON "transactions" ("user_id", "created_at")`,
+    );
 
     // Purchased tenders
     await queryRunner.query(`

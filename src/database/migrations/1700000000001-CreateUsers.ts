@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateUsers1700000000001 implements MigrationInterface {
-  name = 'CreateUsers1700000000001';
+  name = "CreateUsers1700000000001";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
@@ -30,8 +30,12 @@ export class CreateUsers1700000000001 implements MigrationInterface {
         "updated_at"      TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_users_email" ON "users" ("email")`);
-    await queryRunner.query(`CREATE INDEX "idx_users_role" ON "users" ("role")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_users_email" ON "users" ("email")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_users_role" ON "users" ("role")`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

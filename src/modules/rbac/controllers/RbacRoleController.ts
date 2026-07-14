@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { RbacService } from '../rbac.service';
 import { asyncHandler } from '../../../core/asyncHandler';
 import { z } from 'zod';

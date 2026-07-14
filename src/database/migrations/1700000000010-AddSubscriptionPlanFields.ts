@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class AddSubscriptionPlanFields1700000000010 implements MigrationInterface {
-  name = 'AddSubscriptionPlanFields1700000000010';
+  name = "AddSubscriptionPlanFields1700000000010";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`

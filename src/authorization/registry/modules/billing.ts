@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/billing.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const billingModule: ModuleDefinition = {
   slug: "billing",

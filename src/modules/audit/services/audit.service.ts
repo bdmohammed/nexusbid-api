@@ -9,7 +9,7 @@ import type {
   UpdateRetentionDto,
   RequestAuditExportDto,
 } from "../dto/audit.dto";
-import { redactSensitiveData } from "../utils/redaction";
+import type { redactSensitiveData } from "../utils/redaction";
 
 export async function searchLogs(
   dto: AuditQueryDto,

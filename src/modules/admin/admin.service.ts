@@ -1,5 +1,5 @@
 import * as bcrypt from "bcryptjs";
-import { In, ILike } from "typeorm";
+import { In, type ILike } from "typeorm";
 import * as jwt from "jsonwebtoken";
 import * as crypto from "crypto";
 import { env } from "../../config/env";
@@ -38,7 +38,7 @@ import {
   sendVerificationEmail,
 } from "../../services/email.service";
 import { createEmailToken } from "../../services/token.service";
-import {
+import type {
   AnalyticsQueryDto,
   BatchStateItemDto,
   CreateAdminDto,

@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateBIAnalyticsTables1772480000000 implements MigrationInterface {
-  name = 'CreateBIAnalyticsTables1772480000000';
+  name = "CreateBIAnalyticsTables1772480000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Generic Fact Table
@@ -166,7 +166,9 @@ export class CreateBIAnalyticsTables1772480000000 implements MigrationInterface 
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE IF EXISTS "traffic_daily_metrics"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "subscription_daily_metrics"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "subscription_daily_metrics"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "user_daily_metrics"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "tender_daily_metrics"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "scheduled_reports"`);

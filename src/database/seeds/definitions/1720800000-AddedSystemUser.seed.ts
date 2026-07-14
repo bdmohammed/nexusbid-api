@@ -1,7 +1,7 @@
-import { SeedInterface } from "../seed.interface";
+import type { SeedInterface } from "../seed.interface";
 import { User } from "../../entities/User";
 import { AccountType, UserStatus } from "../../../types/enums";
-import { DataSource } from "typeorm";
+import type { DataSource } from "typeorm";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 import { env } from "@/config/env";

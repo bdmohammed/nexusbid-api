@@ -1,6 +1,6 @@
-import { SeedInterface } from "../seed.interface";
+import type { SeedInterface } from "../seed.interface";
 import { State } from "../../entities/State";
-import { DataSource, In } from "typeorm";
+import { type DataSource, In } from "typeorm";
 import { User } from "@/database/entities/User";
 import { env } from "@/config/env";
 

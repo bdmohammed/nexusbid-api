@@ -1,6 +1,6 @@
-import { Request } from 'express';
+import type { Request } from 'express';
 import { env } from '../../config/env';
-import { paypalRequest, PAYPAL_BASE } from './paypal.client';
+import { paypalRequest, type PAYPAL_BASE } from './paypal.client';
 import { logger } from '../../config/logger';
 
 interface VerifyWebhookPayload {

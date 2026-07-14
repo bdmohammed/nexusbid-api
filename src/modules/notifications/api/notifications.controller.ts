@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "../../../config/database";
-import { Notification } from "../../../database/entities/Notification";
+import type { Notification } from "../../../database/entities/Notification";
 import { NotificationRecipient } from "../../../database/entities/NotificationRecipient";
 import { NotificationAction } from "../../../database/entities/NotificationAction";
 import { UserRole } from "../../../database/entities/UserRole";

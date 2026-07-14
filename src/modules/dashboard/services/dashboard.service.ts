@@ -11,7 +11,7 @@ import {
   TenderPublicationStatus,
   AccountType,
 } from "../../../types/enums";
-import { Response } from "express";
+import type { Response } from "express";
 import * as os from "os";
 
 // ─── Widget Registry ─────────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
-import { Response } from "express";
+import type { Response } from "express";
 import { AppDataSource } from "../../../config/database";
 import { Notification } from "../../../database/entities/Notification";
 import { NotificationRecipient } from "../../../database/entities/NotificationRecipient";
 import { NotificationAction } from "../../../database/entities/NotificationAction";
-import { User } from "../../../database/entities/User";
+import type { User } from "../../../database/entities/User";
 import { UserRole } from "../../../database/entities/UserRole";
 import { domainEvents, TENDER_EVENTS } from "../../../utils/domainEvents";
 import { rbacEventEmitter } from "../../rbac/events/RbacEvents";

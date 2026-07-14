@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/roles.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const rolesModule: ModuleDefinition = {
   slug: "roles",

@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateCategoryVersioningAndHierarchy1772530000000 implements MigrationInterface {
-  name = 'CreateCategoryVersioningAndHierarchy1772530000000';
+  name = "CreateCategoryVersioningAndHierarchy1772530000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Create Category Versions table
@@ -142,13 +142,27 @@ export class CreateCategoryVersioningAndHierarchy1772530000000 implements Migrat
     `);
 
     // 9. Drop old columns and constraints from categories
-    await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "UQ_categories_slug"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "categories_slug_key"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP COLUMN IF EXISTS "name"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP COLUMN IF EXISTS "description"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP COLUMN IF EXISTS "slug"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP COLUMN IF EXISTS "is_active"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP COLUMN IF EXISTS "is_deleted"`);
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "UQ_categories_slug"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "categories_slug_key"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP COLUMN IF EXISTS "name"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP COLUMN IF EXISTS "description"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP COLUMN IF EXISTS "slug"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP COLUMN IF EXISTS "is_active"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP COLUMN IF EXISTS "is_deleted"`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -175,9 +189,15 @@ export class CreateCategoryVersioningAndHierarchy1772530000000 implements Migrat
     `);
 
     // Drop new constraints on categories
-    await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_approved_by"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_parent"`);
-    await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_active_version"`);
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_approved_by"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_parent"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "FK_categories_active_version"`,
+    );
 
     // Drop columns from categories
     await queryRunner.query(`
@@ -201,11 +221,15 @@ export class CreateCategoryVersioningAndHierarchy1772530000000 implements Migrat
 
     // Drop review comments, assignments, reviews, versions
     await queryRunner.query(`DROP TABLE IF EXISTS "category_review_comments"`);
-    await queryRunner.query(`DROP TABLE IF EXISTS "category_review_assignments"`);
+    await queryRunner.query(
+      `DROP TABLE IF EXISTS "category_review_assignments"`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "category_reviews"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "category_versions"`);
 
     // Re-add unique constraints
-    await queryRunner.query(`ALTER TABLE "categories" ADD CONSTRAINT "UQ_categories_slug" UNIQUE ("slug")`);
+    await queryRunner.query(
+      `ALTER TABLE "categories" ADD CONSTRAINT "UQ_categories_slug" UNIQUE ("slug")`,
+    );
   }
 }

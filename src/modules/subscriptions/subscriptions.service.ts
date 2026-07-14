@@ -4,12 +4,8 @@ import { Subscription } from "../../database/entities/Subscription";
 import { Coupon } from "../../database/entities/Coupon";
 import { AppError } from "../../core/AppError";
 import { SubscriptionStatus } from "../../types/enums";
-import {
-  createSubscription as paypalCreateSubscription,
-  getSubscriptionApprovalUrl,
-  cancelSubscription as paypalCancelSubscription,
-} from "../../services/paypal/paypal.subscriptions";
-import {
+import { type createSubscription as paypalCreateSubscription, type getSubscriptionApprovalUrl, cancelSubscription as paypalCancelSubscription } from "../../services/paypal/paypal.subscriptions";
+import type {
   createOrder as paypalCreateOrder,
   getApprovalUrl as paypalGetOrderApprovalUrl,
 } from "../../services/paypal/paypal.orders";

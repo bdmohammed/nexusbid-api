@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../core/asyncHandler';
 import { sendOk } from '../../core/response';
 import { sendContactFormEmail } from '../../services/email.service';

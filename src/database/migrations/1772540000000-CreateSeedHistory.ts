@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateSeedHistory1772540000000 implements MigrationInterface {
   name = "CreateSeedHistory1772540000000";

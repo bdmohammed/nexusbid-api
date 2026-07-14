@@ -1,7 +1,7 @@
-import { SeedInterface } from "../seed.interface";
+import type { SeedInterface } from "../seed.interface";
 import { Permission } from "../../entities/Permission";
 import { PermissionModule } from "../../entities/PermissionModule";
-import { DataSource, In } from "typeorm";
+import { type DataSource, In } from "typeorm";
 
 const rolePermissionModule = {
   name: "Role",

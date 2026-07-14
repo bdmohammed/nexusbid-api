@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { ZodSchema, ZodError } from 'zod';
+import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import type { ZodSchema, ZodError } from 'zod';
 import { AppError } from '../core/AppError';
 
 type Target = 'body' | 'query' | 'params';

@@ -1,4 +1,4 @@
-import { Logger as TypeOrmLogger, QueryRunner } from 'typeorm';
+import type { Logger as TypeOrmLogger, QueryRunner } from 'typeorm';
 import { logger } from './logger';
 
 export class TypeOrmPinoLogger implements TypeOrmLogger {

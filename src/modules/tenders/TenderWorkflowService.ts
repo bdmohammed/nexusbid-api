@@ -1,16 +1,12 @@
-import { AppDataSource } from "../../config/database";
-import { Tender } from "../../database/entities/Tender";
-import { TenderVersion } from "../../database/entities/TenderVersion";
-import { TenderReview } from "../../database/entities/TenderReview";
-import { TenderReviewAssignment } from "../../database/entities/TenderReviewAssignment";
-import { TenderReviewComment } from "../../database/entities/TenderReviewComment";
-import { TenderAmendment } from "../../database/entities/TenderAmendment";
-import { AppError } from "../../core/AppError";
-import {
-  TenderLifecycleStatus,
-  TenderVersionStatus,
-  TenderPublicationStatus,
-} from "../../types/enums";
+import type { AppDataSource } from "../../config/database";
+import type { Tender } from "../../database/entities/Tender";
+import type { TenderVersion } from "../../database/entities/TenderVersion";
+import type { TenderReview } from "../../database/entities/TenderReview";
+import type { TenderReviewAssignment } from "../../database/entities/TenderReviewAssignment";
+import type { TenderReviewComment } from "../../database/entities/TenderReviewComment";
+import type { TenderAmendment } from "../../database/entities/TenderAmendment";
+import type { AppError } from "../../core/AppError";
+import { type TenderLifecycleStatus, TenderVersionStatus, TenderPublicationStatus } from "../../types/enums";
 
 export class TenderWorkflowService {
   /**

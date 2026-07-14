@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/cms.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const cmsModule: ModuleDefinition = {
   slug: "cms",

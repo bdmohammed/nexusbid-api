@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import * as service from '../services/audit.service';
 import { AuditQuerySchema, UpdateRetentionSchema, RequestAuditExportSchema } from '../dto/audit.dto';
 import { AppError } from '../../../core/AppError';

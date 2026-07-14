@@ -1,8 +1,8 @@
 import { AppDataSource } from "../../../config/database";
 import { TenderDailyMetrics } from "../../../database/entities/TenderDailyMetrics";
 import { UserDailyMetrics } from "../../../database/entities/UserDailyMetrics";
-import { SubscriptionDailyMetrics } from "../../../database/entities/SubscriptionDailyMetrics";
-import { TrafficDailyMetrics } from "../../../database/entities/TrafficDailyMetrics";
+import type { SubscriptionDailyMetrics } from "../../../database/entities/SubscriptionDailyMetrics";
+import type { TrafficDailyMetrics } from "../../../database/entities/TrafficDailyMetrics";
 import { UserDashboardLayout } from "../../../database/entities/UserDashboardLayout";
 import { AnalyticsAlert } from "../../../database/entities/AnalyticsAlert";
 import { ScheduledReport } from "../../../database/entities/ScheduledReport";

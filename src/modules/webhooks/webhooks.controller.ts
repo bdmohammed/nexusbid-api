@@ -1,5 +1,5 @@
 import { performance } from 'perf_hooks';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../core/asyncHandler';
 import { verifyPayPalWebhook, getPayPalEventId } from '../../services/paypal/paypal.webhook';
 import * as service from './webhooks.service';

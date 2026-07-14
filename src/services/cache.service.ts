@@ -1,4 +1,4 @@
-import { logger } from '../config/logger';
+import { logger } from "../config/logger";
 
 // Custom zero-dependency LRU Cache to maintain bounded memory usage
 class LRUCache<K, V> {
@@ -48,22 +48,22 @@ const l1Cache = new LRUCache<string, { data: any; expiresAt: number }>(1000);
 // Initialize optional L2 Redis client dynamically
 let redisClient: any = null;
 
-try {
-  // Try importing ioredis. If not installed, we fallback to memory-only
-  const Redis = require('ioredis');
-  const redisUrl = process.env.REDIS_URL;
-  if (redisUrl) {
-    redisClient = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-    });
-    redisClient.on('error', (err: any) => {
-      logger.warn({ err }, 'Redis connection error. Falling back to memory cache.');
-    });
-  }
-} catch (e) {
-  logger.info('ioredis package not found or environment not configured. Cache fallback enabled.');
-}
+// try {
+//   // Try importing ioredis. If not installed, we fallback to memory-only
+//   const Redis = require('ioredis');
+//   const redisUrl = process.env.REDIS_URL;
+//   if (redisUrl) {
+//     redisClient = new Redis(redisUrl, {
+//       maxRetriesPerRequest: 1,
+//       connectTimeout: 2000,
+//     });
+//     redisClient.on('error', (err: any) => {
+//       logger.warn({ err }, 'Redis connection error. Falling back to memory cache.');
+//     });
+//   }
+// } catch (e) {
+//   logger.info('ioredis package not found or environment not configured. Cache fallback enabled.');
+// }
 
 export class CacheService {
   /**
@@ -92,7 +92,7 @@ export class CacheService {
           return parsed as T;
         }
       } catch (err) {
-        logger.error({ err, key }, 'Failed to fetch key from Redis');
+        logger.error({ err, key }, "Failed to fetch key from Redis");
       }
     }
 
@@ -102,18 +102,22 @@ export class CacheService {
   /**
    * Cache a value in L1 memory and L2 Redis.
    */
-  public static async set(key: string, value: any, ttlSeconds = 300): Promise<void> {
+  public static async set(
+    key: string,
+    value: any,
+    ttlSeconds = 300,
+  ): Promise<void> {
     const expiresAt = Date.now() + ttlSeconds * 1000;
-    
+
     // Set L1
     l1Cache.set(key, { data: value, expiresAt });
 
     // Set L2
     if (redisClient) {
       try {
-        await redisClient.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+        await redisClient.set(key, JSON.stringify(value), "EX", ttlSeconds);
       } catch (err) {
-        logger.error({ err, key }, 'Failed to set key in Redis');
+        logger.error({ err, key }, "Failed to set key in Redis");
       }
     }
   }
@@ -130,7 +134,7 @@ export class CacheService {
       try {
         await redisClient.del(key);
       } catch (err) {
-        logger.error({ err, key }, 'Failed to delete key from Redis');
+        logger.error({ err, key }, "Failed to delete key from Redis");
       }
     }
   }
@@ -143,7 +147,7 @@ export class CacheService {
       try {
         await this.invalidate(key);
       } catch (err) {
-        logger.error({ err, key }, 'Background cache invalidation failed');
+        logger.error({ err, key }, "Background cache invalidation failed");
       }
     });
   }

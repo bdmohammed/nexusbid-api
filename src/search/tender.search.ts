@@ -1,5 +1,5 @@
-import { SelectQueryBuilder } from "typeorm";
-import { Tender } from "../database/entities/Tender";
+import type { SelectQueryBuilder } from "typeorm";
+import type { Tender } from "../database/entities/Tender";
 import { TenderLifecycleStatus, TenderPublicationStatus } from "../types/enums";
 
 export interface TenderSearchParams {

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "../config/database";
 import { AuditLog } from "../database/entities/AuditLog";
 import { asyncHandler } from "../core/asyncHandler";

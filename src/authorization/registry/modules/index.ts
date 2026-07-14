@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/index.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 import { dashboardModule } from "./dashboard";
 import { usersModule } from "./users";

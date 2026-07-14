@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "../config/database";
 import { User } from "../database/entities/User";
 import { AppError } from "../core/AppError";

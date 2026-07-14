@@ -21,12 +21,14 @@ services:
       - .env.uat
     environment:
       NODE_ENV: uat
+      DOCKER: "true"
 
   api:
     env_file:
       - .env.uat
     environment:
       NODE_ENV: uat
+      DOCKER: "true"
     labels:
       com.nexusbid.service: "api"
       com.nexusbid.env: "uat"

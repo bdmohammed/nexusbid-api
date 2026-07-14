@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/analytics.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const analyticsModule: ModuleDefinition = {
   slug: "analytics",

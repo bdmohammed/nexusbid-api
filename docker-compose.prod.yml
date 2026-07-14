@@ -43,6 +43,9 @@ x-api-common: &api-common
     - .env.prod
   environment:
     NODE_ENV: prod
+    DOCKER: "true"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   networks:
     - nexusbid-net
 

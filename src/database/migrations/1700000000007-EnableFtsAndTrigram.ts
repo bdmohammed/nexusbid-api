@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 /**
  * Enables PostgreSQL full-text search and trigram extensions.
@@ -8,7 +8,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * These indexes are used by the buildTenderSearchQuery() function.
  */
 export class EnableFtsAndTrigram1700000000007 implements MigrationInterface {
-  name = 'EnableFtsAndTrigram1700000000007';
+  name = "EnableFtsAndTrigram1700000000007";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Enable trigram extension (fuzzy/partial word matching)

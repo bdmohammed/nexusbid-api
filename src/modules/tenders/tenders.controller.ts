@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { asyncHandler } from "../../core/asyncHandler";
 import {
   sendOk,
@@ -12,11 +12,7 @@ import { AppDataSource } from "../../config/database";
 import { Tender } from "../../database/entities/Tender";
 import { TenderVersion } from "../../database/entities/TenderVersion";
 import { TenderWorkflowService } from "./TenderWorkflowService";
-import {
-  TenderLifecycleStatus,
-  TenderPublicationStatus,
-  TenderVersionStatus,
-} from "../../types/enums";
+import { TenderLifecycleStatus, TenderPublicationStatus, type TenderVersionStatus } from "../../types/enums";
 import type {
   TenderSearchQueryDto,
   CreateTenderDto,

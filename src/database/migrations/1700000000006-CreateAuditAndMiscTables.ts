@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface {
-  name = 'CreateAuditAndMiscTables1700000000006';
+  name = "CreateAuditAndMiscTables1700000000006";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Notifications
@@ -23,7 +23,9 @@ export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_notif_user_read" ON "notifications" ("user_id", "is_read")`,
+    );
 
     // Support tickets
     await queryRunner.query(`
@@ -70,8 +72,12 @@ export class CreateAuditAndMiscTables1700000000006 implements MigrationInterface
         "created_at"   TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await queryRunner.query(`CREATE INDEX "idx_audit_actor_date" ON "audit_logs" ("actor_id", "created_at")`);
-    await queryRunner.query(`CREATE INDEX "idx_audit_entity"     ON "audit_logs" ("entity_type", "entity_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "idx_audit_actor_date" ON "audit_logs" ("actor_id", "created_at")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "idx_audit_entity"     ON "audit_logs" ("entity_type", "entity_id")`,
+    );
 
     // Webhook events (idempotency store)
     await queryRunner.query(`

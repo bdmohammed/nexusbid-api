@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/notifications.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const notificationsModule: ModuleDefinition = {
   slug: "notifications",

@@ -1,6 +1,6 @@
 // src/authorization/registry/modules/taxonomy.ts
 
-import { ModuleDefinition } from "../types";
+import type { ModuleDefinition } from "../types";
 
 export const taxonomyModule: ModuleDefinition = {
   slug: "taxonomy",

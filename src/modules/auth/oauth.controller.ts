@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import crypto from 'crypto';
 import { asyncHandler } from '../../core/asyncHandler';
 import * as oauthService from './oauth.service';

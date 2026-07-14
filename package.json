@@ -7,7 +7,7 @@
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
     "dev:local": "cross-env NODE_ENV=local nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
     "dev:dev": "cross-env NODE_ENV=dev nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
-    "build": "tsc --project tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc-alias",
     "start": "node dist/config/server.js",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:run": "npm run typeorm -- migration:run -d src/config/database.ts",
@@ -73,6 +73,7 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
+    "tsc-alias": "^1.9.1",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.2"
   },

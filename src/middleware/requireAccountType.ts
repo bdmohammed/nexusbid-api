@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../core/AppError';
-import { AccountType } from '../types/enums';
+import type { AccountType } from '../types/enums';
 
 export const requireAccountType = (allowedType: AccountType) => {
   return (req: Request, res: Response, next: NextFunction): void => {

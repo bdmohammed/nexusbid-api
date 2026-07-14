@@ -14,7 +14,7 @@ import { RoleReviewComment } from "../../database/entities/RoleReviewComment";
 import { Permission } from "../../database/entities/Permission";
 import { PermissionModule } from "../../database/entities/PermissionModule";
 import { UserRole } from "../../database/entities/UserRole";
-import { User } from "../../database/entities/User";
+import type { User } from "../../database/entities/User";
 import { AppError } from "../../core/AppError";
 import { rbacEventEmitter } from "./events/RbacEvents";
 import slugify from "slugify";

@@ -1,7 +1,7 @@
 // src/authorization/registry/validator.ts
 
 import { MODULES } from "./modules";
-import {
+import type {
   ModuleDefinition,
   PermissionDefinition,
 } from "./types";

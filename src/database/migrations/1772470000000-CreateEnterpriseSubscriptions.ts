@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from "typeorm";
 
 export class CreateEnterpriseSubscriptions1772470000000 implements MigrationInterface {
-  name = 'CreateEnterpriseSubscriptions1772470000000';
+  name = "CreateEnterpriseSubscriptions1772470000000";
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ─── TENDER GOVERNANCE UPGRADES ──────────────────────────────────────────

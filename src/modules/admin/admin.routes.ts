@@ -14,7 +14,7 @@ import * as controller from './admin.controller';
 import setupRouter from '../rbac/setup.routes';
 import { RegisterDto, LoginDto, VerifyEmailDto, ResendVerificationDto, ForgotPasswordDto, ResetPasswordDto } from '../auth/auth.dto';
 import * as authController from '../auth/auth.controller';
-import { loadPermissions } from '../../middleware/permissions';
+import type { loadPermissions } from '../../middleware/permissions';
 
 const router = Router();
 

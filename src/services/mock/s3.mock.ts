@@ -8,7 +8,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../config/logger';
-import { AppError } from '../../core/AppError';
+import type { AppError } from '../../core/AppError';
 
 export async function generateUploadUrl(
   fileName: string,

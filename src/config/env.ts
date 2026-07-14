@@ -15,9 +15,10 @@ dotenv.config({
 // ─── Step 3: If running inside Docker Compose (DOCKER=true), swap DB host ────
 // This allows a single .env.local / .env.dev to work both natively and in Docker.
 if (process.env["DOCKER"] === "true" && process.env["DATABASE_URL"]) {
+  const host = nodeEnv === "local" ? "db" : "host.docker.internal";
   process.env["DATABASE_URL"] = process.env["DATABASE_URL"].replace(
     /@localhost:/,
-    "@db:",
+    `@${host}:`,
   );
 }
 
