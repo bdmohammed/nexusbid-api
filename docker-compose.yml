@@ -40,7 +40,7 @@ x-api-common: &api-common
   environment:
     NODE_ENV: local
     DOCKER: "true"
-    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nexusbid_dev}
+    DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nexusbid}
   volumes:
     - ./src:/app/src
   networks:
@@ -91,7 +91,7 @@ services:
       # values so the stack starts without any manual configuration.
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-nexusbid_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusbid}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -103,7 +103,7 @@ services:
     healthcheck:
       # pg_isready exits 0 only when Postgres is accepting connections.
       # The API's depends_on.condition: service_healthy waits for this.
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexusbid_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexusbid}"]
       interval: 5s
       timeout: 5s
       retries: 5
