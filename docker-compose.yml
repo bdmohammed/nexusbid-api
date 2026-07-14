@@ -32,9 +32,7 @@ volumes:
 
 # Reusable configuration block for API services to avoid duplication
 x-api-common: &api-common
-  build:
-    context: .
-    dockerfile: docker/Dockerfile
+  image: nexusbid-api-dev:latest
   env_file:
     - .env
   environment:
@@ -64,6 +62,9 @@ services:
   # ── API ─────────────────────────────────────────────────────────────────────
   api:
     <<: *api-common
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     ports:
       # Direct port exposure for debugging with Postman / curl (bypasses nginx).
       # Remove this in production — traffic should only enter through nginx.

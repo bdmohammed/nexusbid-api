@@ -29,16 +29,7 @@ networks:
 
 # Reusable configuration block for API services to avoid duplication
 x-api-common: &api-common
-  # Phase 2+: pull pre-built image from ECR instead of building on the server.
-  # image: ${ECR_REGISTRY}/nexusbid-api:${IMAGE_TAG:-latest}
-  # For now (Phase 1): build the production image locally.
-  build:
-    context: .
-    dockerfile: docker/Dockerfile.prod
-    args:
-      BUILD_DATE: ${BUILD_DATE:-}
-      GIT_REVISION: ${GIT_REVISION:-}
-      VERSION: ${VERSION:-1.0.0}
+  image: nexusbid-api:latest
   env_file:
     - .env.prod
   environment:
@@ -64,6 +55,13 @@ services:
   # ── API ─────────────────────────────────────────────────────────────────────
   api:
     <<: *api-common
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.prod
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        GIT_REVISION: ${GIT_REVISION:-}
+        VERSION: ${VERSION:-1.0.0}
     # Do NOT expose port 3000 to the host in production.
     # All external traffic enters through nginx on ports 80/443.
     restart: always
