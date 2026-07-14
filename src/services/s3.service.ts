@@ -4,51 +4,73 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { v4 as uuidv4 } from 'uuid';
-import type { AppError } from '../core/AppError';
-import { env } from '../config/env';
-import { S3_URL_EXPIRY } from '../core/constants';
+  type S3ClientConfig,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { v4 as uuidv4 } from "uuid";
+import type { AppError } from "../core/AppError";
+import { env } from "../config/env";
+import { S3_URL_EXPIRY } from "../core/constants";
 
 // ─── Local env: swap in dummy implementation (no real AWS calls) ─────────────
-if (env.NODE_ENV === 'local') {
-  module.exports = require('./mock/s3.mock');
+if (env.NODE_ENV === "local") {
+  module.exports = require("./mock/s3.mock");
 }
 
-
-const s3Client = new S3Client({
+const s3Config: S3ClientConfig = {
   region: env.AWS_REGION,
-  credentials: {
+};
+
+if (env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) {
+  s3Config.credentials = {
     accessKeyId: env.AWS_ACCESS_KEY_ID,
     secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+  };
+}
+
+const s3Client = new S3Client(s3Config);
 
 /**
  * Helper to determine MIME type from filename extension.
  */
 function getContentType(fileName: string): string {
-  const ext = fileName.toLowerCase().split('.').pop();
+  const ext = fileName.toLowerCase().split(".").pop();
   switch (ext) {
-    case 'pdf': return 'application/pdf';
-    case 'jpg':
-    case 'jpeg': return 'image/jpeg';
-    case 'png': return 'image/png';
-    case 'gif': return 'image/gif';
-    case 'zip': return 'application/zip';
-    case 'tar': return 'application/x-tar';
-    case 'gz': return 'application/gzip';
-    case 'doc': return 'application/msword';
-    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    case 'xls': return 'application/vnd.ms-excel';
-    case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    case 'ppt': return 'application/vnd.ms-powerpoint';
-    case 'pptx': return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    case 'txt': return 'text/plain';
-    case 'csv': return 'text/csv';
-    case 'json': return 'application/json';
-    default: return 'application/octet-stream';
+    case "pdf":
+      return "application/pdf";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "zip":
+      return "application/zip";
+    case "tar":
+      return "application/x-tar";
+    case "gz":
+      return "application/gzip";
+    case "doc":
+      return "application/msword";
+    case "docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "xls":
+      return "application/vnd.ms-excel";
+    case "xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "ppt":
+      return "application/vnd.ms-powerpoint";
+    case "pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    case "txt":
+      return "text/plain";
+    case "csv":
+      return "text/csv";
+    case "json":
+      return "application/json";
+    default:
+      return "application/octet-stream";
   }
 }
 
@@ -57,8 +79,8 @@ function getContentType(fileName: string): string {
  */
 function sanitizeFileName(fileName: string): string {
   return fileName
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
     .toLowerCase();
 }
 
@@ -67,7 +89,11 @@ function sanitizeFileName(fileName: string): string {
  */
 export async function generateUploadUrl(
   fileName: string,
-): Promise<{ uploadUrl: string; documentKey: string; originalFileName: string }> {
+): Promise<{
+  uploadUrl: string;
+  documentKey: string;
+  originalFileName: string;
+}> {
   const sanitized = sanitizeFileName(fileName);
   const documentKey = `tenders/${uuidv4()}-${sanitized}`;
 
