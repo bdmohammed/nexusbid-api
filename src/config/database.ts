@@ -183,7 +183,7 @@ export const AppDataSource = new DataSource({
   migrations: [
     // Production: compiled JS files
     // Development (ts-node): TypeScript source files
-    process.env["NODE_ENV"] === "prod"
+    process.env["NODE_ENV"] === "prod" || process.env["NODE_ENV"] === "uat"
       ? "dist/database/migrations/*.js"
       : "src/database/migrations/*.ts",
   ],
