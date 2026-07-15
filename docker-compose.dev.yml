@@ -15,3 +15,8 @@ services:
     env_file:
       - .env
       - .env.dev     # Override with real credentials
+    labels:
+      com.nexusbid.env: "dev"
+      com.nexusbid.service: "api"
+      com.nexusbid.team: "backend"
+

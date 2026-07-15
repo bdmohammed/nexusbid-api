@@ -281,3 +281,7 @@ test/results/
 
 test-output
 !apps/web/user/app/.next
+
+# Nginx Basic Auth credentials
+.htpasswd
+docker/.htpasswd

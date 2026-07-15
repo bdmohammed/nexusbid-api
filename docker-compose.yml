@@ -73,6 +73,13 @@ services:
       db:
         condition: service_healthy   # Wait for postgres to accept connections
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
     healthcheck:
       # Calls the real health endpoint — same check used by nginx before
       # routing traffic. start-period is long because ts-node compiles on
@@ -82,6 +89,15 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "local"
+      com.nexusbid.service: "api"
+      com.nexusbid.team: "backend"
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   # Development-only database. In production, use Amazon RDS.
@@ -110,11 +126,22 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "3"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "local"
+      com.nexusbid.service: "db"
+      com.nexusbid.team: "backend"
 
   # ── Nginx ─────────────────────────────────────────────────────────────────────
   # HTTP-only reverse proxy for local development.
@@ -129,14 +156,66 @@ services:
       # For HTTPS testing: docker compose -f docker-compose.yml -f docker-compose.ssl.yml up
     volumes:
       - ./docker/nginx.local.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/.htpasswd:/etc/nginx/.htpasswd:ro
     networks:
       - nexusbid-net
     depends_on:
       api:
         condition: service_healthy   # Wait for the API to pass its health check
+      dozzle:
+        condition: service_healthy   # Wait for Dozzle to pass its health check
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 64M
+        reservations:
+          memory: 32M
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
-        max-file: "2"
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "local"
+      com.nexusbid.service: "nginx"
+      com.nexusbid.team: "devops"
+
+  # ── Dozzle Log Viewer (Local Dev) ─────────────────────────────────────────────
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: nexusbid-dozzle-local
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - nexusbid-net
+    environment:
+      DOZZLE_LEVEL: info
+      DOZZLE_NO_ANALYTICS: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 100M
+        reservations:
+          memory: 50M
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "local"
+      com.nexusbid.service: "dozzle"
+      com.nexusbid.team: "devops"
+

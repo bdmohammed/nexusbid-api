@@ -1,10 +1,10 @@
-import type { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
-import { QueryFailedError } from 'typeorm';
-import { AppError } from '../core/AppError';
-import { logger } from '../config/logger';
-import { env } from '../config/env';
-import { getTraceId, getContext } from '../config/requestContext';
+import type { Request, Response, NextFunction } from "express";
+import { ZodError } from "zod";
+import { QueryFailedError } from "typeorm";
+import { AppError } from "../core/AppError";
+import { logger } from "../config/logger";
+import { env } from "../config/env";
+import { getTraceId, getContext } from "../config/requestContext";
 
 interface AppErrorWithErrors extends AppError {
   errors?: Array<{ field: string; message: string }>;
@@ -28,8 +28,12 @@ export const errorHandler = (
   _next: NextFunction,
 ): void => {
   const activeLogger = req.log || logger;
-  const traceId = getTraceId() ?? (req as any).traceId ?? 'unknown';
-  const requestId = getContext()?.requestId ?? (req as any).requestId ?? (req as any).id ?? 'unknown';
+  const traceId = getTraceId() ?? (req as any).traceId ?? "unknown";
+  const requestId =
+    getContext()?.requestId ??
+    (req as any).requestId ??
+    (req as any).id ??
+    "unknown";
   const userId = getContext()?.userId ?? req.user?.userId;
 
   // ── AppError ────────────────────────────────────────────────────────────────
@@ -59,7 +63,10 @@ export const errorHandler = (
 
   // ── Zod (should be caught by validate middleware, but belt-and-suspenders) ──
   if (err instanceof ZodError) {
-    const validationErrors = err.issues.map((i) => ({ field: i.path.join('.'), message: i.message }));
+    const validationErrors = err.issues.map((i) => ({
+      field: i.path.join("."),
+      message: i.message,
+    }));
     activeLogger.warn(
       {
         requestId,
@@ -68,15 +75,15 @@ export const errorHandler = (
         path: req.path,
         userId,
         statusCode: 422,
-        code: 'VALIDATION_ERROR',
+        code: "VALIDATION_ERROR",
         errors: validationErrors,
       },
-      'Validation failed',
+      "Validation failed",
     );
     res.status(422).json({
       success: false,
-      message: 'Validation failed',
-      error: 'VALIDATION_ERROR',
+      message: "Validation failed",
+      error: "VALIDATION_ERROR",
       errors: validationErrors,
       traceId,
     });
@@ -85,8 +92,11 @@ export const errorHandler = (
 
   // ── TypeORM unique constraint violation ─────────────────────────────────────
   if (err instanceof QueryFailedError) {
-    const pgError = err as QueryFailedError & { code?: string; detail?: string };
-    if (pgError.code === '23505') {
+    const pgError = err as QueryFailedError & {
+      code?: string;
+      detail?: string;
+    };
+    if (pgError.code === "23505") {
       activeLogger.warn(
         {
           requestId,
@@ -95,21 +105,23 @@ export const errorHandler = (
           path: req.path,
           userId,
           statusCode: 409,
-          code: 'CONFLICT',
+          code: "CONFLICT",
           detail: pgError.detail,
         },
-        'Database record conflict',
+        "Database record conflict",
       );
       res.status(409).json({
         success: false,
-        message: 'A record with this value already exists',
-        error: 'CONFLICT',
+        message: "A record with this value already exists",
+        error: "CONFLICT",
         traceId,
-        ...(['local', 'dev'].includes(env.NODE_ENV) ? { detail: pgError.detail } : {}),
+        ...(["local", "dev"].includes(env.NODE_ENV)
+          ? { detail: pgError.detail }
+          : {}),
       });
       return;
     }
-    if (pgError.code === '23503') {
+    if (pgError.code === "23503") {
       activeLogger.warn(
         {
           requestId,
@@ -118,14 +130,14 @@ export const errorHandler = (
           path: req.path,
           userId,
           statusCode: 409,
-          code: 'FK_VIOLATION',
+          code: "FK_VIOLATION",
         },
-        'Database foreign key violation',
+        "Database foreign key violation",
       );
       res.status(409).json({
         success: false,
-        message: 'Referenced record does not exist',
-        error: 'FK_VIOLATION',
+        message: "Referenced record does not exist",
+        error: "FK_VIOLATION",
         traceId,
       });
       return;
@@ -133,7 +145,7 @@ export const errorHandler = (
   }
 
   // ── CSRF error ──────────────────────────────────────────────────────────────
-  if (err instanceof Error && err.message === 'invalid csrf token') {
+  if (err instanceof Error && err.message === "invalid csrf token") {
     activeLogger.warn(
       {
         requestId,
@@ -142,14 +154,14 @@ export const errorHandler = (
         path: req.path,
         userId,
         statusCode: 403,
-        code: 'CSRF_INVALID',
+        code: "CSRF_INVALID",
       },
-      'CSRF validation failed',
+      "CSRF validation failed",
     );
     res.status(403).json({
       success: false,
-      message: 'CSRF validation failed. Refresh the page and try again.',
-      error: 'CSRF_INVALID',
+      message: "CSRF validation failed. Refresh the page and try again.",
+      error: "CSRF_INVALID",
       traceId,
     });
     return;
@@ -167,14 +179,14 @@ export const errorHandler = (
       userId,
       statusCode: 500,
     },
-    'Unhandled error',
+    "Unhandled error",
   );
 
   res.status(500).json({
     success: false,
-    message: 'An unexpected error occurred',
-    error: 'INTERNAL_ERROR',
+    message: "An unexpected error occurred",
+    error: "INTERNAL_ERROR",
     traceId,
-    ...(['local', 'dev'].includes(env.NODE_ENV) ? { stack: error.stack } : {}),
+    ...(["local", "dev"].includes(env.NODE_ENV) ? { stack: error.stack } : {}),
   });
 };
