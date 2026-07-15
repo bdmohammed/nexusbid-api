@@ -143,6 +143,12 @@ async function generateAndSetTokens(
     secure: env.NODE_ENV === "prod" || env.NODE_ENV === "uat",
     sameSite: "lax",
     maxAge: ACCESS_COOKIE_MAX_AGE,
+    domain:
+      env.NODE_ENV === "prod"
+        ? ".rfpnexa.com"
+        : env.NODE_ENV === "uat"
+          ? ".staging.rfpnexa.com"
+          : undefined,
   });
 
   // 5. Set Refresh Token Cookie (scoped to /api/v1/auth)
@@ -152,6 +158,12 @@ async function generateAndSetTokens(
     sameSite: "lax",
     maxAge: refreshTtl,
     path: "/api/v1/auth",
+    domain:
+      env.NODE_ENV === "prod"
+        ? ".rfpnexa.com"
+        : env.NODE_ENV === "uat"
+          ? ".staging.rfpnexa.com"
+          : undefined,
   });
 }
 
@@ -520,6 +532,12 @@ export async function logoutUser(
     httpOnly: true,
     secure: env.NODE_ENV === "prod" || env.NODE_ENV === "uat",
     sameSite: "lax",
+    domain:
+      env.NODE_ENV === "prod"
+        ? ".rfpnexa.com"
+        : env.NODE_ENV === "uat"
+          ? ".staging.rfpnexa.com"
+          : undefined,
   });
 
   res.clearCookie(REFRESH_COOKIE_NAME, {
@@ -527,6 +545,12 @@ export async function logoutUser(
     secure: env.NODE_ENV === "prod" || env.NODE_ENV === "uat",
     sameSite: "lax",
     path: "/api/v1/auth",
+    domain:
+      env.NODE_ENV === "prod"
+        ? ".rfpnexa.com"
+        : env.NODE_ENV === "uat"
+          ? ".staging.rfpnexa.com"
+          : undefined,
   });
 
   if (userId || email) {
