@@ -1,19 +1,19 @@
-import { randomUUID } from 'crypto';
-import pinoHttp from 'pino-http';
-import { logger } from '../config/logger';
+import { randomUUID } from "crypto";
+import pinoHttp from "pino-http";
+import { logger } from "../config/logger";
 
 export const requestLogger = pinoHttp({
   logger,
   genReqId: (req: any) => req.requestId || req.traceId || randomUUID(),
   customLogLevel(req, res, err) {
-    if (res.statusCode >= 500 || err) return 'error';
-    if (res.statusCode >= 400) return 'warn';
-    return 'info';
+    if (res.statusCode >= 500 || err) return "error";
+    if (res.statusCode >= 400) return "warn";
+    return "info";
   },
   autoLogging: {
     ignore: (req) => {
-      const url = req.url?.split('?')[0];
-      return ['/health', '/ping', '/favicon.ico'].includes(url || '');
+      const url = req.url?.split("?")[0];
+      return ["/health", "/ping", "/favicon.ico"].includes(url || "");
     },
   },
   customProps(req: any, res: any) {
@@ -21,17 +21,25 @@ export const requestLogger = pinoHttp({
       requestId: req.id,
       traceId: req.traceId || req.id,
       method: req.method,
-      endpoint: req.url?.split('?')[0],
+      endpoint: req.url?.split("?")[0],
       status: res.statusCode,
     };
   },
-  customErrorObject: () => ({}),
+  customErrorObject(req, res, error) {
+    return {
+      err: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      },
+    };
+  },
   serializers: {
     req: () => undefined,
     res: () => undefined,
   },
-  customSuccessMessage: () => 'request completed',
-  customErrorMessage: () => 'request failed',
+  customSuccessMessage: () => "request completed",
+  customErrorMessage: () => "request failed",
   formatters: {
     log(object: any) {
       if (object.responseTime !== undefined) {
