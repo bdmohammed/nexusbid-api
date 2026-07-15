@@ -18,7 +18,7 @@
 #      aws ecr get-login-password --region us-east-1 | \
 #        docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
 #   2. .env.prod must exist on the host (git-ignored, deployed via CI or SSM)
-#   3. SSL certificates must exist at docker/ssl/ (cert.pem + key.pem)
+#   3. SSL certificates must exist in the host Let's Encrypt directory (/etc/letsencrypt)
 # ─────────────────────────────────────────────────────────────────────────────
 
 networks:
@@ -95,16 +95,16 @@ services:
   # Pinned to a specific major.minor version to avoid unexpected updates.
   nginx:
     image: nginx:1.28-alpine
+    container_name: nexusbid-nginx-prod
     ports:
       - "80:80"    # HTTP → HTTPS redirect
       - "443:443"  # HTTPS (TLS termination)
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      # SSL certificates — provide via:
-      #   - Self-signed (local prod testing): scripts/gen-local-ssl.ps1
-      #   - Let's Encrypt (real domain):      certbot / ACM
-      - ./docker/ssl:/etc/nginx/ssl:ro
+      # SSL certificates: loaded directly from the host system Certbot directory.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./docker/.htpasswd:/etc/nginx/.htpasswd:ro
+
     networks:
       - nexusbid-net
     depends_on:
