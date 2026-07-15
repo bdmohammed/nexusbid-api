@@ -124,11 +124,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      # Only enable container inspection and logs endpoint
+      # Only enable container inspection, logs, and basic info endpoint
       CONTAINERS: 1
       LOGS: 1
+      INFO: 1
     networks:
       - nexusbid-net
+
     deploy:
       resources:
         limits:
