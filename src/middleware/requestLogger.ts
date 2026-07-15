@@ -25,10 +25,10 @@ export const requestLogger = pinoHttp({
       status: res.statusCode,
     };
   },
+  customErrorObject: () => ({}),
   serializers: {
     req: () => undefined,
     res: () => undefined,
-    err: () => undefined,
   },
   customSuccessMessage: () => 'request completed',
   customErrorMessage: () => 'request failed',
@@ -41,5 +41,4 @@ export const requestLogger = pinoHttp({
       return object;
     },
   },
-
 });
