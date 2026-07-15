@@ -28,9 +28,11 @@ export const { generateToken, doubleCsrfProtection } = doubleCsrf({
     httpOnly: true,
     path: "/",
     domain:
-      env.NODE_ENV === "prod" || env.NODE_ENV === "uat"
+      env.NODE_ENV === "prod"
         ? ".rfpnexa.com"
-        : undefined,
+        : env.NODE_ENV === "uat"
+          ? ".staging.rfpnexa.com"
+          : undefined,
   },
   size: 64,
   ignoredMethods: ["GET", "HEAD", "OPTIONS"],
