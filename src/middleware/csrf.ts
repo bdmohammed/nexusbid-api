@@ -1,5 +1,5 @@
-import { doubleCsrf } from 'csrf-csrf';
-import { env } from '../config/env';
+import { doubleCsrf } from "csrf-csrf";
+import { env } from "../config/env";
 
 /**
  * CSRF protection using the double-submit cookie pattern (csrf-csrf library).
@@ -18,13 +18,20 @@ import { env } from '../config/env';
  */
 export const { generateToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => env.CSRF_SECRET,
-  cookieName: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat' ? '__Host-nexusbid.csrf' : 'nexusbid.csrf',
+  cookieName:
+    env.NODE_ENV === "prod" || env.NODE_ENV === "uat"
+      ? "__Host-nexusbid.csrf"
+      : "nexusbid.csrf",
   cookieOptions: {
-    sameSite: 'lax',
-    secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
+    sameSite: "lax",
+    secure: env.NODE_ENV === "prod" || env.NODE_ENV === "uat",
     httpOnly: true,
-    path: '/',
+    path: "/",
+    domain:
+      env.NODE_ENV === "prod" || env.NODE_ENV === "uat"
+        ? ".rfpnexa.com"
+        : undefined,
   },
   size: 64,
-  ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
+  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
 });
