@@ -86,8 +86,9 @@ services:
         max-size: "10m"
         max-file: "5"
     labels:
-      com.nexusbid.service: "api"
       com.nexusbid.env: "production"
+      com.nexusbid.service: "api"
+      com.nexusbid.team: "backend"
 
   # ── Nginx ─────────────────────────────────────────────────────────────────────
   # Reverse proxy: TLS termination, rate limiting, HTTP → HTTPS redirect.
@@ -103,6 +104,7 @@ services:
       #   - Self-signed (local prod testing): scripts/gen-local-ssl.ps1
       #   - Let's Encrypt (real domain):      certbot / ACM
       - ./docker/ssl:/etc/nginx/ssl:ro
+      - ./docker/.htpasswd:/etc/nginx/.htpasswd:ro
     networks:
       - nexusbid-net
     depends_on:
@@ -112,11 +114,20 @@ services:
         # API that hasn't finished connecting to the database.
         condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          memory: 64M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
     labels:
-      com.nexusbid.service: "nginx"
       com.nexusbid.env: "production"
+      com.nexusbid.service: "nginx"
+      com.nexusbid.team: "devops"
+

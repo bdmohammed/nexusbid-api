@@ -1,8 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# docker-compose.uat.yml
+# docker-compose.uat.yml — NexusBid UAT (Staging) Stack
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
+
   api-init:
     env_file:
       - .env.uat
@@ -13,6 +14,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    labels:
+      com.nexusbid.env: "uat"
+      com.nexusbid.service: "api-init"
+      com.nexusbid.team: "backend"
 
   api:
     env_file:
@@ -24,9 +29,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     labels:
-      com.nexusbid.service: "api"
       com.nexusbid.env: "uat"
+      com.nexusbid.service: "api"
+      com.nexusbid.team: "backend"
 
   db:
     image: postgres:15-alpine
@@ -35,7 +53,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-nexusbid}
     ports:
-      - "5432:5432"
+      # Expose port in UAT for testing / DB administration (same as original UAT compose)
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -46,11 +65,134 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "uat"
+      com.nexusbid.service: "db"
+      com.nexusbid.team: "backend"
 
   nginx:
+    image: nginx:1.28-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+      - ./docker/.htpasswd:/etc/nginx/.htpasswd:ro
+    networks:
+      - nexusbid-net
+    depends_on:
+      api:
+        condition: service_healthy
+      dozzle:
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     labels:
-      com.nexusbid.service: "nginx"
       com.nexusbid.env: "uat"
-  
+      com.nexusbid.service: "nginx"
+      com.nexusbid.team: "devops"
+
+  # ── Docker Socket Proxy (Security Hardening for Dozzle) ─────────────────────
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: nexusbid-socket-proxy-uat
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      # Only enable container inspection and logs endpoint
+      CONTAINERS: 1
+      LOGS: 1
+    networks:
+      - nexusbid-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 45M
+        reservations:
+          memory: 15M
+    # Verify TCP port 2375 is open and active
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2375 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "2m"
+        max-file: "3"
+    labels:
+      com.nexusbid.env: "uat"
+      com.nexusbid.service: "socket-proxy"
+      com.nexusbid.team: "devops"
+
+  # ── Dozzle Log Viewer (Staging / UAT) ───────────────────────────────────────
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: nexusbid-dozzle-uat
+    restart: unless-stopped
+    expose:
+      - "8080"
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    networks:
+      - nexusbid-net
+    environment:
+      # Connect via socket-proxy instead of raw UNIX socket mount
+      DOZZLE_REMOTE_HOST: "tcp://socket-proxy:2375"
+      # Only show UAT containers in this dashboard
+      DOZZLE_FILTER: "label=com.nexusbid.env=uat"
+      DOZZLE_LEVEL: info
+      DOZZLE_NO_ANALYTICS: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 100M
+        reservations:
+          memory: 50M
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "uat"
+      com.nexusbid.service: "dozzle"
+      com.nexusbid.team: "devops"
+
 volumes:
-    postgres_data:
+  postgres_data:

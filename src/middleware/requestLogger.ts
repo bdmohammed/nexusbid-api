@@ -21,8 +21,8 @@ export const requestLogger = pinoHttp({
       requestId: req.id,
       traceId: req.traceId || req.id,
       method: req.method,
-      path: req.url?.split('?')[0],
-      statusCode: res.statusCode,
+      endpoint: req.url?.split('?')[0],
+      status: res.statusCode,
     };
   },
   serializers: {
@@ -35,10 +35,11 @@ export const requestLogger = pinoHttp({
   formatters: {
     log(object: any) {
       if (object.responseTime !== undefined) {
-        object.durationMs = object.responseTime;
+        object.duration = object.responseTime;
         delete object.responseTime;
       }
       return object;
     },
   },
+
 });
