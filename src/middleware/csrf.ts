@@ -20,7 +20,7 @@ export const { generateToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => env.CSRF_SECRET,
   cookieName:
     env.NODE_ENV === "prod" || env.NODE_ENV === "uat"
-      ? "__Host-nexusbid.csrf"
+      ? "__Secure-nexusbid.csrf"
       : "nexusbid.csrf",
   cookieOptions: {
     sameSite: "lax",
