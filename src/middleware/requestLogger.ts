@@ -26,14 +26,23 @@ export const requestLogger = pinoHttp<Request, Response>({
       requestId: req.id,
       traceId: req.traceId ?? req.id,
       method: req.method,
-      path: req.url.split('?')[0] ?? '',
+      endPoint: req.url.split('?')[0] ?? '',
       statusCode: res.statusCode,
+    };
+  },
+  customErrorObject(_req, _res, error) {
+    return {
+      err: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      },
     };
   },
   serializers: {
     req: () => undefined,
     res: () => undefined,
-    err: () => undefined,
+    // err: () => undefined,
   },
   customSuccessMessage: () => 'request completed',
   customErrorMessage: () => 'request failed',

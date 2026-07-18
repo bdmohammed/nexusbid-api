@@ -120,6 +120,7 @@ pnpm-lock.yaml
 
 # env files (can opt-in for committing if needed)
 .env.*
+!.env.example
 
 # Linting
 .eslintcache
@@ -280,3 +281,7 @@ test/results/
 
 test-output
 !apps/web/user/app/.next
+
+# Nginx Basic Auth credentials
+.htpasswd
+docker/.htpasswd

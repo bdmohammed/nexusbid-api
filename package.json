@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
     "start": "node dist/config/server.js",
-    "build": "tsc --project tsconfig.json",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
     "typecheck:watch": "tsc --watch --noEmit",
@@ -37,10 +36,19 @@
     "preinstall": "",
     "prepare": "husky",
     "fake": "cross-env NODE_ENV=local npx ts-node -r tsconfig-paths/register src/database/generateMissingMigrations.ts",
-    "generate:errors": "ts-node ts-morph-script.ts"
+    "generate:errors": "ts-node ts-morph-script.ts",
+    "dev:local": "cross-env NODE_ENV=local nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
+    "dev:dev": "cross-env NODE_ENV=dev nodemon --exec ts-node -r tsconfig-paths/register src/config/server.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias",
+    "migration:run:local": "cross-env NODE_ENV=local npm run migration:run",
+    "migration:run:prod": "node node_modules/typeorm/cli.js migration:run -d dist/config/database.js",
+    "seed:prod": "node dist/database/seeds/seed.js",
+    "test:auth": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles tests/auth",
+    "migration:run:test": "cross-env NODE_ENV=test ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d src/config/database.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/client-sesv2": "^3.1085.0",
     "@aws-sdk/s3-request-presigner": "^3.600.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
@@ -60,7 +68,6 @@
     "pino-http": "^10.2.0",
     "pino-pretty": "^11.2.1",
     "reflect-metadata": "^0.2.2",
-    "resend": "^3.4.0",
     "slugify": "^1.6.9",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
@@ -115,7 +122,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.2",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "tsc-alias": "^1.9.1"
   },
   "engines": {
     "node": ">=20.19.4"

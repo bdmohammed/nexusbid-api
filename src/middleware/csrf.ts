@@ -19,12 +19,14 @@ import { env } from '../config/env';
  */
 export const { generateToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => env.CSRF_SECRET,
-  cookieName: '__Host-nexusbid.csrf',
+  cookieName:
+    env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat' ? '__Host-nexusbid.csrf' : 'nexusbid.csrf',
   cookieOptions: {
     sameSite: 'lax',
     secure: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat',
     httpOnly: true,
     path: '/',
+    domain: env.NODE_ENV === 'prod' || env.NODE_ENV === 'uat' ? '.rfpnexa.com' : undefined,
   },
   size: 64,
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],

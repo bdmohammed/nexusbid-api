@@ -156,6 +156,7 @@ export enum AppErrorCode {
 
 export const AppErrorMessage = {
   INVALID_INPUT: 'INVALID_INPUT',
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
   // --- Auth & Session ---
   ACCESS_TOKEN_EXPIRED: 'Access token expired',
   ACCOUNT_NOT_DEACTIVATED: 'Account is not deactivated',

@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.local.yml — Local Development Overrides
+#
+# Usage:
+#   # 1. Run local migrations and seed the database manually (optional)
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml --profile init run --rm api-init
+#
+#   # 2. Start the local application stack
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#
+# Overrides:
+#   - Loads .env.local in addition to .env
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  api-init:
+    env_file:
+      - .env
+      - .env.local
+
+  api:
+    env_file:
+      - .env
+      - .env.local

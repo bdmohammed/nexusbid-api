@@ -1,32 +1,132 @@
-version: '3.9'
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.prod.yml — NexusBid Production Stack
+#
+# Services: API + Nginx
+# Database: Amazon RDS (external — not managed by this compose file)
+# Storage:  Amazon S3 (SDK, no container)
+# Email:    Amazon SES (SDK, no container)
+#
+# Usage:
+#   # 1. Run production migrations and seed the database (optional containerised execution)
+#   docker compose -f docker-compose.prod.yml --profile init run --rm api-init
+#
+#   # 2. Start the application stack
+#   IMAGE_TAG=abc1234 docker compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites on EC2:
+#   1. docker login to ECR:
+#      aws ecr get-login-password --region us-east-1 | \
+#        docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+#   2. .env.prod must exist on the host (git-ignored, deployed via CI or SSM)
+#   3. SSL certificates must exist in the host Let's Encrypt directory (/etc/letsencrypt)
+# ─────────────────────────────────────────────────────────────────────────────
+
+networks:
+  # Isolated bridge network. Services communicate by name (api:3000).
+  # No service is reachable from the internet except through nginx.
+  nexusbid-net:
+    driver: bridge
+
+# Reusable configuration block for API services to avoid duplication
+x-api-common: &api-common
+  image: nexusbid-api:latest
+  env_file:
+    - .env.prod
+  environment:
+    NODE_ENV: prod
+    DOCKER: "true"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks:
+    - nexusbid-net
 
 services:
+
+  # ── API Initialization (Production Migrations & Seeding) ───────────────────
+  # A short-lived service that runs production migrations and seeds.
+  # Run explicitly via: docker compose -f docker-compose.prod.yml --profile init run --rm api-init
+  api-init:
+    <<: *api-common
+    profiles:
+      - init
+    restart: "no"
+    command: ["sh", "-c", "npm run migration:run:prod && npm run seed:prod"]
+
+  # ── API ─────────────────────────────────────────────────────────────────────
   api:
+    <<: *api-common
     build:
       context: .
       dockerfile: docker/Dockerfile.prod
-    environment:
-      NODE_ENV: production
-    env_file:
-      - .env
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        GIT_REVISION: ${GIT_REVISION:-}
+        VERSION: ${VERSION:-1.0.0}
+    # Do NOT expose port 3000 to the host in production.
+    # All external traffic enters through nginx on ports 80/443.
     restart: always
     deploy:
-      replicas: 2
       resources:
         limits:
+          cpus: "1.0"
           memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      # Calls the real /api/v1/health which queries the database.
+      # nginx waits for this to pass before routing traffic (depends_on below).
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "production"
+      com.nexusbid.service: "api"
+      com.nexusbid.team: "backend"
 
+  # ── Nginx ─────────────────────────────────────────────────────────────────────
+  # Reverse proxy: TLS termination, rate limiting, HTTP → HTTPS redirect.
+  # Pinned to a specific major.minor version to avoid unexpected updates.
   nginx:
-    image: nginx:alpine
+    image: nginx:1.28-alpine
+    container_name: nexusbid-nginx-prod
     ports:
-      - '80:80'
-      - '443:443'
+      - "80:80"    # HTTP → HTTPS redirect
+      - "443:443"  # HTTPS (TLS termination)
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - api
-    restart: always
+      # SSL certificates: loaded directly from the host system Certbot directory.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./docker/.htpasswd:/etc/nginx/.htpasswd:ro
 
-volumes:
-  postgres_data:
+    networks:
+      - nexusbid-net
+    depends_on:
+      api:
+        # nginx starts only after the API passes its health check.
+        # Prevents a brief window where nginx starts routing to an
+        # API that hasn't finished connecting to the database.
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      com.nexusbid.env: "production"
+      com.nexusbid.service: "nginx"
+      com.nexusbid.team: "devops"
