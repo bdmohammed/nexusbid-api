@@ -1,9 +1,9 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
-import { User } from '../../src/entities/User';
-import { UserDevice } from '../../src/entities/UserDevice';
-import { PasswordHistory } from '../../src/entities/PasswordHistory';
+import { AppDataSource } from '../../src/config/database';
+import { User } from '../../src/database/entities/User';
+import { UserDevice } from '../../src/database/entities/UserDevice';
+import { PasswordHistory } from '../../src/database/entities/PasswordHistory';
 import { clearAuthTables } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createVerifiedUser } from '../helpers/builders';
@@ -26,8 +26,8 @@ const mockSendLoginNotification = sendLoginNotificationEmail as jest.MockedFunct
   typeof sendLoginNotificationEmail
 >;
 
-const userRepo = () => appDataSource.getRepository(User);
-const deviceRepo = () => appDataSource.getRepository(UserDevice);
+const userRepo = () => AppDataSource.getRepository(User);
+const deviceRepo = () => AppDataSource.getRepository(UserDevice);
 
 describe('Security Backlog Integration Tests', () => {
   let agent: ReturnType<typeof request.agent>;

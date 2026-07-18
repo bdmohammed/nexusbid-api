@@ -30,18 +30,6 @@ export const systemModule: ModuleDefinition = {
       introducedIn: '1.0.0',
     },
     {
-      key: 'system.feature_flags.manage',
-      name: 'Manage Feature Flags',
-      displayOrder: 3,
-      action: 'manage',
-      description: 'Enable or disable application features.',
-      dependencies: {
-        allOf: ['system.view'],
-      },
-      isSystem: true,
-      introducedIn: '1.0.0',
-    },
-    {
       key: 'system.maintenance.manage',
       name: 'Maintenance Mode',
       displayOrder: 4,

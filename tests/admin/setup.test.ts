@@ -1,11 +1,12 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
+import { AppDataSource } from '../../src/config/database';
 import { clearAuthTables } from '../helpers/db';
-import { User } from '../../src/entities/User';
-import { Role } from '../../src/entities/Role';
-import { UserRole } from '../../src/entities/UserRole';
-import { AccountType } from '../../src/types/enums';
+import { User } from '../../src/database/entities/User';
+import { Role } from '../../src/database/entities/Role';
+import { RoleVersion } from '../../src/database/entities/RoleVersion';
+import { UserRole } from '../../src/database/entities/UserRole';
+import { AccountType, RoleStatus, RoleVersionStatus } from '../../src/types/enums';
 
 describe('System Setup Flow Integration Tests', () => {
   beforeEach(async () => {
@@ -21,9 +22,10 @@ describe('System Setup Flow Integration Tests', () => {
     });
 
     it('should return 403 Forbidden when a Super Admin already exists', async () => {
-      const userRepo = appDataSource.getRepository(User);
-      const roleRepo = appDataSource.getRepository(Role);
-      const userRoleRepo = appDataSource.getRepository(UserRole);
+      const userRepo = AppDataSource.getRepository(User);
+      const roleRepo = AppDataSource.getRepository(Role);
+      const roleVersionRepo = AppDataSource.getRepository(RoleVersion);
+      const userRoleRepo = AppDataSource.getRepository(UserRole);
 
       // Create admin user
       const admin = userRepo.create({
@@ -37,12 +39,28 @@ describe('System Setup Flow Integration Tests', () => {
 
       // Create Super Admin role
       const role = roleRepo.create({
-        name: 'Super Admin',
-        slug: 'super-admin',
         isSystemRole: true,
-        isActive: true,
+        status: RoleStatus.ACTIVE,
+        createdByUserId: savedAdmin.id,
+        updatedByUserId: savedAdmin.id,
       });
       const savedRole = await roleRepo.save(role);
+
+      // Create Approved Version for the role
+      const roleVersion = roleVersionRepo.create({
+        roleId: savedRole.id,
+        version: 1,
+        name: 'Super Admin',
+        description: 'Super Admin Role',
+        status: RoleVersionStatus.APPROVED,
+        createdByUserId: savedAdmin.id,
+        approvedByUserId: savedAdmin.id,
+        approvedAt: new Date(),
+      });
+      await roleVersionRepo.save(roleVersion);
+
+      savedRole.activeVersionId = roleVersion.id;
+      await roleRepo.save(savedRole);
 
       // Assign role
       const userRole = userRoleRepo.create({
@@ -74,16 +92,16 @@ describe('System Setup Flow Integration Tests', () => {
       expect(res.body.data.email).toBe('firstadmin@test.local');
 
       // Verify DB State
-      const userRepo = appDataSource.getRepository(User);
-      const roleRepo = appDataSource.getRepository(Role);
-      const userRoleRepo = appDataSource.getRepository(UserRole);
+      const userRepo = AppDataSource.getRepository(User);
+      const roleRepo = AppDataSource.getRepository(Role);
+      const userRoleRepo = AppDataSource.getRepository(UserRole);
 
       const createdUser = await userRepo.findOne({ where: { email: 'firstadmin@test.local' } });
       expect(createdUser).toBeDefined();
       expect(createdUser?.accountType).toBe(AccountType.ADMIN);
 
       const superAdminRole = await roleRepo.findOne({
-        where: { slug: 'super-admin' },
+        where: { isSystemRole: true },
         relations: ['createdBy', 'updatedBy'],
       });
       expect(superAdminRole).toBeDefined();
@@ -99,9 +117,10 @@ describe('System Setup Flow Integration Tests', () => {
     });
 
     it('should reject setup requests with 403 if a Super Admin already exists', async () => {
-      const userRepo = appDataSource.getRepository(User);
-      const roleRepo = appDataSource.getRepository(Role);
-      const userRoleRepo = appDataSource.getRepository(UserRole);
+      const userRepo = AppDataSource.getRepository(User);
+      const roleRepo = AppDataSource.getRepository(Role);
+      const roleVersionRepo = AppDataSource.getRepository(RoleVersion);
+      const userRoleRepo = AppDataSource.getRepository(UserRole);
 
       // Create admin user
       const admin = userRepo.create({
@@ -115,12 +134,27 @@ describe('System Setup Flow Integration Tests', () => {
 
       // Create Super Admin role
       const role = roleRepo.create({
-        name: 'Super Admin',
-        slug: 'super-admin',
         isSystemRole: true,
-        isActive: true,
+        status: RoleStatus.ACTIVE,
+        createdByUserId: savedAdmin.id,
+        updatedByUserId: savedAdmin.id,
       });
       const savedRole = await roleRepo.save(role);
+
+      // Create Version
+      const roleVersion = roleVersionRepo.create({
+        roleId: savedRole.id,
+        version: 1,
+        name: 'Super Admin',
+        status: RoleVersionStatus.APPROVED,
+        createdByUserId: savedAdmin.id,
+        approvedByUserId: savedAdmin.id,
+        approvedAt: new Date(),
+      });
+      await roleVersionRepo.save(roleVersion);
+
+      savedRole.activeVersionId = roleVersion.id;
+      await roleRepo.save(savedRole);
 
       // Assign role
       const userRole = userRoleRepo.create({
@@ -145,9 +179,9 @@ describe('System Setup Flow Integration Tests', () => {
     });
 
     it('should successfully upgrade an existing user to admin and assign Super Admin role', async () => {
-      const userRepo = appDataSource.getRepository(User);
-      const roleRepo = appDataSource.getRepository(Role);
-      const userRoleRepo = appDataSource.getRepository(UserRole);
+      const userRepo = AppDataSource.getRepository(User);
+      const roleRepo = AppDataSource.getRepository(Role);
+      const userRoleRepo = AppDataSource.getRepository(UserRole);
 
       // Create pre-existing user (ordinary user)
       const existingUser = userRepo.create({
@@ -183,7 +217,7 @@ describe('System Setup Flow Integration Tests', () => {
       expect(upgradedUser?.passwordHash).not.toBe('oldhash');
 
       // Verify Role assigned
-      const superAdminRole = await roleRepo.findOne({ where: { slug: 'super-admin' } });
+      const superAdminRole = await roleRepo.findOne({ where: { isSystemRole: true } });
       expect(superAdminRole).toBeDefined();
 
       const assignment = await userRoleRepo.findOne({

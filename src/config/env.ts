@@ -16,13 +16,14 @@ dotenv.config({
 // ─── Step 3: If running inside Docker Compose (DOCKER=true), swap DB host ────
 // This allows a single .env.local / .env.dev to work both natively and in Docker.
 if (process.env['DOCKER'] === 'true' && process.env['DATABASE_URL']) {
-  process.env['DATABASE_URL'] = process.env['DATABASE_URL'].replace(/@localhost:/, '@db:');
+  const host = nodeEnv === 'local' ? 'db' : 'host.docker.internal';
+  process.env['DATABASE_URL'] = process.env['DATABASE_URL'].replace(/@localhost:/, `@${host}:`);
 }
 
 // ─── Zod Schema ──────────────────────────────────────────────────────────────
 const envSchema = z.object({
   // App
-  APP_NAME: z.string().default('rfp-backend'),
+  APP_NAME: z.string().default('rfpnexa'),
   NODE_ENV: z.enum(['local', 'dev', 'uat', 'prod', 'test']).default('local'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).optional(),
   PORT: z.coerce.number().default(3000),
@@ -42,7 +43,7 @@ const envSchema = z.object({
   // PayPal — optional in local env (dummy mode)
   PAYPAL_CLIENT_ID: z.string().min(1),
   PAYPAL_SECRET: z.string().min(1),
-  PAYPAL_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  PAYPAL_ENV: z.enum(['sandbox', 'prod']).default('sandbox'),
   PAYPAL_WEBHOOK_ID: z.string().min(1),
 
   // AWS S3 — optional in local env (dummy mode)
@@ -51,9 +52,11 @@ const envSchema = z.object({
   AWS_REGION: z.string().default('us-east-1'),
   AWS_S3_BUCKET: z.string().min(1),
 
-  // Email (Resend) — optional in local env (dummy mode)
-  RESEND_API_KEY: z.string().min(1),
+  // Email — configured via EMAIL_PROVIDER
+  EMAIL_PROVIDER: z.enum(['ses', 'dummy']).default('dummy'),
   FROM_EMAIL: z.string().email(),
+  NEXUSBID_SYSTEM_ADMIN_EMAIL: z.string().email(),
+  RESEND_API_KEY: z.string().optional(),
 
   // Features
   SWAGGER_ENABLED: z.coerce.boolean().default(false),

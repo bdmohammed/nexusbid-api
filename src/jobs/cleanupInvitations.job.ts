@@ -1,8 +1,8 @@
-import { appDataSource } from '../config/database';
+import { AppDataSource } from '../config/database';
 import { logger } from '../config/logger';
-import { TenderInvitation } from '../entities/TenderInvitation';
+import { TenderInvitation } from '../database/entities/TenderInvitation';
 
-const invitationRepo = appDataSource.getRepository(TenderInvitation);
+const invitationRepo = AppDataSource.getRepository(TenderInvitation);
 
 export async function cleanupInvitationsJob(): Promise<void> {
   const expiredCount = await invitationRepo

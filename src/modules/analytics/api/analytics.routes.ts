@@ -2,6 +2,15 @@ import { Router } from 'express';
 
 import { authenticate } from '../../../middleware/authenticate';
 import { requirePermission } from '../../../middleware/permissions';
+import { validate } from '../../../middleware/validate';
+import {
+  AlertIdParamSchema,
+  AnalyticsQuerySchema,
+  CreateScheduledReportSchema,
+  FilenameParamSchema,
+  RequestExportSchema,
+  SaveDashboardLayoutSchema,
+} from '../dto/analytics.dto';
 
 import * as controller from './analytics.controller';
 
@@ -28,7 +37,12 @@ router.use(authenticate);
  *       200:
  *         description: Overview stats resolved
  */
-router.get('/overview', requirePermission('analytics.view'), controller.getOverview);
+router.get(
+  '/overview',
+  requirePermission('analytics.view'),
+  validate(AnalyticsQuerySchema, 'query'),
+  controller.getOverview,
+);
 
 /**
  * @swagger
@@ -46,7 +60,12 @@ router.get('/overview', requirePermission('analytics.view'), controller.getOverv
  *       200:
  *         description: Tender analytics resolved
  */
-router.get('/tenders', requirePermission('analytics.view'), controller.getTenders);
+router.get(
+  '/tenders',
+  requirePermission('analytics.view'),
+  validate(AnalyticsQuerySchema, 'query'),
+  controller.getTenders,
+);
 
 /**
  * @swagger
@@ -64,7 +83,12 @@ router.get('/tenders', requirePermission('analytics.view'), controller.getTender
  *       200:
  *         description: User growth metrics resolved
  */
-router.get('/users', requirePermission('analytics.users'), controller.getUsersMetrics);
+router.get(
+  '/users',
+  requirePermission('analytics.users'),
+  validate(AnalyticsQuerySchema, 'query'),
+  controller.getUsersMetrics,
+);
 
 /**
  * @swagger
@@ -82,7 +106,12 @@ router.get('/users', requirePermission('analytics.users'), controller.getUsersMe
  *       200:
  *         description: Financial metrics resolved
  */
-router.get('/revenue', requirePermission('analytics.financial'), controller.getRevenueMetrics);
+router.get(
+  '/revenue',
+  requirePermission('analytics.financial'),
+  validate(AnalyticsQuerySchema, 'query'),
+  controller.getRevenueMetrics,
+);
 
 /**
  * @swagger
@@ -162,7 +191,12 @@ router.get('/system', requirePermission('analytics.system'), controller.getSyste
  *         description: Config saved successfully
  */
 router.get('/dashboard', requirePermission('analytics.view'), controller.getDashboard);
-router.post('/dashboard', requirePermission('analytics.view'), controller.saveDashboard);
+router.post(
+  '/dashboard',
+  requirePermission('analytics.view'),
+  validate(SaveDashboardLayoutSchema, 'body'),
+  controller.saveDashboard,
+);
 
 // ─── Alerts triggers ──────────────────────────────────────────────────────────
 
@@ -209,6 +243,7 @@ router.get('/alerts', requirePermission('analytics.view'), controller.getAlertsL
 router.post(
   '/alerts/:alertId/resolve',
   requirePermission('analytics.view'),
+  validate(AlertIdParamSchema, 'params'),
   controller.resolveAlertTrigger,
 );
 
@@ -243,6 +278,7 @@ router.post(
 router.post(
   '/exports/request',
   requirePermission('analytics.export'),
+  validate(RequestExportSchema, 'body'),
   controller.requestDataExport,
 );
 
@@ -285,7 +321,11 @@ router.get('/exports/jobs', requirePermission('analytics.export'), controller.ge
  *           Content-Disposition:
  *             schema: { type: string, example: "attachment; filename=report.xlsx" }
  */
-router.get('/exports/download/:filename', controller.downloadExportFile);
+router.get(
+  '/exports/download/:filename',
+  validate(FilenameParamSchema, 'params'),
+  controller.downloadExportFile,
+);
 
 // ─── Scheduled reports schedules ─────────────────────────────────────────────
 
@@ -333,6 +373,7 @@ router.get('/exports/download/:filename', controller.downloadExportFile);
 router.post(
   '/reports/schedules',
   requirePermission('analytics.reports'),
+  validate(CreateScheduledReportSchema, 'body'),
   controller.createReportSchedule,
 );
 router.get(

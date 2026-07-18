@@ -1,12 +1,12 @@
 import { TenderLifecycleStatus, TenderPublicationStatus } from '../types/enums';
 
-import type { Tender } from '../entities/Tender';
+import type { Tender } from '../database/entities/Tender';
 import type { SelectQueryBuilder } from 'typeorm';
 
 export interface TenderSearchParams {
   q?: string;
   categoryId?: string;
-  stateId?: string;
+  stateId?: number;
   before?: string; // ISO date string
   after?: string; // ISO date string
   featured?: boolean;

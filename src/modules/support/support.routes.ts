@@ -4,7 +4,7 @@ import { contactLimiter } from '../../middleware/rateLimits';
 import { validate } from '../../middleware/validate';
 
 import { submitContactForm } from './support.controller';
-import { ContactFormDto } from './support.dto';
+import { ContactFormSchema } from './support.dto';
 
 const router = Router();
 
@@ -57,6 +57,6 @@ const router = Router();
  *       429:
  *         $ref: '#/components/responses/RateLimited'
  */
-router.post('/contact', contactLimiter, validate(ContactFormDto), submitContactForm);
+router.post('/contact', contactLimiter, validate(ContactFormSchema), submitContactForm);
 
 export { router as supportRouter };

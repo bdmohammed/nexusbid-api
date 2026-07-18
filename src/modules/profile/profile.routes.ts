@@ -5,11 +5,13 @@ import { validate } from '../../middleware/validate';
 
 import * as controller from './profile.controller';
 import {
-  ChangePasswordDto,
-  RequestChangeDto,
-  UpdateAvatarDto,
-  UpdatePreferencesDto,
-  UpdateProfileDto,
+  ChangePasswordSchema,
+  PageLimitQuerySchema,
+  ProfileSessionIdParamSchema,
+  RequestChangeSchema,
+  UpdateAvatarSchema,
+  UpdatePreferencesSchema,
+  UpdateProfileSchema,
 } from './profile.dto';
 
 const router = Router();
@@ -160,7 +162,7 @@ router.get('/', controller.getProfile);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.patch('/', validate(UpdateProfileDto), controller.updateProfile);
+router.patch('/', validate(UpdateProfileSchema, 'body'), controller.updateProfile);
 
 /**
  * @swagger
@@ -202,7 +204,7 @@ router.patch('/', validate(UpdateProfileDto), controller.updateProfile);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.post('/avatar', validate(UpdateAvatarDto), controller.updateAvatar);
+router.post('/avatar', validate(UpdateAvatarSchema), controller.updateAvatar);
 
 /**
  * @swagger
@@ -248,7 +250,7 @@ router.delete('/avatar', controller.removeAvatar);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/ChangePasswordDto'
+ *             $ref: '#/components/schemas/ChangePasswordSchema'
  *     responses:
  *       200:
  *         description: Password changed successfully
@@ -266,7 +268,7 @@ router.delete('/avatar', controller.removeAvatar);
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.post('/change-password', validate(ChangePasswordDto), controller.changePassword);
+router.post('/change-password', validate(ChangePasswordSchema), controller.changePassword);
 
 /**
  * @swagger
@@ -316,7 +318,11 @@ router.get('/sessions', controller.getSessions);
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.delete('/sessions/:id', controller.revokeSession);
+router.delete(
+  '/sessions/:id',
+  validate(ProfileSessionIdParamSchema, 'params'),
+  controller.revokeSession,
+);
 
 /**
  * @swagger
@@ -394,7 +400,7 @@ router.get('/devices', controller.getDevices);
  *                       items:
  *                         $ref: '#/components/schemas/ProfileActivity'
  */
-router.get('/activity', controller.getActivity);
+router.get('/activity', validate(PageLimitQuerySchema, 'query'), controller.getActivity);
 
 /**
  * @swagger
@@ -424,7 +430,11 @@ router.get('/activity', controller.getActivity);
  *                       items:
  *                         $ref: '#/components/schemas/ProfileActivity'
  */
-router.get('/security-history', controller.getSecurityHistory);
+router.get(
+  '/security-history',
+  validate(PageLimitQuerySchema, 'query'),
+  controller.getSecurityHistory,
+);
 
 /**
  * @swagger
@@ -535,7 +545,7 @@ router.get('/preferences', controller.getPreferences);
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.patch('/preferences', validate(UpdatePreferencesDto), controller.updatePreferences);
+router.patch('/preferences', validate(UpdatePreferencesSchema), controller.updatePreferences);
 
 /**
  * @swagger
@@ -576,7 +586,7 @@ router.patch('/preferences', validate(UpdatePreferencesDto), controller.updatePr
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/request-change', validate(RequestChangeDto), controller.requestChange);
+router.post('/request-change', validate(RequestChangeSchema), controller.requestChange);
 
 /**
  * @swagger
@@ -646,7 +656,8 @@ router.post('/delete-request', controller.deleteRequest);
  * /api/v1/profile/export:
  *   get:
  *     summary: Export profile data
- *     description: Downloads all user-owned profile data, preferences, subscriptions, and actions as a raw JSON file. Bypass standard API envelopes.
+ *     description: Downloads all user-owned profile data, preferences, subscriptions, and actions
+ *     as a raw JSON file. Bypass standard API envelopes.
  *     operationId: exportProfileData
  *     tags: [Profile]
  *     security:

@@ -2,11 +2,19 @@ import express, { Router } from 'express';
 
 import { auditLogger } from '../../middleware/auditLogger';
 import { authenticate } from '../../middleware/authenticate';
-import { requirePermission, requireRole } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 import { AccountType, PermissionKey } from '../../types/enums';
 import * as controller from '../admin/admin.controller';
-import { CategoryQueryDto, CreateCategoryDto, UpdateCategoryDto } from '../admin/admin.dto';
+import {
+  CategoryQuerySchema,
+  CreateCategorySchema,
+  IdParamSchema,
+  UpdateCategorySchema,
+} from '../admin/admin.dto';
+
+import type { RequestHandler } from 'express';
+import { requirePermission } from '@/middleware/permissions';
+import { requireRole } from '@/middleware/requireAccountType';
 
 const router = Router();
 
@@ -140,7 +148,7 @@ const adminAuth = [authenticate, requireRole(AccountType.ADMIN)];
  *                 currentPage: 1
  *               traceId: "uuid"
  */
-router.get('/', validate(CategoryQueryDto, 'query'), controller.listCategories);
+router.get('/', validate(CategoryQuerySchema, 'query'), controller.listCategories);
 
 /**
  * @swagger
@@ -208,7 +216,7 @@ router.post(
   '/',
   adminAuth,
   requirePermission(PermissionKey.MANAGE_CATEGORIES),
-  validate(CreateCategoryDto),
+  validate(CreateCategorySchema),
   auditLogger('category.create', 'category'),
   controller.createCategory,
 );
@@ -220,7 +228,8 @@ router.post(
  *     summary: Batch process categories (Admin)
  *     description: |
  *       Create, update, or soft-delete categories in bulk.
- *       Accepts application/json (array of actions) or text/csv payload directly in the request body. Maximum batch size is 500 items.
+ *       Accepts application/json (array of actions) or text/csv payload directly in the request
+ *       body. Maximum batch size is 500 items.
  *       **Required Permission:** `MANAGE_CATEGORIES` (Admin only)
  *     operationId: batchCategories
  *     tags: [Categories]
@@ -294,8 +303,8 @@ router.post(
   '/batch',
   adminAuth,
   requirePermission(PermissionKey.MANAGE_CATEGORIES),
-  express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }),
-  express.json({ limit: '1mb' }),
+  express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }) as RequestHandler,
+  express.json({ limit: '1mb' }) as RequestHandler,
   controller.batchCategories,
 );
 
@@ -408,7 +417,8 @@ router.patch(
   '/:id',
   adminAuth,
   requirePermission(PermissionKey.MANAGE_CATEGORIES),
-  validate(UpdateCategoryDto),
+  validate(IdParamSchema, 'params'),
+  validate(UpdateCategorySchema),
   auditLogger('category.edit', 'category'),
   controller.updateCategory,
 );
@@ -416,6 +426,7 @@ router.delete(
   '/:id',
   adminAuth,
   requirePermission(PermissionKey.MANAGE_CATEGORIES),
+  validate(IdParamSchema, 'params'),
   auditLogger('category.delete', 'category'),
   controller.deleteCategory,
 );
@@ -459,6 +470,7 @@ router.get(
   '/:id/history',
   adminAuth,
   requirePermission(PermissionKey.MANAGE_CATEGORIES),
+  validate(IdParamSchema, 'params'),
   controller.getCategoryHistory,
 );
 

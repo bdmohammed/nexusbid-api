@@ -4,7 +4,7 @@ import { authenticate } from '../../middleware/authenticate';
 import { validate } from '../../middleware/validate';
 
 import * as controller from './subscriptions.controller';
-import { CreateSubscriptionDto } from './subscriptions.dto';
+import { CreateSubscriptionSchema } from './subscriptions.dto';
 
 const router = Router();
 
@@ -164,7 +164,7 @@ router.get('/plans', controller.getPlans);
  *                         approvalUrl: { type: string, format: uri, example: "https://paypal.com/checkout?token=123" }
  *                         subscriptionId: { type: string, format: uuid }
  */
-router.post('/', authenticate, validate(CreateSubscriptionDto), controller.createSubscription);
+router.post('/', authenticate, validate(CreateSubscriptionSchema), controller.createSubscription);
 
 /**
  * @swagger

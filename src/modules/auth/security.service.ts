@@ -2,17 +2,17 @@ import crypto from 'node:crypto';
 
 import * as bcrypt from 'bcryptjs';
 
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { env } from '../../config/env';
-import { AppError } from '../../core/AppError';
-import { PasswordHistory } from '../../entities/PasswordHistory';
-import { UserDevice } from '../../entities/UserDevice';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
+import { PasswordHistory } from '../../database/entities/PasswordHistory';
+import { UserDevice } from '../../database/entities/UserDevice';
 import { sendLoginNotificationEmail } from '../../services/email.service';
 
-import type { User } from '../../entities/User';
+import type { User } from '../../database/entities/User';
 
-const passwordHistoryRepository = appDataSource.getRepository(PasswordHistory);
-const userDeviceRepository = appDataSource.getRepository(UserDevice);
+const passwordHistoryRepository = AppDataSource.getRepository(PasswordHistory);
+const userDeviceRepository = AppDataSource.getRepository(UserDevice);
 
 /**
  * Validates a CAPTCHA response token with Cloudflare Turnstile verification.
@@ -22,12 +22,16 @@ const userDeviceRepository = appDataSource.getRepository(UserDevice);
 export async function verifyCaptcha(token: string | undefined): Promise<void> {
   const secretKey = env.TURNSTILE_SECRET_KEY ?? 'mock';
 
-  if (env.NODE_ENV === 'local' ?? env.NODE_ENV === 'test' ?? secretKey === 'mock') {
+  if (env.NODE_ENV === 'local' || env.NODE_ENV === 'test' || secretKey === 'mock') {
     return;
   }
 
   if (!token) {
-    throw new AppError('CAPTCHA verification is required', 400, 'CAPTCHA_REQUIRED');
+    throw new AppError(
+      AppErrorMessage.CAPTCHA_REQUIRED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.CAPTCHA_REQUIRED,
+    );
   }
 
   try {
@@ -45,11 +49,18 @@ export async function verifyCaptcha(token: string | undefined): Promise<void> {
       return;
     }
 
-    const turnstileResponse: any = await response.json();
+    const turnstileResponse = (await response.json()) as {
+      success: boolean;
+      [key: string]: unknown;
+    };
     if (!turnstileResponse.success) {
-      throw new AppError('CAPTCHA verification failed. Please try again.', 400, 'CAPTCHA_FAILED');
+      throw new AppError(
+        AppErrorMessage.CAPTCHA_FAILED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.CAPTCHA_FAILED,
+      );
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof AppError) throw err;
     // Fail open on other network/fetch exceptions to preserve login service availability
   }
@@ -61,7 +72,7 @@ export async function verifyCaptcha(token: string | undefined): Promise<void> {
  * Fails open if HaveIBeenPwned API is offline or throws a network error.
  */
 export async function verifyPasswordBreach(password: string): Promise<void> {
-  if (env.NODE_ENV === 'local' ?? env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'local' || env.NODE_ENV === 'test') {
     return;
   }
 
@@ -83,14 +94,14 @@ export async function verifyPasswordBreach(password: string): Promise<void> {
         const count = parseInt(countStr ?? '0', 10);
         if (count > 0) {
           throw new AppError(
-            'This password has been exposed in a data breach. Please choose a different password.',
-            400,
-            'PASSWORD_BREACHED',
+            AppErrorMessage.PASSWORD_BREACHED,
+            HttpStatusCode.BAD_REQUEST,
+            AppErrorCode.PASSWORD_BREACHED,
           );
         }
       }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof AppError) throw err;
     // Fail open on network/fetch errors
   }
@@ -110,9 +121,9 @@ export async function checkPasswordHistory(userId: string, newPassword: string):
     const isMatch = await bcrypt.compare(newPassword, entry.passwordHash);
     if (isMatch) {
       throw new AppError(
-        'New password cannot be one of your recently used passwords',
-        400,
-        'PASSWORD_REUSED',
+        AppErrorMessage.PASSWORD_REUSED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.PASSWORD_REUSED,
       );
     }
   }

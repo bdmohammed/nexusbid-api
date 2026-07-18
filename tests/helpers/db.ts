@@ -22,19 +22,21 @@
  * Wraps a test body in a transaction that is always rolled back.
  * Use for tests that only need read isolation (no TRUNCATE overhead).
  */
-import { appDataSource } from '../../src/config/database';
-import { Role } from '../../src/entities/Role';
-import { UserRole } from '../../src/entities/UserRole';
-import { Permission } from '../../src/entities/Permission';
-import { PermissionModule } from '../../src/entities/PermissionModule';
-import { RolePermission } from '../../src/entities/RolePermission';
+import { AppDataSource } from '../../src/config/database';
+import { Role } from '../../src/database/entities/Role';
+import { UserRole } from '../../src/database/entities/UserRole';
+import { Permission } from '../../src/database/entities/Permission';
+import { PermissionModule } from '../../src/database/entities/PermissionModule';
+import { RoleVersion } from '../../src/database/entities/RoleVersion';
+import { RoleVersionPermission } from '../../src/database/entities/RoleVersionPermission';
+import { RoleStatus, RoleVersionStatus } from '../../src/types/enums';
 
 /**
  * Truncates all auth-related tables and resets identity sequences.
  * Call in beforeEach() inside test suites that write to these tables.
  */
 export async function clearAuthTables(): Promise<void> {
-  await appDataSource.query(`
+  await AppDataSource.query(`
     TRUNCATE TABLE
       audit_logs,
       email_tokens,
@@ -47,7 +49,9 @@ export async function clearAuthTables(): Promise<void> {
       subscriptions,
       transactions,
       user_roles,
-      role_permissions,
+      role_version_permissions,
+      role_reviews,
+      role_versions,
       roles,
       permissions,
       permission_modules,
@@ -71,7 +75,7 @@ export async function clearAuthTables(): Promise<void> {
  *   }));
  */
 export async function withTransaction(fn: () => Promise<void>): Promise<void> {
-  const queryRunner = appDataSource.createQueryRunner();
+  const queryRunner = AppDataSource.createQueryRunner();
   await queryRunner.connect();
   await queryRunner.startTransaction();
   try {
@@ -90,53 +94,89 @@ export async function setupTestRoleWithPermission(
   roleName: string,
   permissionKey: string,
 ): Promise<void> {
-  const roleRepo = appDataSource.getRepository(Role);
-  const userRoleRepo = appDataSource.getRepository(UserRole);
-  const permissionRepo = appDataSource.getRepository(Permission);
-  const moduleRepo = appDataSource.getRepository(PermissionModule);
-  const rolePermissionRepo = appDataSource.getRepository(RolePermission);
+  const roleRepo = AppDataSource.getRepository(Role);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const permissionRepo = AppDataSource.getRepository(Permission);
+  const moduleRepo = AppDataSource.getRepository(PermissionModule);
+  const versionRepo = AppDataSource.getRepository(RoleVersion);
+  const rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
 
   const [modulePart] = permissionKey.split('.');
-  let module = await moduleRepo.findOneBy({ name: modulePart });
+  let module = await moduleRepo.findOneBy({ key: modulePart.toLowerCase() });
   if (!module) {
-    module = moduleRepo.create({ name: modulePart, description: `Test Module ${modulePart}` });
+    module = moduleRepo.create({
+      name: modulePart,
+      key: modulePart.toLowerCase(),
+      description: `Test Module ${modulePart}`,
+      isActive: true,
+      createdById: userId,
+    });
     await moduleRepo.save(module);
   }
 
   let permission = await permissionRepo.findOneBy({ key: permissionKey });
   if (!permission) {
+    const [, action] = permissionKey.split('.');
     permission = permissionRepo.create({
       name: permissionKey,
       key: permissionKey,
+      action: action || 'READ',
       description: `Test Permission ${permissionKey}`,
       moduleId: module.id,
+      isActive: true,
+      createdById: userId,
     });
     await permissionRepo.save(permission);
   }
 
-  const slug = roleName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  let role = await roleRepo.findOneBy({ slug });
-  if (!role) {
+  const isSuperAdmin = roleName.toLowerCase().replace(/[^a-z0-9]+/g, '-') === 'super-admin';
+  
+  let roleVersion = await versionRepo.findOne({
+    where: { name: roleName },
+    relations: ['role'],
+  });
+
+  let role: Role;
+  if (!roleVersion) {
     role = roleRepo.create({
-      name: roleName,
-      slug,
-      description: `Test Role ${roleName}`,
-      isActive: true,
-      isSystemRole: slug === 'super-admin',
+      status: RoleStatus.ACTIVE,
+      isSystemRole: isSuperAdmin,
+      createdByUserId: userId,
+      updatedByUserId: userId,
     });
     await roleRepo.save(role);
+
+    roleVersion = versionRepo.create({
+      roleId: role.id,
+      version: 1,
+      name: roleName,
+      description: `Test Role ${roleName}`,
+      status: RoleVersionStatus.APPROVED,
+      createdByUserId: userId,
+      approvedByUserId: userId,
+      approvedAt: new Date(),
+    });
+    await versionRepo.save(roleVersion);
+
+    role.activeVersionId = roleVersion.id;
+    await roleRepo.save(role);
+  } else {
+    role = roleVersion.role;
   }
 
-  let rolePermission = await rolePermissionRepo.findOneBy({
-    roleId: role.id,
-    permissionId: permission.id,
+  let rvp = await rvpRepo.findOneBy({
+    roleVersionId: roleVersion.id,
+    permissionKey,
   });
-  if (!rolePermission) {
-    rolePermission = rolePermissionRepo.create({
-      roleId: role.id,
-      permissionId: permission.id,
+  if (!rvp) {
+    rvp = rvpRepo.create({
+      roleVersionId: roleVersion.id,
+      permissionKey,
+      permissionName: permission.name,
+      moduleSlug: module.key,
+      moduleName: module.name,
     });
-    await rolePermissionRepo.save(rolePermission);
+    await rvpRepo.save(rvp);
   }
 
   let userRole = await userRoleRepo.findOneBy({
@@ -147,6 +187,7 @@ export async function setupTestRoleWithPermission(
     userRole = userRoleRepo.create({
       userId,
       roleId: role.id,
+      assignedAt: new Date(),
     });
     await userRoleRepo.save(userRole);
   }

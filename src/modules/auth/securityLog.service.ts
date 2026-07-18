@@ -1,8 +1,10 @@
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { logger } from '../../config/logger';
-import { SecurityLog } from '../../entities/SecurityLog';
+import { SecurityLog } from '../../database/entities/SecurityLog';
 
-const securityLogRepository = appDataSource.getRepository(SecurityLog);
+import type { SecurityEvent } from '../../types/enums';
+
+const securityLogRepository = AppDataSource.getRepository(SecurityLog);
 
 /**
  * Resolves geolocation for an IP address using ip-api.com.
@@ -17,11 +19,11 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
   const cleanIp = ip.trim().split(',')[0] ?? ''; // Handle potential proxy headers
 
   if (
-    cleanIp === '127.0.0.1' ??
-    cleanIp === '::1' ??
-    cleanIp.startsWith('192.168.') ??
-    cleanIp.startsWith('10.') ??
-    cleanIp.startsWith('172.16.') ??
+    cleanIp === '127.0.0.1' ||
+    cleanIp === '::1' ||
+    cleanIp.startsWith('192.168.') ||
+    cleanIp.startsWith('10.') ||
+    cleanIp.startsWith('172.16.') ||
     cleanIp.startsWith('::ffff:127.0.0.1')
   ) {
     return 'Localhost';
@@ -43,13 +45,14 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
       return 'Unknown';
     }
 
-    const geolocationData: any = await response.json();
+    const geolocationData = (await response.json()) as Record<string, string>;
     if (geolocationData.status === 'success') {
       const parts = [
         geolocationData.city,
         geolocationData.regionName,
         geolocationData.country,
       ].filter(Boolean);
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       return parts.join(', ') ?? 'Unknown';
     }
   } catch (err) {
@@ -66,7 +69,7 @@ export async function resolveIpLocation(ip: string | null): Promise<string> {
 export async function logSecurityEvent(options: {
   userId?: string | null;
   email: string | null;
-  event: string;
+  event: SecurityEvent;
   ipAddress: string | null;
   userAgent: string | null;
   details?: Record<string, unknown> | null;
@@ -81,8 +84,10 @@ export async function logSecurityEvent(options: {
           event: options.event,
           ipAddress: options.ipAddress ?? null,
           userAgent: options.userAgent ?? null,
-          location,
-          details: options.details ?? null,
+          details: {
+            ...(options.details ?? {}),
+            location,
+          },
         });
 
         await securityLogRepository.save(securityLog);

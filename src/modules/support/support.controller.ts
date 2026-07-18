@@ -11,8 +11,10 @@ import type { Request, Response } from 'express';
  * Rate limited to 3 per IP per hour to prevent spam.
  * Never exposes the admin email to the public frontend.
  */
-export const submitContactForm = asyncHandler(async (req: Request, res: Response) => {
-  const { name, email, message } = req.validated as ContactFormDto;
-  await sendContactFormEmail({ senderName: name, senderEmail: email, message });
-  return sendOk(res, null, 'Your message has been sent. We will respond within 24–48 hours.');
-});
+export const submitContactForm = asyncHandler<{}, {}, ContactFormDto, {}>(
+  async (req: Request, res: Response) => {
+    const { name, email, message } = req.body;
+    await sendContactFormEmail({ senderName: name, senderEmail: email, message });
+    return sendOk(res, null, 'Your message has been sent. We will respond within 24–48 hours.');
+  },
+);

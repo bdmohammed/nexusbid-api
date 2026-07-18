@@ -1,19 +1,26 @@
 import * as os from 'node:os';
 
-import { appDataSource } from '../../../config/database';
-import { AuditLog } from '../../../entities/AuditLog';
-import { Subscription } from '../../../entities/Subscription';
-import { Tender } from '../../../entities/Tender';
-import { TenderVersion } from '../../../entities/TenderVersion';
-import { User } from '../../../entities/User';
-import { UserDashboardLayout } from '../../../entities/UserDashboardLayout';
+import pidusage from 'pidusage';
+
+import { AppDataSource } from '../../../config/database';
+import { AuditLog } from '../../../database/entities/AuditLog';
+import { Subscription } from '../../../database/entities/Subscription';
+import { Tender } from '../../../database/entities/Tender';
+import { TenderVersion } from '../../../database/entities/TenderVersion';
+import { User } from '../../../database/entities/User';
+import { UserDashboardLayout } from '../../../database/entities/UserDashboardLayout';
 import {
   AccountType,
+  DashboardTheme,
+  SubscriptionStatus,
   TenderLifecycleStatus,
   TenderPublicationStatus,
   TenderVersionStatus,
+  UserStatus,
 } from '../../../types/enums';
 
+import type { DashboardWidget } from '../../../database/entities/UserDashboardLayout';
+import type { PatchLayoutDto } from '../dto/dashboard.dto';
 import type { Response } from 'express';
 
 // ─── Widget Registry ─────────────────────────────────────────────────────────
@@ -146,22 +153,22 @@ export function addSSEClient(client: SSEClient) {
   });
 }
 
-export function broadcastSSE(event: string, data: any, requiredPermission?: string) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  sseClients.forEach((client) => {
-    if (
-      !requiredPermission ??
-      client.permissions.includes(requiredPermission) ??
-      client.roles.includes('super-admin')
-    ) {
-      client.res.write(payload);
-    }
-  });
-}
+// export function broadcastSSE(event: string, data: any, requiredPermission?: string) {
+//   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+//   sseClients.forEach((client) => {
+//     if (
+//       !requiredPermission
+//       // client.permissions.includes(requiredPermission) ??
+//       // client.roles.includes('super-admin')
+//     ) {
+//       client.res.write(payload);
+//     }
+//   });
+// }
 
 // ─── Services Orchestrator ────────────────────────────────────────────────────
 
-const layoutRepo = appDataSource.getRepository(UserDashboardLayout);
+const layoutRepo = AppDataSource.getRepository(UserDashboardLayout);
 
 export async function getDashboardConfig(
   userId: string,
@@ -180,25 +187,23 @@ export async function getDashboardConfig(
       }
     }
     if (defaultWidgets.length === 0) {
-      defaultWidgets = ROLE_DEFAULT_LAYOUTS['support']; // fallback
+      defaultWidgets = ROLE_DEFAULT_LAYOUTS['support'] as string[]; // fallback
     }
 
-    const initialLayoutWidgets = defaultWidgets.map((wId, index) => ({
-      widgetId: wId,
+    const initialLayoutWidgets: DashboardWidget[] = defaultWidgets.map((wId, index) => ({
+      id: wId,
       x: (index % 3) * 2,
       y: Math.floor(index / 3) * 2,
       w: WIDGET_REGISTRY.find((w) => w.id === wId)?.defaultSize.w ?? 2,
       h: WIDGET_REGISTRY.find((w) => w.id === wId)?.defaultSize.h ?? 2,
-      hidden: false,
       collapsed: false,
     }));
 
     layout = layoutRepo.create({
       userId,
-      widgets: initialLayoutWidgets as any,
+      widgets: initialLayoutWidgets,
       filters: {},
-      theme: 'default',
-      favorites: [],
+      theme: DashboardTheme.DEFAULT,
     });
 
     await layoutRepo.save(layout);
@@ -209,9 +214,8 @@ export async function getDashboardConfig(
   const authorizedWidgets = WIDGET_REGISTRY.filter((w) => {
     if (!w.enabled) return false;
     if (isSuperAdmin) return true;
-    return (
-      userPermissions.includes(w.requiredPermission) ?? w.requiredPermission === 'dashboard.view'
-    );
+    return userPermissions.includes(w.requiredPermission);
+    // ?? w.requiredPermission === 'dashboard.view'
   });
 
   return {
@@ -221,13 +225,22 @@ export async function getDashboardConfig(
   };
 }
 
-export async function updateDashboardLayout(userId: string, widgets: any[], theme?: string) {
+export async function updateDashboardLayout(
+  userId: string,
+  widgets: PatchLayoutDto['widgets'],
+  theme?: DashboardTheme,
+) {
   let layout = await layoutRepo.findOne({ where: { userId } });
-  if (!layout) {
-    layout = layoutRepo.create({ userId, widgets: [], filters: {} });
-  }
+  layout ??= layoutRepo.create({ userId, widgets: [], filters: {} });
 
-  layout.widgets = widgets;
+  layout.widgets = widgets.map((w) => ({
+    id: w.widgetId,
+    x: w.x,
+    y: w.y,
+    w: w.w,
+    h: w.h,
+    collapsed: w.collapsed,
+  }));
   if (theme) layout.theme = theme;
 
   return layoutRepo.save(layout);
@@ -242,26 +255,23 @@ export async function resetDashboardLayout(userId: string, roles: string[]) {
     }
   }
   if (defaultWidgets.length === 0) {
-    defaultWidgets = ROLE_DEFAULT_LAYOUTS['support'];
+    defaultWidgets = ROLE_DEFAULT_LAYOUTS.support as string[];
   }
 
-  const initialLayoutWidgets = defaultWidgets.map((wId, index) => ({
-    widgetId: wId,
+  const initialLayoutWidgets: DashboardWidget[] = defaultWidgets.map((wId, index) => ({
+    id: wId,
     x: (index % 3) * 2,
     y: Math.floor(index / 3) * 2,
     w: WIDGET_REGISTRY.find((w) => w.id === wId)?.defaultSize.w ?? 2,
     h: WIDGET_REGISTRY.find((w) => w.id === wId)?.defaultSize.h ?? 2,
-    hidden: false,
     collapsed: false,
   }));
 
   let layout = await layoutRepo.findOne({ where: { userId } });
-  if (!layout) {
-    layout = layoutRepo.create({ userId, widgets: [] });
-  }
+  layout ??= layoutRepo.create({ userId, widgets: [] });
 
-  layout.widgets = initialLayoutWidgets as any;
-  layout.theme = 'default';
+  layout.widgets = initialLayoutWidgets;
+  layout.theme = DashboardTheme.DEFAULT;
 
   return layoutRepo.save(layout);
 }
@@ -269,8 +279,8 @@ export async function resetDashboardLayout(userId: string, roles: string[]) {
 // ─── Composition Widgets Data APIs ──────────────────────────────────────────
 
 export async function getTenderData() {
-  const tenderRepo = appDataSource.getRepository(Tender);
-  const versionRepo = appDataSource.getRepository(TenderVersion);
+  const tenderRepo = AppDataSource.getRepository(Tender);
+  const versionRepo = AppDataSource.getRepository(TenderVersion);
 
   const draftCount = await versionRepo.count({ where: { status: TenderVersionStatus.DRAFT } });
   const underReviewCount = await versionRepo.count({
@@ -314,27 +324,26 @@ export async function getTenderData() {
 }
 
 export async function getRevenueData() {
-  const subRepo = appDataSource.getRepository(Subscription);
+  const subRepo = AppDataSource.getRepository(Subscription);
   const activeSubs = await subRepo.find({
-    where: { status: 'active' as any },
-    relations: ['plan'],
+    where: { status: SubscriptionStatus.ACTIVE },
+    relations: ['planVersion'],
   });
 
   let totalMRR = 0;
   const activeCount = activeSubs.length;
 
   activeSubs.forEach((sub) => {
-    if (sub.plan) {
-      // priceCents is price, billingPeriod could be 'month' or 'year'
-      const planPriceCents = (sub.plan as any).priceCents ?? 0;
-      const billingPeriod = (sub.plan as any).billingPeriod ?? 'month';
+    // if (sub.planVersion) {
+    const planPriceCents = sub.planVersion.priceCents;
+    const { durationDays } = sub.planVersion;
 
-      if (billingPeriod === 'year') {
-        totalMRR += planPriceCents / 12 / 100;
-      } else {
-        totalMRR += planPriceCents / 100;
-      }
+    if (durationDays >= 360) {
+      totalMRR += planPriceCents / 12 / 100;
+    } else {
+      totalMRR += planPriceCents / 100;
     }
+    // }
   });
 
   const totalARR = totalMRR * 12;
@@ -361,11 +370,11 @@ export async function getRevenueData() {
 }
 
 export async function getUsersData() {
-  const userRepo = appDataSource.getRepository(User);
+  const userRepo = AppDataSource.getRepository(User);
 
   const totalUsers = await userRepo.count();
   const admins = await userRepo.count({ where: { accountType: AccountType.ADMIN } });
-  const pendingApprovals = await userRepo.count({ where: { status: 'pending_approval' as any } });
+  const pendingApprovals = await userRepo.count({ where: { status: UserStatus.PENDING_APPROVAL } });
   const blockedUsers = await userRepo.count({ where: { isBlocked: true } });
 
   return {
@@ -377,7 +386,7 @@ export async function getUsersData() {
 }
 
 export async function getReviewQueueData() {
-  const versionRepo = appDataSource.getRepository(TenderVersion);
+  const versionRepo = AppDataSource.getRepository(TenderVersion);
 
   const pendingTenderReviews = await versionRepo.count({
     where: { status: TenderVersionStatus.UNDER_REVIEW },
@@ -397,15 +406,15 @@ export async function getCriticalAlertsData() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const failedLogins = await appDataSource.getRepository(AuditLog).count({
+  const failedLogins = await AppDataSource.getRepository(AuditLog).count({
     where: {
       action: 'auth.login_failed',
       createdAt: todayStart,
     },
   });
 
-  const expiredSubs = await appDataSource.getRepository(Subscription).count({
-    where: { status: 'expired' as any },
+  const expiredSubs = await AppDataSource.getRepository(Subscription).count({
+    where: { status: SubscriptionStatus.EXPIRED },
   });
 
   return {
@@ -418,39 +427,40 @@ export async function getCriticalAlertsData() {
 }
 
 export async function getRecentActivityData() {
-  const logRepo = appDataSource.getRepository(AuditLog);
+  const logRepo = AppDataSource.getRepository(AuditLog);
   const rawLogs = await logRepo.find({
     order: { createdAt: 'DESC' },
     take: 10,
   });
 
   return rawLogs.map((log) => {
-    let friendlyText = '';
-    switch (log.action) {
-      case 'auth.login':
-        friendlyText = `User logged in from IP ${log.ipAddress}`;
-        break;
-      case 'auth.login_failed':
-        friendlyText = `Failed login attempt from IP ${log.ipAddress}`;
-        break;
-      case 'tender.create':
-        friendlyText = 'New Tender registered';
-        break;
-      case 'tender.publish':
-        friendlyText = 'Tender published successfully';
-        break;
-      case 'role.create':
-        friendlyText = 'New security role created';
-        break;
-      case 'subscription.create':
-        friendlyText = 'Subscription purchased';
-        break;
-      case 'subscription.upgrade':
-        friendlyText = 'Subscription upgraded';
-        break;
-      default:
-        friendlyText = `${log.action} performed in ${log.module ?? 'System'}`;
-    }
+    const friendlyText = (() => {
+      switch (log.action) {
+        case 'auth.login':
+          return `User logged in from IP ${log.ipAddress}`;
+
+        case 'auth.login_failed':
+          return `Failed login attempt from IP ${log.ipAddress}`;
+
+        case 'tender.create':
+          return 'New Tender registered';
+
+        case 'tender.publish':
+          return 'Tender published successfully';
+
+        case 'role.create':
+          return 'New security role created';
+
+        case 'subscription.create':
+          return 'Subscription purchased';
+
+        case 'subscription.upgrade':
+          return 'Subscription upgraded';
+
+        default:
+          return `${log.action} performed in ${log.module}`;
+      }
+    })();
 
     return {
       id: log.id,
@@ -460,11 +470,12 @@ export async function getRecentActivityData() {
   });
 }
 
-export function getSystemHealthData() {
+export async function getSystemHealthData() {
   // Memory, CPU load and status indicators
   const freeMem = os.freemem();
   const totalMem = os.totalmem();
   const memoryUsagePercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
+  const stats = await pidusage(process.pid);
 
   return {
     apiLatencyMs: 98,
@@ -473,7 +484,9 @@ export function getSystemHealthData() {
     storageUsagePercent: 62,
     databaseStatus: 'Healthy',
     memoryUsagePercent,
-    cpuUsagePercent: Math.round(os.loadavg()[0] * 10),
+    loadAverage1m: Math.round((os.loadavg()[0] ?? 0) * 10),
+    cpuUsagePercent: Math.round(stats.cpu), // e.g. 12
+    memoryUsageMb: Math.round(stats.memory / 1024 / 1024),
   };
 }
 

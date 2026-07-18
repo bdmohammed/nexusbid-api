@@ -1,13 +1,14 @@
-import { appDataSource } from '../../../config/database';
+import { AppDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
-import { AnalyticsEvent } from '../../../entities/AnalyticsEvent';
-import { SubscriptionDailyMetrics } from '../../../entities/SubscriptionDailyMetrics';
-import { TenderDailyMetrics } from '../../../entities/TenderDailyMetrics';
-import { TrafficDailyMetrics } from '../../../entities/TrafficDailyMetrics';
-import { UserDailyMetrics } from '../../../entities/UserDailyMetrics';
+import { Country } from '../../../database/entities/Country';
+import { SubscriptionDailyMetrics } from '../../../database/entities/SubscriptionDailyMetrics';
+import { TenderDailyMetrics } from '../../../database/entities/TenderDailyMetrics';
+import { TrafficDailyMetrics } from '../../../database/entities/TrafficDailyMetrics';
+import { UserDailyMetrics } from '../../../database/entities/UserDailyMetrics';
+import { BrowserType, DeviceType } from '../../../types/enums';
 
 export async function runDailyRollups(targetDate: Date = new Date()): Promise<void> {
-  const dateStr = targetDate.toISOString().split('T')[0];
+  const dateStr = targetDate.toISOString().split('T')[0] ?? '';
   logger.info({ date: dateStr }, 'Running daily analytical rollups');
 
   const startOfDay = new Date(targetDate);
@@ -17,18 +18,15 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
   endOfDay.setHours(23, 59, 59, 999);
 
   try {
-    const eventRepo = appDataSource.getRepository(AnalyticsEvent);
+    const countryRepo = AppDataSource.getRepository(Country);
+    const countriesDb = await countryRepo.find();
+    const countryMap = new Map(countriesDb.map((c) => [c.code.toUpperCase(), c]));
 
     // 1. Tenders Aggregates
-    const tenderMetricsRepo = appDataSource.getRepository(TenderDailyMetrics);
-    const tenderEvents = await eventRepo.find({
-      where: {
-        occurredAt: startOfDay, // Note: standard between dates is cleaner:
-      },
-    });
+    const tenderMetricsRepo = AppDataSource.getRepository(TenderDailyMetrics);
 
     // Instead of simple find, let's build standard PostgreSQL queries to get aggregates of yesterday's events:
-    const tenderAggs = await appDataSource.query(
+    const tenderAggs = await AppDataSource.query(
       `
       SELECT
         COALESCE(properties->>'country', 'US') AS country,
@@ -47,12 +45,15 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
       [startOfDay, endOfDay],
     );
 
-    for (const agg of tenderAggs) {
+    for await (const agg of tenderAggs) {
+      const rawCountryCode = agg.country.trim().toUpperCase();
+      const country = countryMap.get(rawCountryCode);
+
       const metric = tenderMetricsRepo.create({
-        date: dateStr,
-        country: agg.country,
+        date: new Date(dateStr),
+        countryId: country ? parseInt(country.id, 10) : null,
         categoryId: agg.category_id,
-        tenderType: agg.tender_type,
+        procurementType: agg.tender_type,
         createdCount: parseInt(agg.created_count, 10),
         publishedCount: parseInt(agg.published_count, 10),
         awardedCount: parseInt(agg.awarded_count, 10),
@@ -64,8 +65,8 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
     }
 
     // 2. Users Aggregates
-    const userMetricsRepo = appDataSource.getRepository(UserDailyMetrics);
-    const userAggs = await appDataSource.query(
+    const userMetricsRepo = AppDataSource.getRepository(UserDailyMetrics);
+    const userAggs = await AppDataSource.query(
       `
       SELECT
         COALESCE(properties->>'country', 'US') AS country,
@@ -80,9 +81,12 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
     );
 
     for (const agg of userAggs) {
+      const rawCountryCode = agg.country.trim().toUpperCase();
+      const country = countryMap.get(rawCountryCode);
+
       const metric = userMetricsRepo.create({
-        date: dateStr,
-        country: agg.country,
+        date: new Date(dateStr),
+        countryId: country ? parseInt(country.id, 10) : null,
         newUsers: parseInt(agg.new_users, 10),
         activeUsers: parseInt(agg.active_users, 10),
         verifiedUsers: parseInt(agg.verified_users, 10),
@@ -91,8 +95,8 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
     }
 
     // 3. Subscriptions Aggregates
-    const subMetricsRepo = appDataSource.getRepository(SubscriptionDailyMetrics);
-    const subAggs = await appDataSource.query(
+    const subMetricsRepo = AppDataSource.getRepository(SubscriptionDailyMetrics);
+    const subAggs = await AppDataSource.query(
       `
       SELECT
         (properties->>'planId')::uuid AS plan_id,
@@ -108,7 +112,7 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
 
     for (const agg of subAggs) {
       const metric = subMetricsRepo.create({
-        date: dateStr,
+        date: new Date(dateStr),
         planId: agg.plan_id,
         currency: agg.currency,
         activeCount: parseInt(agg.active_count, 10),
@@ -118,11 +122,12 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
     }
 
     // 4. Traffic Aggregates
-    const trafficMetricsRepo = appDataSource.getRepository(TrafficDailyMetrics);
-    const trafficAggs = await appDataSource.query(
+    const trafficMetricsRepo = AppDataSource.getRepository(TrafficDailyMetrics);
+
+    const trafficAggs = await AppDataSource.query(
       `
       SELECT
-        COALESCE(properties->>'country', 'US') AS country,
+        COALESCE(properties->>'country', 'US') AS country_code,
         properties->>'device' AS device,
         properties->>'browser' AS browser,
         COUNT(DISTINCT actor_id) AS unique_visitors,
@@ -132,22 +137,44 @@ export async function runDailyRollups(targetDate: Date = new Date()): Promise<vo
         COUNT(CASE WHEN event_type = 'SEARCH' THEN 1 END) AS searches_count
       FROM analytics_events
       WHERE occurred_at >= $1 AND occurred_at <= $2
-      GROUP BY country, device, browser
+      GROUP BY country_code, device, browser
     `,
       [startOfDay, endOfDay],
     );
 
-    for (const agg of trafficAggs) {
+    for await (const agg of trafficAggs) {
+      const rawCountryCode = (agg.country_code ?? 'US').trim().toUpperCase();
+      const country = countryMap.get(rawCountryCode);
+
+      const rawDevice = (agg.device ?? '').trim().toUpperCase();
+      const device = Object.values(DeviceType).includes(rawDevice as DeviceType)
+        ? (rawDevice as DeviceType)
+        : DeviceType.DESKTOP;
+
+      const rawBrowser = (agg.browser ?? '').trim().toUpperCase();
+      const browser = Object.values(BrowserType).includes(rawBrowser as BrowserType)
+        ? (rawBrowser as BrowserType)
+        : BrowserType.OTHER;
+
       const metric = trafficMetricsRepo.create({
         date: dateStr,
-        country: agg.country,
-        device: agg.device,
-        browser: agg.browser,
-        uniqueVisitors: parseInt(agg.unique_visitors, 10),
-        pageViews: parseInt(agg.page_views, 10),
-        tenderViews: parseInt(agg.tender_views, 10),
-        tenderDownloads: parseInt(agg.tender_downloads, 10),
-        searchesCount: parseInt(agg.searches_count, 10),
+        countryId: country ? parseInt(country.id, 10) : null,
+        device,
+        browser,
+        uniqueVisitors: parseInt(agg.unique_visitors, 10) || 0,
+        newVisitors: 0,
+        returningVisitors: 0,
+        pageViews: parseInt(agg.page_views, 10) || 0,
+        tenderViews: parseInt(agg.tender_views, 10) || 0,
+        searchCount: parseInt(agg.searches_count, 10) || 0,
+        avgSessionDuration: 0,
+        bounceRate: 0,
+        signupCount: 0,
+        subscriptionCount: 0,
+        revenue: 0,
+        tenderDownloads: parseInt(agg.tender_downloads, 10) || 0,
+        apiRequests: 0,
+        errorCount: 0,
       });
       await trafficMetricsRepo.save(metric);
     }
@@ -167,7 +194,7 @@ export async function cleanupAnalyticsData(): Promise<void> {
     'Cleaning up raw analytics events older than 2 years',
   );
   try {
-    await appDataSource.query(
+    await AppDataSource.query(
       `
       DELETE FROM analytics_events
       WHERE occurred_at < $1
@@ -182,10 +209,11 @@ export async function cleanupAnalyticsData(): Promise<void> {
 
 // ─── Development Seeding Helper (Only called in dev/seed) ────────────────────
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function backfillHistoricalDevMetrics(): Promise<void> {
   logger.info('Checking if daily aggregates need historical backfill...');
 
-  const tenderMetricsRepo = appDataSource.getRepository(TenderDailyMetrics);
+  const tenderMetricsRepo = AppDataSource.getRepository(TenderDailyMetrics);
   const count = await tenderMetricsRepo.count();
   if (count > 0) {
     logger.info('Daily metrics table already populated — skipping backfill');
@@ -193,27 +221,53 @@ export async function backfillHistoricalDevMetrics(): Promise<void> {
   }
 
   logger.info('Daily metrics are empty. Seeding 90 days of dev metrics...');
-  const userMetricsRepo = appDataSource.getRepository(UserDailyMetrics);
-  const subMetricsRepo = appDataSource.getRepository(SubscriptionDailyMetrics);
-  const trafficMetricsRepo = appDataSource.getRepository(TrafficDailyMetrics);
+  const userMetricsRepo = AppDataSource.getRepository(UserDailyMetrics);
+  const subMetricsRepo = AppDataSource.getRepository(SubscriptionDailyMetrics);
+  const trafficMetricsRepo = AppDataSource.getRepository(TrafficDailyMetrics);
+  const countryRepo = AppDataSource.getRepository(Country);
+
+  const countryCodes = ['US', 'CA', 'IN'];
+  const countryMap: Record<string, Country> = {};
+  for (const code of countryCodes) {
+    let country = await countryRepo.findOne({ where: { code } });
+    if (!country) {
+      country = countryRepo.create({
+        code,
+        name: code === 'US' ? 'United States' : code === 'CA' ? 'Canada' : 'India',
+        slug: code === 'US' ? 'united-states' : code === 'CA' ? 'canada' : 'india',
+        isActive: true,
+      });
+      country = await countryRepo.save(country);
+    }
+    countryMap[code] = country;
+  }
 
   const countries = ['USA', 'Canada', 'India'];
   const devices = ['Desktop', 'Mobile', 'Tablet'];
   const browsers = ['Chrome', 'Safari', 'Firefox', 'Edge'];
   const tenderTypes = ['Government RFP', 'Commercial Bid', 'Public Tender'];
 
+  const countryNameToCode: Record<string, string> = {
+    USA: 'US',
+    Canada: 'CA',
+    India: 'IN',
+  };
+
   for (let i = 90; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = d.toISOString().split('T')[0] ?? '';
 
     // Seed Tenders
-    for (const c of countries) {
-      for (const t of tenderTypes) {
+    // eslint-disable-next-line no-await-in-loop
+    for await (const c of countries) {
+      for await (const t of tenderTypes) {
+        const code = countryNameToCode[c] as string;
+        const countryEntity = countryMap[code];
         const metric = tenderMetricsRepo.create({
-          date: dateStr,
-          country: c,
-          tenderType: t,
+          date: new Date(dateStr),
+          countryId: countryEntity ? parseInt(countryEntity.id, 10) : null,
+          procurementType: t,
           createdCount: Math.floor(Math.random() * 8) + 2,
           publishedCount: Math.floor(Math.random() * 7) + 2,
           awardedCount: Math.floor(Math.random() * 5) + 1,
@@ -228,10 +282,13 @@ export async function backfillHistoricalDevMetrics(): Promise<void> {
     }
 
     // Seed Users
-    for (const c of countries) {
+    // eslint-disable-next-line no-await-in-loop
+    for await (const c of countries) {
+      const code = countryNameToCode[c] as string;
+      const countryEntity = countryMap[code];
       const metric = userMetricsRepo.create({
-        date: dateStr,
-        country: c,
+        date: new Date(dateStr),
+        countryId: countryEntity ? parseInt(countryEntity.id, 10) : null,
         newUsers: Math.floor(Math.random() * 15) + 5,
         activeUsers: Math.floor(Math.random() * 200) + 50,
         verifiedUsers: Math.floor(Math.random() * 10) + 3,
@@ -240,26 +297,56 @@ export async function backfillHistoricalDevMetrics(): Promise<void> {
     }
 
     // Seed Subscriptions
+
     const subMetric = subMetricsRepo.create({
-      date: dateStr,
+      date: new Date(dateStr),
       activeCount: Math.floor(Math.random() * 100) + 400,
       revenueCents: Math.floor(Math.random() * 200000) + 1500000,
     });
     await subMetricsRepo.save(subMetric);
 
     // Seed Traffic
-    for (const c of countries) {
+    const mappedCountryCodes = ['US', 'CA', 'IN'];
+    for (const code of mappedCountryCodes) {
+      const countryEntity = countryMap[code];
       for (const dev of devices) {
+        const rawDevice = dev.toUpperCase();
+        const deviceEnum = Object.values(DeviceType).includes(rawDevice as DeviceType)
+          ? (rawDevice as DeviceType)
+          : DeviceType.DESKTOP;
+
+        const randomBrowser = browsers[
+          Math.floor(Math.random() * browsers.length)
+        ]?.toUpperCase() as BrowserType;
+        const browserEnum = Object.values(BrowserType).includes(randomBrowser)
+          ? randomBrowser
+          : BrowserType.OTHER;
+
+        const unique = Math.floor(Math.random() * 1000) + 200;
+        const pageViewsVal = Math.floor(Math.random() * 5000) + 1000;
+        const tenderViewsVal = Math.floor(Math.random() * 1200) + 300;
+        const tenderDownloadsVal = Math.floor(Math.random() * 200) + 50;
+        const searchCountVal = Math.floor(Math.random() * 800) + 100;
+
         const metric = trafficMetricsRepo.create({
           date: dateStr,
-          country: c,
-          device: dev,
-          browser: browsers[Math.floor(Math.random() * browsers.length)],
-          uniqueVisitors: Math.floor(Math.random() * 1000) + 200,
-          pageViews: Math.floor(Math.random() * 5000) + 1000,
-          tenderViews: Math.floor(Math.random() * 1200) + 300,
-          tenderDownloads: Math.floor(Math.random() * 200) + 50,
-          searchesCount: Math.floor(Math.random() * 800) + 100,
+          countryId: countryEntity ? parseInt(countryEntity.id, 10) : null,
+          device: deviceEnum,
+          browser: browserEnum,
+          uniqueVisitors: unique,
+          newVisitors: Math.floor(unique * 0.4),
+          returningVisitors: Math.floor(unique * 0.6),
+          pageViews: pageViewsVal,
+          tenderViews: tenderViewsVal,
+          searchCount: searchCountVal,
+          avgSessionDuration: Math.floor(Math.random() * 300) + 60,
+          bounceRate: parseFloat((Math.random() * 40 + 20).toFixed(2)),
+          signupCount: Math.floor(Math.random() * 10),
+          subscriptionCount: Math.floor(Math.random() * 5),
+          revenue: Math.floor(Math.random() * 100000),
+          tenderDownloads: tenderDownloadsVal,
+          apiRequests: pageViewsVal * 5,
+          errorCount: Math.floor(Math.random() * 5),
         });
         await trafficMetricsRepo.save(metric);
       }

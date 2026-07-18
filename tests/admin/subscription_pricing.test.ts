@@ -1,10 +1,10 @@
-import { appDataSource } from '../../src/config/database';
-import { Plan } from '../../src/entities/Plan';
-import { Subscription } from '../../src/entities/Subscription';
-import { State } from '../../src/entities/State';
-import { Category } from '../../src/entities/Category';
-import { Tender } from '../../src/entities/Tender';
-import { User } from '../../src/entities/User';
+import { AppDataSource } from '../../src/config/database';
+import { Plan } from '../../src/database/entities/Plan';
+import { Subscription } from '../../src/database/entities/Subscription';
+import { State } from '../../src/database/entities/State';
+import { Category } from '../../src/database/entities/Category';
+import { Tender } from '../../src/database/entities/Tender';
+import { User } from '../../src/database/entities/User';
 import { SubscriptionStatus, TenderStatus, AccountType } from '../../src/types/enums';
 import { createSubscription } from '../../src/modules/subscriptions/subscriptions.service';
 import { hasAccessToTender } from '../../src/utils/access';
@@ -32,14 +32,14 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
 
   beforeAll(async () => {
     // Ensure database is initialized
-    if (!appDataSource.isInitialized) {
-      await appDataSource.initialize();
+    if (!AppDataSource.isInitialized) {
+      await AppDataSource.initialize();
     }
   });
 
   beforeEach(async () => {
     // Clear tables
-    await appDataSource.query(
+    await AppDataSource.query(
       `TRUNCATE TABLE subscriptions, plans, tenders, categories, states, users RESTART IDENTITY CASCADE`,
     );
 
@@ -51,7 +51,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     });
 
     // Create lookup states
-    const stateRepo = appDataSource.getRepository(State);
+    const stateRepo = AppDataSource.getRepository(State);
     testState = stateRepo.create({
       name: 'New York',
       code: 'NY',
@@ -79,7 +79,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     await stateRepo.save([testState, otherState, canadaState]);
 
     // Create categories
-    const categoryRepo = appDataSource.getRepository(Category);
+    const categoryRepo = AppDataSource.getRepository(Category);
     testCategory = categoryRepo.create({
       code: '001',
       name: 'Technology',
@@ -95,7 +95,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     await categoryRepo.save([testCategory, otherCategory]);
 
     // Create plans
-    const planRepo = appDataSource.getRepository(Plan);
+    const planRepo = AppDataSource.getRepository(Plan);
     allAccessPlan = await planRepo.save(
       planRepo.create({
         name: 'All-Access Plan',
@@ -155,7 +155,7 @@ describe('Subscription Pricing & Target-Specific Access Control Tests', () => {
     );
 
     // Create tenders
-    const tenderRepo = appDataSource.getRepository(Tender);
+    const tenderRepo = AppDataSource.getRepository(Tender);
     tenderInState = await tenderRepo.save(
       tenderRepo.create({
         title: 'NY Software Project',

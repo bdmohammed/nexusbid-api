@@ -1,12 +1,20 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 
 import { auditLogger } from '../../middleware/auditLogger';
 import { authenticate } from '../../middleware/authenticate';
-import { requirePermission, requireRole } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 import { AccountType, PermissionKey } from '../../types/enums';
 import * as controller from '../admin/admin.controller';
-import { CreateStateDto, StateQueryDto, UpdateStateDto } from '../admin/admin.dto';
+import {
+  StateQuerySchema,
+  UpdateCountryBodySchema,
+  UpdateCountryParamsSchema,
+  UpdateStateBodySchema,
+  UpdateStateParamsSchema,
+} from '../admin/admin.dto';
+
+import { requirePermission } from '@/middleware/permissions';
+import { requireRole } from '@/middleware/requireAccountType';
 
 const router = Router();
 
@@ -46,7 +54,8 @@ const router = Router();
  * /api/v1/states:
  *   get:
  *     summary: List and search geographical states / locations (Public)
- *     description: Returns a paginated list of active states, optionally filtered by code, slug, type, country, or partial text search.
+ *     description: Returns a paginated list of active states, optionally filtered by code, slug, type
+ *     country, or partial text search.
  *     operationId: listStates
  *     tags: [States]
  *     security: []
@@ -107,7 +116,7 @@ const router = Router();
  *                 currentPage: 1
  *               traceId: "uuid"
  */
-router.get('/', validate(StateQueryDto, 'query'), controller.listStates);
+router.get('/', validate(StateQuerySchema, 'query'), controller.listStates);
 
 /**
  * @swagger
@@ -205,15 +214,6 @@ router.get('/countries', controller.listCountries);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post(
-  '/',
-  authenticate,
-  requireRole(AccountType.ADMIN),
-  requirePermission(PermissionKey.MANAGE_STATES),
-  validate(CreateStateDto),
-  auditLogger('state.create', 'state'),
-  controller.createState,
-);
 
 /**
  * @swagger
@@ -322,87 +322,21 @@ router.patch(
   authenticate,
   requireRole(AccountType.ADMIN),
   requirePermission(PermissionKey.MANAGE_STATES),
-  validate(UpdateStateDto),
+  validate(UpdateStateParamsSchema, 'params'),
+  validate(UpdateStateBodySchema, 'body'),
   auditLogger('state.edit', 'state'),
   controller.updateState,
 );
-router.delete(
-  '/:id',
-  authenticate,
-  requireRole(AccountType.ADMIN),
-  requirePermission(PermissionKey.MANAGE_STATES),
-  auditLogger('state.delete', 'state'),
-  controller.deleteState,
-);
 
-/**
- * @swagger
- * /api/v1/states/batch:
- *   post:
- *     summary: Batch import/upsert/delete states (Admin)
- *     description: |
- *       Processes batch actions (upsert, delete) for states in JSON or CSV format.
- *       **Required Permission:** `MANAGE_STATES` (Admin only)
- *     operationId: batchStates
- *     tags: [States]
- *     security:
- *       - cookieAuth: []
- *         csrfToken: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: array
- *             items:
- *               type: object
- *               required: [code]
- *               properties:
- *                 action: { type: string, enum: [upsert, delete], default: upsert }
- *                 code: { type: string, example: "TX" }
- *                 name: { type: string, example: "Texas" }
- *                 slug: { type: string, example: "texas" }
- *                 type: { type: string, enum: [state, territory, federal], example: "state" }
- *                 country: { type: string, example: "United States" }
- *         text/csv:
- *           schema:
- *             type: string
- *             example: |
- *               action,code,name,slug,type,country
- *               upsert,TX,Texas,texas,state,United States
- *               delete,FL,,,,,
- *     responses:
- *       200:
- *         description: Batch processed successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/SuccessResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       type: object
- *                       properties:
- *                         created: { type: integer, example: 1 }
- *                         updated: { type: integer, example: 0 }
- *                         deleted: { type: integer, example: 1 }
- *                         failed: { type: integer, example: 0 }
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         $ref: '#/components/responses/Unauthorized'
- *       403:
- *         $ref: '#/components/responses/Forbidden'
- */
-router.post(
-  '/batch',
+router.patch(
+  '/countries/:id',
   authenticate,
   requireRole(AccountType.ADMIN),
   requirePermission(PermissionKey.MANAGE_STATES),
-  express.text({ type: ['text/csv', 'text/plain'], limit: '1mb' }),
-  express.json({ limit: '1mb' }),
-  controller.batchStates,
+  validate(UpdateCountryParamsSchema, 'params'),
+  validate(UpdateCountryBodySchema, 'body'),
+  auditLogger('country.edit', 'country'),
+  controller.updateCountry,
 );
 
 export { router as statesRouter };

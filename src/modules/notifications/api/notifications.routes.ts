@@ -2,8 +2,15 @@ import { Router } from 'express';
 
 import { authenticate } from '../../../middleware/authenticate';
 import { loadPermissions } from '../../../middleware/permissions';
+import { validate } from '../../../middleware/validate';
 
 import * as controller from './notifications.controller';
+import {
+  ExecuteActionParamsSchema,
+  GetNotificationsQuerySchema,
+  NotificationIdParamSchema,
+  UpdatePreferencesBodySchema,
+} from './notifications.dto';
 
 const router = Router();
 
@@ -83,7 +90,7 @@ router.use(loadPermissions);
  *                       items:
  *                         $ref: '#/components/schemas/NotificationItem'
  */
-router.get('/', controller.getNotifications);
+router.get('/', validate(GetNotificationsQuerySchema, 'query'), controller.getNotifications);
 
 /**
  * @swagger
@@ -180,7 +187,11 @@ router.get('/categories', controller.getCategories);
  *                       $ref: '#/components/schemas/NotificationPreferences'
  */
 router.get('/preferences', controller.getPreferences);
-router.patch('/preferences', controller.updatePreferences);
+router.patch(
+  '/preferences',
+  validate(UpdatePreferencesBodySchema, 'body'),
+  controller.updatePreferences,
+);
 
 /**
  * @swagger
@@ -247,7 +258,7 @@ router.patch('/read-all', controller.markAllAsRead);
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.patch('/:id/read', controller.markAsRead);
+router.patch('/:id/read', validate(NotificationIdParamSchema, 'params'), controller.markAsRead);
 
 /**
  * @swagger
@@ -270,7 +281,11 @@ router.patch('/:id/read', controller.markAsRead);
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.patch('/:id/archive', controller.archiveNotification);
+router.patch(
+  '/:id/archive',
+  validate(NotificationIdParamSchema, 'params'),
+  controller.archiveNotification,
+);
 
 /**
  * @swagger
@@ -293,14 +308,19 @@ router.patch('/:id/archive', controller.archiveNotification);
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.patch('/:id/dismiss', controller.dismissNotification);
+router.patch(
+  '/:id/dismiss',
+  validate(NotificationIdParamSchema, 'params'),
+  controller.dismissNotification,
+);
 
 /**
  * @swagger
  * /api/v1/notifications/{id}/actions/{actionId}/execute:
  *   post:
  *     summary: Execute an action trigger on a notification
- *     description: Performs a user response action attached to an interactive notification (e.g. accepting invitation, approving draft).
+ *     description: Performs a user response action attached to an interactive
+ *     notification (e.g. accepting invitation, approving draft).
  *     operationId: executeNotificationAction
  *     tags: [Notifications]
  *     security:
@@ -321,6 +341,10 @@ router.patch('/:id/dismiss', controller.dismissNotification);
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.post('/:id/actions/:actionId/execute', controller.executeAction);
+router.post(
+  '/:id/actions/:actionId/execute',
+  validate(ExecuteActionParamsSchema, 'params'),
+  controller.executeAction,
+);
 
 export { router as notificationsRouter };

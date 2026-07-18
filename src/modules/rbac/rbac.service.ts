@@ -1,35 +1,52 @@
 import slugify from 'slugify';
 import { In, Not } from 'typeorm';
 
-import { appDataSource } from '../../config/database';
-import { AppError } from '../../core/AppError';
-import { Permission } from '../../entities/Permission';
-import { PermissionModule } from '../../entities/PermissionModule';
-import { Role, RoleStatus } from '../../entities/Role';
-import { ReviewStatus, RoleReview } from '../../entities/RoleReview';
-import { ReviewAssignmentStatus, RoleReviewAssignment } from '../../entities/RoleReviewAssignment';
-import { RoleReviewComment } from '../../entities/RoleReviewComment';
-import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
-import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
-import { UserRole } from '../../entities/UserRole';
+import { AppDataSource } from '../../config/database';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
+import { Permission } from '../../database/entities/Permission';
+import { PermissionModule } from '../../database/entities/PermissionModule';
+import { Role } from '../../database/entities/Role';
+import { RoleReviewAssignment } from '../../database/entities/RoleReviewAssignment';
+import { RoleReviewComment } from '../../database/entities/RoleReviewComment';
+import { RoleVersion } from '../../database/entities/RoleVersion';
+import { RoleVersionPermission } from '../../database/entities/RoleVersionPermission';
+import { UserRole } from '../../database/entities/UserRole';
+import { assignUserRoles, revokeUserRole } from '../admin/admin.service';
 
 import { rbacEventEmitter } from './events/RbacEvents';
 
+import type {
+  CompareVersionsResult,
+  CreateRoleResult,
+  ExportRoleData,
+  RoleDetails,
+  RoleStatsResult,
+  UpdateRoleResult,
+} from './rbac.dto';
+import { RoleReview } from '@/database/entities/RoleReview';
+import {
+  ReviewAction,
+  ReviewAssignmentStatus,
+  ReviewStatus,
+  RoleStatus,
+  RoleVersionStatus,
+} from '@/types/enums';
+
 export class RbacService {
-  private static readonly roleRepo = appDataSource.getRepository(Role);
-  private static readonly versionRepo = appDataSource.getRepository(RoleVersion);
-  private static readonly rvpRepo = appDataSource.getRepository(RoleVersionPermission);
-  private static readonly reviewRepo = appDataSource.getRepository(RoleReview);
-  private static readonly assignmentRepo = appDataSource.getRepository(RoleReviewAssignment);
-  private static readonly commentRepo = appDataSource.getRepository(RoleReviewComment);
-  private static readonly permRepo = appDataSource.getRepository(Permission);
-  private static readonly moduleRepo = appDataSource.getRepository(PermissionModule);
-  private static readonly userRoleRepo = appDataSource.getRepository(UserRole);
+  private static readonly roleRepo = AppDataSource.getRepository(Role);
+  private static readonly versionRepo = AppDataSource.getRepository(RoleVersion);
+  private static readonly rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
+  private static readonly reviewRepo = AppDataSource.getRepository(RoleReview);
+  private static readonly assignmentRepo = AppDataSource.getRepository(RoleReviewAssignment);
+  private static readonly permRepo = AppDataSource.getRepository(Permission);
+  private static readonly moduleRepo = AppDataSource.getRepository(PermissionModule);
+  private static readonly userRoleRepo = AppDataSource.getRepository(UserRole);
 
   /**
    * Get all active, disabled and soft-deleted roles, joining their active version.
    */
-  public static async getRoles(includeDeleted = false): Promise<any[]> {
+  public static async getRoles(includeDeleted = false) {
+    // : Promise<RoleDetails[]>
     const roles = await this.roleRepo.find({
       where: includeDeleted ? {} : { status: Not(RoleStatus.ARCHIVED) },
       relations: [
@@ -43,16 +60,20 @@ export class RbacService {
 
     return roles.map((r) => {
       let displayVersion = r.activeVersion;
-      if (!displayVersion && r.versions && r.versions.length > 0) {
+      if (!displayVersion && r.versions.length > 0) {
         const sorted = [...r.versions].sort((a, b) => b.version - a.version);
-        displayVersion = sorted[0];
+        displayVersion = sorted[0] as RoleVersion;
       }
 
-      const permissions = displayVersion?.roleVersionPermissions?.map((p) => p.permissionKey) ?? [];
+      const permissions = displayVersion?.roleVersionPermissions.map((p) => p.permissionKey);
 
       return {
         id: r.id,
-        slug: r.slug,
+        key: r.isSystemRole
+          ? 'super-admin'
+          : displayVersion?.name
+            ? slugify(displayVersion.name, { lower: true, strict: true })
+            : '',
         status: r.status,
         isSystemRole: r.isSystemRole,
         isDefaultRole: r.isDefaultRole,
@@ -72,7 +93,7 @@ export class RbacService {
   /**
    * Get role by ID with active version permissions.
    */
-  public static async getRoleById(id: string): Promise<any> {
+  public static async getRoleById(id: string): Promise<RoleDetails> {
     const role = await this.roleRepo.findOne({
       where: { id },
       relations: [
@@ -84,20 +105,28 @@ export class RbacService {
     });
 
     if (!role) {
-      throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+      throw new AppError(
+        AppErrorMessage.ROLE_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.ROLE_NOT_FOUND,
+      );
     }
 
     let displayVersion = role.activeVersion;
-    if (!displayVersion && role.versions && role.versions.length > 0) {
+    if (!displayVersion && role.versions.length > 0) {
       const sorted = [...role.versions].sort((a, b) => b.version - a.version);
-      displayVersion = sorted[0];
+      displayVersion = sorted[0] as RoleVersion;
     }
 
     const permissions = displayVersion?.roleVersionPermissions.map((p) => p.permissionKey) ?? [];
 
     return {
       id: role.id,
-      slug: role.slug,
+      slug: role.isSystemRole
+        ? 'super-admin'
+        : displayVersion?.name
+          ? slugify(displayVersion.name, { lower: true, strict: true })
+          : '',
       status: role.status,
       isSystemRole: role.isSystemRole,
       isDefaultRole: role.isDefaultRole,
@@ -120,20 +149,24 @@ export class RbacService {
     description: string | null,
     permissionKeys: string[],
     userId: string,
-  ): Promise<any> {
-    if (!name ?? name.trim() === '') {
-      throw new AppError('Role name is required', 400, 'VALIDATION_ERROR');
-    }
-
-    if (!permissionKeys ?? permissionKeys.length === 0) {
+  ): Promise<CreateRoleResult> {
+    if (name.trim() === '') {
       throw new AppError(
-        'A role must have at least one permission assigned.',
-        400,
-        'VALIDATION_ERROR',
+        AppErrorMessage.ROLE_NAME_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
       );
     }
 
-    const slug = slugify(name, { lower: true, strict: true });
+    if (permissionKeys.length === 0) {
+      throw new AppError(
+        AppErrorMessage.ROLE_PERMISSION_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
+    }
+
+    // const slug = slugify(name, { lower: true, strict: true });
 
     // Validate if any version has this name or slug already
     const existingVersion = await this.versionRepo.findOne({
@@ -141,9 +174,9 @@ export class RbacService {
     });
     if (existingVersion) {
       throw new AppError(
-        `A role version with name "${name}" already exists.`,
-        409,
-        'ROLE_ALREADY_EXISTS',
+        AppErrorMessage.ROLE_VERSION_ALREADY_EXISTS(name),
+        HttpStatusCode.CONFLICT,
+        AppErrorCode.ROLE_ALREADY_EXISTS,
       );
     }
 
@@ -155,16 +188,15 @@ export class RbacService {
 
     if (permissions.length === 0) {
       throw new AppError(
-        'None of the assigned permissions exist in the registry.',
-        400,
-        'VALIDATION_ERROR',
+        AppErrorMessage.PERMISSIONS_NOT_IN_REGISTRY,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
       );
     }
 
-    return appDataSource.transaction(async (transactionManager) => {
+    return AppDataSource.transaction(async (transactionManager) => {
       // 1. Create Role
       const role = new Role();
-      role.slug = slug;
       role.status = RoleStatus.DISABLED; // Disabled until a version is approved
       role.isSystemRole = false;
       role.isDefaultRole = false;
@@ -186,7 +218,7 @@ export class RbacService {
         rvp.roleVersionId = savedVersion.id;
         rvp.permissionKey = p.key;
         rvp.permissionName = p.name;
-        rvp.moduleSlug = p.module.slug;
+        rvp.moduleSlug = p.module.key;
         rvp.moduleName = p.module.name;
         return rvp;
       });
@@ -218,24 +250,32 @@ export class RbacService {
     description: string | null,
     permissionKeys: string[],
     userId: string,
-  ): Promise<any> {
+  ): Promise<UpdateRoleResult> {
     const role = await this.roleRepo.findOne({
       where: { id },
       relations: ['activeVersion'],
     });
     if (!role) {
-      throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+      throw new AppError(
+        AppErrorMessage.ROLE_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.ROLE_NOT_FOUND,
+      );
     }
 
     if (role.isSystemRole) {
-      throw new AppError('System roles cannot be modified.', 403, 'SYSTEM_ROLE_PROTECTED');
+      throw new AppError(
+        AppErrorMessage.SYSTEM_ROLES_READONLY,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.SYSTEM_ROLE_PROTECTED,
+      );
     }
 
-    if (!permissionKeys ?? permissionKeys.length === 0) {
+    if (permissionKeys.length === 0) {
       throw new AppError(
-        'A role must have at least one permission assigned.',
-        400,
-        'VALIDATION_ERROR',
+        AppErrorMessage.ROLE_PERMISSION_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
       );
     }
 
@@ -246,9 +286,9 @@ export class RbacService {
     });
     if (permissions.length === 0) {
       throw new AppError(
-        'None of the assigned permissions exist in the registry.',
-        400,
-        'VALIDATION_ERROR',
+        AppErrorMessage.PERMISSIONS_NOT_IN_REGISTRY,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
       );
     }
 
@@ -270,9 +310,9 @@ export class RbacService {
         const lockExpiry = new Date(draft.lockedAt.getTime() + 15 * 60 * 1000);
         if (lockExpiry > new Date()) {
           throw new AppError(
-            'This role draft is currently locked by another administrator.',
-            409,
-            'DRAFT_LOCKED',
+            AppErrorMessage.ROLE_DRAFT_LOCKED,
+            HttpStatusCode.CONFLICT,
+            AppErrorCode.DRAFT_LOCKED,
           );
         }
       }
@@ -290,7 +330,7 @@ export class RbacService {
       draft.lockedByUserId = null;
       draft.lockedAt = null;
 
-      await appDataSource.transaction(async (transactionManager) => {
+      await AppDataSource.transaction(async (transactionManager) => {
         await transactionManager.save(draft);
 
         // Delete old snapshot permissions
@@ -302,7 +342,7 @@ export class RbacService {
           rvp.roleVersionId = draft.id;
           rvp.permissionKey = p.key;
           rvp.permissionName = p.name;
-          rvp.moduleSlug = p.module.slug;
+          rvp.moduleSlug = p.module.key;
           rvp.moduleName = p.module.name;
           return rvp;
         });
@@ -343,7 +383,7 @@ export class RbacService {
       newDraft.status = RoleVersionStatus.DRAFT;
       newDraft.createdByUserId = userId;
 
-      await appDataSource.transaction(async (transactionManager) => {
+      await AppDataSource.transaction(async (transactionManager) => {
         const savedDraft = await transactionManager.save(newDraft);
 
         const versionPermissions = permissions.map((p) => {
@@ -351,7 +391,7 @@ export class RbacService {
           rvp.roleVersionId = savedDraft.id;
           rvp.permissionKey = p.key;
           rvp.permissionName = p.name;
-          rvp.moduleSlug = p.module.slug;
+          rvp.moduleSlug = p.module.key;
           rvp.moduleName = p.module.name;
           return rvp;
         });
@@ -379,9 +419,13 @@ export class RbacService {
   /**
    * Clone a role or version to create a new role template draft.
    */
-  public static async duplicateRole(id: string, newName: string, userId: string): Promise<any> {
+  public static async duplicateRole(
+    id: string,
+    newName: string,
+    userId: string,
+  ): Promise<CreateRoleResult> {
     const role = await this.getRoleById(id);
-    return this.createRole(newName, `Cloned from ${role.name}.`, role.permissionKeys, userId);
+    return this.createRole(newName, `Cloned from ${role.name}.`, role.permissionKeys ?? [], userId);
   }
 
   /**
@@ -390,14 +434,18 @@ export class RbacService {
   public static async deleteRole(id: string, userId: string): Promise<void> {
     const role = await this.roleRepo.findOne({ where: { id } });
     if (!role) {
-      throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+      throw new AppError(
+        AppErrorMessage.ROLE_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.ROLE_NOT_FOUND,
+      );
     }
 
     if (role.isSystemRole) {
       throw new AppError(
-        'System roles cannot be archived or deleted.',
-        403,
-        'SYSTEM_ROLE_PROTECTED',
+        AppErrorMessage.SYSTEM_ROLES_PROTECTED,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.SYSTEM_ROLE_PROTECTED,
       );
     }
 
@@ -416,10 +464,14 @@ export class RbacService {
   /**
    * Restore a soft-deleted archived role.
    */
-  public static async restoreRole(id: string, userId: string): Promise<any> {
+  public static async restoreRole(id: string, userId: string): Promise<Role> {
     const role = await this.roleRepo.findOne({ where: { id } });
     if (!role) {
-      throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+      throw new AppError(
+        AppErrorMessage.ROLE_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.ROLE_NOT_FOUND,
+      );
     }
 
     role.status = RoleStatus.ACTIVE;
@@ -451,12 +503,21 @@ export class RbacService {
    */
   public static async lockRoleVersion(versionId: string, userId: string): Promise<void> {
     const version = await this.versionRepo.findOne({ where: { id: versionId } });
-    if (!version) throw new AppError('Role version not found', 404, 'NOT_FOUND');
+    if (!version)
+      throw new AppError(
+        AppErrorMessage.ROLE_VERSION_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
 
     if (version.lockedByUserId && version.lockedByUserId !== userId && version.lockedAt) {
       const lockExpiry = new Date(version.lockedAt.getTime() + 15 * 60 * 1000);
       if (lockExpiry > new Date()) {
-        throw new AppError('Draft is locked by another admin.', 409, 'DRAFT_LOCKED');
+        throw new AppError(
+          AppErrorMessage.DRAFT_LOCKED_ADMIN,
+          HttpStatusCode.CONFLICT,
+          AppErrorCode.DRAFT_LOCKED,
+        );
       }
     }
 
@@ -470,10 +531,19 @@ export class RbacService {
    */
   public static async unlockRoleVersion(versionId: string, userId: string): Promise<void> {
     const version = await this.versionRepo.findOne({ where: { id: versionId } });
-    if (!version) throw new AppError('Role version not found', 404, 'NOT_FOUND');
+    if (!version)
+      throw new AppError(
+        AppErrorMessage.ROLE_VERSION_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
 
     if (version.lockedByUserId && version.lockedByUserId !== userId) {
-      throw new AppError('You cannot unlock a draft locked by someone else.', 403, 'FORBIDDEN');
+      throw new AppError(
+        AppErrorMessage.DRAFT_UNLOCK_FORBIDDEN,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.FORBIDDEN,
+      );
     }
 
     version.lockedByUserId = null;
@@ -488,34 +558,47 @@ export class RbacService {
     versionId: string,
     reviewerIds: string[],
     userId: string,
-  ): Promise<any> {
+  ): Promise<RoleReview> {
     const version = await this.versionRepo.findOne({ where: { id: versionId } });
-    if (!version) throw new AppError('Role version not found', 404, 'NOT_FOUND');
+    if (!version)
+      throw new AppError(
+        AppErrorMessage.ROLE_VERSION_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
 
     if (
       version.status !== RoleVersionStatus.DRAFT &&
       version.status !== RoleVersionStatus.REOPENED
     ) {
-      throw new AppError('Only draft versions can be submitted for review.', 400, 'INVALID_STATE');
+      throw new AppError(
+        AppErrorMessage.ONLY_DRAFT_PLANS_REVIEWED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.INVALID_STATE,
+      );
     }
 
     // Business Rules: Cannot assign oneself as reviewer
     if (reviewerIds.includes(userId)) {
       throw new AppError(
-        'Creator/Submitter cannot be assigned as a reviewer.',
-        400,
-        'CREATOR_APPROVAL_BLOCKED',
+        AppErrorMessage.CREATOR_REVIEWER_BLOCKED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.CREATOR_APPROVAL_BLOCKED,
       );
     }
 
-    if (!reviewerIds ?? reviewerIds.length === 0) {
-      throw new AppError('At least one reviewer must be assigned.', 400, 'VALIDATION_ERROR');
+    if (reviewerIds.length === 0) {
+      throw new AppError(
+        AppErrorMessage.REVIEWER_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
     }
 
     version.status = RoleVersionStatus.PENDING_REVIEW;
 
-    return appDataSource.transaction(async (transactionManager) => {
-      const savedVersion = await transactionManager.save(version);
+    return AppDataSource.transaction(async (transactionManager) => {
+      await transactionManager.save(version);
 
       // Create Review Session
       const review = new RoleReview();
@@ -538,7 +621,7 @@ export class RbacService {
       const comment = new RoleReviewComment();
       comment.reviewId = savedReview.id;
       comment.userId = userId;
-      comment.action = 'SUBMIT';
+      comment.action = ReviewAction.SUBMIT;
       comment.comment = `Submitted version ${version.version} for review.`;
       await transactionManager.save(RoleReviewComment, comment);
 
@@ -567,9 +650,18 @@ export class RbacService {
       relations: ['roleVersion', 'role'],
     });
 
-    if (!review) throw new AppError('Review workflow not found', 404, 'NOT_FOUND');
+    if (!review)
+      throw new AppError(
+        AppErrorMessage.REVIEW_WORKFLOW_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
     if (review.status !== ReviewStatus.PENDING) {
-      throw new AppError('This review workflow is already completed.', 400, 'INVALID_STATE');
+      throw new AppError(
+        AppErrorMessage.REVIEW_WORKFLOW_ALREADY_COMPLETED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.INVALID_STATE,
+      );
     }
 
     // Check assignment
@@ -579,33 +671,42 @@ export class RbacService {
 
     if (!assignment) {
       throw new AppError(
-        'You are not assigned as a reviewer for this role.',
-        403,
-        'UNAUTHORIZED_REVIEWER',
+        AppErrorMessage.NOT_ASSIGNED_ROLE_REVIEWER,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.UNAUTHORIZED_REVIEWER,
       );
     }
 
     if (assignment.status !== ReviewAssignmentStatus.PENDING) {
       throw new AppError(
-        'You have already submitted your review decision.',
-        400,
-        'ALREADY_REVIEWED',
+        AppErrorMessage.REVIEW_ALREADY_SUBMITTED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.ALREADY_REVIEWED,
+      );
+    }
+
+    if (status !== 'APPROVED' && (!commentText || commentText.trim() === '')) {
+      throw new AppError(
+        AppErrorMessage.COMMENT_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.COMMENT_REQUIRED,
       );
     }
 
     // Update assignment status
-    assignment.status = status as any;
+    assignment.status = status as ReviewAssignmentStatus;
     assignment.reviewedAt = new Date();
 
-    await appDataSource.transaction(async (transactionManager) => {
+    // eslint-disable-next-line sonarjs/cognitive-complexity
+    await AppDataSource.transaction(async (transactionManager) => {
       await transactionManager.save(assignment);
 
       // Save Comment log
       const commentLog = new RoleReviewComment();
       commentLog.reviewId = review.id;
       commentLog.userId = userId;
-      commentLog.action = status;
-      commentLog.comment = commentText ?? `${status} review submission.`;
+      commentLog.action = status as ReviewAction;
+      commentLog.comment = commentText;
       await transactionManager.save(RoleReviewComment, commentLog);
 
       // Check all reviewer assignments to make final decision
@@ -630,6 +731,7 @@ export class RbacService {
       // - Approve: If everyone approves (or minimum reviewers met, here we enforce consensus).
       if (rejections > 0) {
         review.status = ReviewStatus.REJECTED;
+        review.completedAt = new Date();
         review.roleVersion.status = RoleVersionStatus.REJECTED;
         await transactionManager.save(review);
         await transactionManager.save(review.roleVersion);
@@ -643,6 +745,7 @@ export class RbacService {
         });
       } else if (changesRequested > 0) {
         review.status = ReviewStatus.REJECTED; // Or custom CHANGES_REQUESTED status
+        review.completedAt = new Date();
         review.roleVersion.status = RoleVersionStatus.REOPENED;
         await transactionManager.save(review);
         await transactionManager.save(review.roleVersion);
@@ -656,7 +759,10 @@ export class RbacService {
       } else if (approvals === totalReviewers) {
         // Enforce Consensus: All approved -> Activate Role Version!
         review.status = ReviewStatus.APPROVED;
+        review.completedAt = new Date();
         review.roleVersion.status = RoleVersionStatus.APPROVED;
+        review.roleVersion.approvedByUserId = userId;
+        review.roleVersion.approvedAt = new Date();
         await transactionManager.save(review);
         await transactionManager.save(review.roleVersion);
 
@@ -671,26 +777,28 @@ export class RbacService {
         const match = description.match(/\[ReplacesRole:\s*([0-9a-fA-F-]+)\]/);
         if (match) {
           const previousRoleId = match[1];
-          const previousRole = await transactionManager.findOne(Role, {
-            where: { id: previousRoleId },
-          });
-          if (previousRole) {
-            previousRole.status = RoleStatus.DISABLED;
-            await transactionManager.save(previousRole);
-
-            // Migrate all users with that previous role to the new role
-            const userRoles = await transactionManager.find(UserRole, {
-              where: { roleId: previousRoleId },
+          if (previousRoleId) {
+            const previousRole = await transactionManager.findOne(Role, {
+              where: { id: previousRoleId },
             });
-            for (const ur of userRoles) {
-              const alreadyHasNew = await transactionManager.findOne(UserRole, {
-                where: { userId: ur.userId, roleId: role.id },
+            if (previousRole) {
+              previousRole.status = RoleStatus.DISABLED;
+              await transactionManager.save(previousRole);
+
+              // Migrate all users with that previous role to the new role
+              const userRoles = await transactionManager.find(UserRole, {
+                where: { roleId: previousRoleId },
               });
-              if (alreadyHasNew) {
-                await transactionManager.remove(ur);
-              } else {
-                ur.roleId = role.id;
-                await transactionManager.save(ur);
+              for (const ur of userRoles) {
+                const alreadyHasNew = await transactionManager.findOne(UserRole, {
+                  where: { userId: ur.userId, roleId: role.id },
+                });
+                if (alreadyHasNew) {
+                  await transactionManager.remove(ur);
+                } else {
+                  ur.roleId = role.id;
+                  await transactionManager.save(ur);
+                }
               }
             }
           }
@@ -713,7 +821,7 @@ export class RbacService {
     roleId: string,
     v1Num: number,
     v2Num: number,
-  ): Promise<any> {
+  ): Promise<CompareVersionsResult> {
     const ver1 = await this.versionRepo.findOne({
       where: { roleId, version: v1Num },
       relations: ['roleVersionPermissions'],
@@ -724,8 +832,12 @@ export class RbacService {
       relations: ['roleVersionPermissions'],
     });
 
-    if (!ver1 ?? !ver2) {
-      throw new AppError('One or both versions not found.', 404, 'NOT_FOUND');
+    if (!ver1 || !ver2) {
+      throw new AppError(
+        AppErrorMessage.VERSIONS_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
     }
 
     const keys1 = ver1.roleVersionPermissions.map((p) => p.permissionKey);
@@ -739,13 +851,13 @@ export class RbacService {
       v1: {
         version: ver1.version,
         name: ver1.name,
-        description: ver1.description,
+        description: ver1.description as string,
         status: ver1.status,
       },
       v2: {
         version: ver2.version,
         name: ver2.name,
-        description: ver2.description,
+        description: ver2.description as string,
         status: ver2.status,
       },
       diff: {
@@ -759,7 +871,7 @@ export class RbacService {
   /**
    * Get role counts, distribution and pending workflow metrics.
    */
-  public static async getRoleStats(): Promise<any> {
+  public static async getRoleStats(): Promise<RoleStatsResult> {
     const totalRoles = await this.roleRepo.count();
     const activeRoles = await this.roleRepo.count({ where: { status: RoleStatus.ACTIVE } });
     const pendingReviews = await this.reviewRepo.count({ where: { status: ReviewStatus.PENDING } });
@@ -783,13 +895,13 @@ export class RbacService {
   /**
    * Get audit trails for exports.
    */
-  public static async getExportData(): Promise<any[]> {
+  public static async getExportData(): Promise<ExportRoleData[]> {
     const roles = await this.roleRepo.find({
       relations: ['activeVersion', 'activeVersion.roleVersionPermissions'],
     });
     return roles.map((r) => ({
       roleId: r.id,
-      slug: r.slug,
+      slug: r.key,
       status: r.status,
       isSystemRole: r.isSystemRole,
       name: r.activeVersion?.name ?? '',
@@ -818,8 +930,16 @@ export class RbacService {
     expiresAt: string | null,
     currentUserId: string,
   ): Promise<void> {
-    const role = await this.roleRepo.findOne({ where: { id: roleId } });
-    if (!role) throw new AppError('Role not found', 404, 'NOT_FOUND');
+    const role = await this.roleRepo.findOne({
+      where: { id: roleId },
+      relations: ['activeVersion'],
+    });
+    if (!role)
+      throw new AppError(
+        AppErrorMessage.ROLE_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
 
     const existingAssignments = await this.userRoleRepo.find({ where: { userId } });
     const assignments = existingAssignments
@@ -831,12 +951,15 @@ export class RbacService {
 
     assignments.push({ roleId, expiresAt });
 
-    const { assignUserRoles } = require('../admin/admin.service');
-    await assignUserRoles(userId, assignments, currentUserId);
+    await assignUserRoles(userId, { assignments }, currentUserId);
+
+    const resolvedName = role.isSystemRole
+      ? 'Super Admin'
+      : (role.activeVersion?.name ?? 'Unnamed Role');
 
     rbacEventEmitter.emit('RoleAssigned', {
       roleId,
-      roleName: role.slug,
+      roleName: resolvedName,
       targetUserId: userId,
       userId: currentUserId,
     });
@@ -848,17 +971,21 @@ export class RbacService {
   public static async revokeAssignment(id: string, currentUserId: string): Promise<void> {
     const userRole = await this.userRoleRepo.findOne({ where: { id } });
     if (!userRole) {
-      throw new AppError('Role assignment not found', 404, 'NOT_FOUND');
+      throw new AppError(
+        AppErrorMessage.ROLE_ASSIGNMENT_NOT_FOUND,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.NOT_FOUND,
+      );
     }
 
-    const { revokeUserRole } = require('../admin/admin.service');
     await revokeUserRole(userRole.userId, userRole.roleId, currentUserId);
   }
 
   /**
    * Get permissions grouped by module.
    */
-  public static async getPermissionsGroupedByModule(): Promise<any[]> {
+  public static async getPermissionsGroupedByModule() {
+    // : Promise<GroupedPermissionModule[]>
     const modules = await this.moduleRepo.find({ order: { displayOrder: 'ASC' } });
     const permissions = await this.permRepo.find({ relations: ['module'] });
 
@@ -867,8 +994,7 @@ export class RbacService {
       return {
         id: mod.id,
         name: mod.name,
-        slug: mod.slug,
-        icon: mod.icon,
+        slug: mod.key,
         permissions: modPerms.map((p) => ({
           id: p.id,
           key: p.key,
@@ -903,17 +1029,19 @@ export class RbacService {
     for (const review of expiredReviews) {
       if (review.createdAt < sixtyDaysAgo) {
         review.status = ReviewStatus.REJECTED;
+        review.completedAt = new Date();
         review.roleVersion.status = RoleVersionStatus.REJECTED;
 
-        await appDataSource.transaction(async (transactionManager) => {
+        // eslint-disable-next-line no-await-in-loop
+        await AppDataSource.transaction(async (transactionManager) => {
           await transactionManager.save(review);
           await transactionManager.save(review.roleVersion);
 
           // Add timeline comment
           const comment = new RoleReviewComment();
           comment.reviewId = review.id;
-          comment.userId = '00000000-0000-0000-0000-000000000000'; // System UUID
-          comment.action = 'AUTO_EXPIRE';
+          comment.userId = null; // System action, user_id is null
+          comment.action = ReviewAction.AUTO_EXPIRE;
           comment.comment = 'Review auto-expired and rejected after 60 days.';
           await transactionManager.save(RoleReviewComment, comment);
         });

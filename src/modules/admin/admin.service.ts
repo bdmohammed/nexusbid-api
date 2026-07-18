@@ -2,28 +2,29 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { In } from 'typeorm';
 
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { env } from '../../config/env';
-import { AppError } from '../../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
 import { BCRYPT_ROUNDS } from '../../core/constants';
-import { AuditLog } from '../../entities/AuditLog';
-import { Category } from '../../entities/Category';
-import { DownloadHistory } from '../../entities/DownloadHistory';
-import { Permission } from '../../entities/Permission';
-import { Plan } from '../../entities/Plan';
-import { PlanVersion } from '../../entities/PlanVersion';
-import { Role } from '../../entities/Role';
-import { RoleVersionPermission } from '../../entities/RoleVersionPermission';
-import { SecurityLog } from '../../entities/SecurityLog';
-import { State } from '../../entities/State';
-import { Subscription } from '../../entities/Subscription';
-import { Tender } from '../../entities/Tender';
-import { TenderVersion } from '../../entities/TenderVersion';
-import { Transaction } from '../../entities/Transaction';
-import { User } from '../../entities/User';
-import { UserNote } from '../../entities/UserNote';
-import { UserRole } from '../../entities/UserRole';
-import { UserSession } from '../../entities/UserSession';
+import { AuditLog } from '../../database/entities/AuditLog';
+import { Category } from '../../database/entities/Category';
+import { Country } from '../../database/entities/Country';
+import { DownloadHistory } from '../../database/entities/DownloadHistory';
+import { Permission } from '../../database/entities/Permission';
+import { Plan } from '../../database/entities/Plan';
+import { PlanVersion } from '../../database/entities/PlanVersion';
+import { Role } from '../../database/entities/Role';
+import { RoleVersionPermission } from '../../database/entities/RoleVersionPermission';
+import { SecurityLog } from '../../database/entities/SecurityLog';
+import { State } from '../../database/entities/State';
+import { Subscription } from '../../database/entities/Subscription';
+import { Tender } from '../../database/entities/Tender';
+import { TenderVersion } from '../../database/entities/TenderVersion';
+import { Transaction } from '../../database/entities/Transaction';
+import { User } from '../../database/entities/User';
+import { UserNote } from '../../database/entities/UserNote';
+import { UserRole } from '../../database/entities/UserRole';
+import { UserSession } from '../../database/entities/UserSession';
 import { CacheService } from '../../services/cache.service';
 import {
   sendAdminApprovalStatusEmail,
@@ -34,7 +35,12 @@ import { createEmailToken } from '../../services/token.service';
 import {
   AccountType,
   EmailTokenType,
+  PlanStatus,
+  PlanVersionStatus,
+  RoleStatus,
+  SecurityEvent,
   SubscriptionStatus,
+  TenderLifecycleStatus,
   TransactionStatus,
   UserStatus,
 } from '../../types/enums';
@@ -42,33 +48,50 @@ import { generateSlug } from '../../utils/slug';
 
 import type {
   AnalyticsQueryDto,
+  AssignUserRolesBodyDto,
+  BatchCategoriesResultDto,
   BatchCategoryItemDto,
-  BatchStateItemDto,
   CategoryQueryDto,
+  CategoryStatsDto,
   CreateAdminDto,
   CreateCategoryDto,
   CreatePlanDto,
-  CreateStateDto,
   ListUsersQueryDto,
+  RevenueAnalyticsResultDto,
   StateQueryDto,
+  TopDownloadResultDto,
   UpdateCategoryDto,
+  UpdateCountryBodyDto,
   UpdatePlanDto,
   UpdateStateDto,
   UpdateUserDetailDto,
+  UserActivityDetailDto,
+  UserDeviceDto,
+  UserGrowthResultDto,
+  UserNoteDetailDto,
+  UserRolesDto,
+  UserSecurityDto,
+  UserSessionDto,
+  UserStatsDto,
+  UserSubscriptionOverviewDto,
+  UserTimelineEvent,
 } from './admin.dto';
-import { PermissionModule } from '@/entities/PermissionModule';
+import { UserPermissions } from '@/constants/permissions';
+import { PermissionModule } from '@/database/entities/PermissionModule';
 
-const userRepo = appDataSource.getRepository(User);
-const planRepo = appDataSource.getRepository(Plan);
-const subRepo = appDataSource.getRepository(Subscription);
-const txnRepo = appDataSource.getRepository(Transaction);
-const categoryRepo = appDataSource.getRepository(Category);
-const stateRepo = appDataSource.getRepository(State);
-const tenderRepo = appDataSource.getRepository(Tender);
-const auditRepo = appDataSource.getRepository(AuditLog);
+const userRepo = AppDataSource.getRepository(User);
+const planRepo = AppDataSource.getRepository(Plan);
+const subRepo = AppDataSource.getRepository(Subscription);
+const txnRepo = AppDataSource.getRepository(Transaction);
+const categoryRepo = AppDataSource.getRepository(Category);
+const stateRepo = AppDataSource.getRepository(State);
+const countryRepo = AppDataSource.getRepository(Country);
+const tenderRepo = AppDataSource.getRepository(Tender);
+const auditRepo = AppDataSource.getRepository(AuditLog);
 
 // ─── User Management ──────────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function listUsers(
   opts: Partial<ListUsersQueryDto> = {},
 ): Promise<{ users: User[]; total: number }> {
@@ -115,20 +138,23 @@ export async function listUsers(
   }
 
   if (opts.status) {
-    if (opts.status === 'ACTIVE') {
+    if (opts.status === UserStatus.ACTIVE) {
       qb.andWhere(
-        "user.status = 'active' AND user.emailVerified = true AND user.isBlocked = false",
+        'user.status = :status AND user.emailVerified = true AND user.isBlocked = false',
+        {
+          status: UserStatus.ACTIVE,
+        },
       );
-    } else if (opts.status === 'PENDING_VERIFICATION') {
+    } else if (opts.status === UserStatus.PENDING_EMAIL_VERIFICATION) {
       qb.andWhere('user.emailVerified = false');
-    } else if (opts.status === 'PENDING_APPROVAL') {
-      qb.andWhere("user.status = 'pending_approval' AND user.emailVerified = true");
-    } else if (opts.status === 'SUSPENDED') {
-      qb.andWhere("user.status = 'suspended'");
-    } else if (opts.status === 'BLOCKED') {
+    } else if (opts.status === UserStatus.PENDING_APPROVAL) {
+      qb.andWhere('user.status = :status AND user.emailVerified = true', { status: opts.status });
+    } else if (opts.status === UserStatus.SUSPENDED) {
+      qb.andWhere('user.status = :status', { status: opts.status });
+    } else if (opts.status === UserStatus.BLOCKED) {
       qb.andWhere('user.isBlocked = true');
-    } else if (opts.status === 'ARCHIVED') {
-      qb.andWhere("user.status = 'archived'");
+    } else if (opts.status === UserStatus.ARCHIVED) {
+      qb.andWhere('user.status = :status', { status: opts.status });
     }
   }
 
@@ -157,12 +183,16 @@ export async function listUsers(
   }
 
   if (opts.approvalStatus) {
-    if (opts.approvalStatus === 'pending') {
-      qb.andWhere("user.status = 'pending_approval'");
-    } else if (opts.approvalStatus === 'approved') {
+    if (opts.approvalStatus === UserStatus.PENDING_APPROVAL) {
+      qb.andWhere('user.status = :status AND user.emailVerified = true', {
+        status: UserStatus.PENDING_APPROVAL,
+      });
+    } else if (opts.approvalStatus === UserStatus.APPROVED) {
       qb.andWhere('user.approvedAt IS NOT NULL');
-    } else if (opts.approvalStatus === 'rejected') {
-      qb.andWhere("user.status = 'rejected'");
+    } else if (opts.approvalStatus === UserStatus.REJECTED_BY_ADMIN) {
+      qb.andWhere('user.status = :status AND user.emailVerified = true', {
+        status: UserStatus.REJECTED_BY_ADMIN,
+      });
     }
   }
 
@@ -188,13 +218,23 @@ export async function getUserById(id: string): Promise<User> {
       'updatedAt',
     ],
   });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   return user;
 }
 
 export async function blockUser(id: string, isBlocked: boolean): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   user.isBlocked = isBlocked;
   if (isBlocked) {
@@ -205,7 +245,12 @@ export async function blockUser(id: string, isBlocked: boolean): Promise<User> {
 
 export async function suspendUser(id: string): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   user.status = UserStatus.SUSPENDED;
   user.tokenVersion += 1;
   return userRepo.save(user);
@@ -213,14 +258,24 @@ export async function suspendUser(id: string): Promise<User> {
 
 export async function unsuspendUser(id: string): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   user.status = UserStatus.ACTIVE;
   return userRepo.save(user);
 }
 
 export async function archiveUser(id: string): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   user.status = UserStatus.ARCHIVED;
   user.tokenVersion += 1;
   return userRepo.save(user);
@@ -228,14 +283,24 @@ export async function archiveUser(id: string): Promise<User> {
 
 export async function unarchiveUser(id: string): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   user.status = UserStatus.ACTIVE;
   return userRepo.save(user);
 }
 
 export async function forcePasswordChange(id: string): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   user.mustResetPassword = true;
   user.tokenVersion += 1;
   return userRepo.save(user);
@@ -243,7 +308,12 @@ export async function forcePasswordChange(id: string): Promise<User> {
 
 export async function sendResetPasswordEmailAction(id: string): Promise<void> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   const rawToken = await createEmailToken(user.id, EmailTokenType.PASSWORD_RESET);
   await sendPasswordResetEmail({
     to: user.email,
@@ -255,7 +325,12 @@ export async function sendResetPasswordEmailAction(id: string): Promise<void> {
 
 export async function sendUserVerificationAction(id: string): Promise<void> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   const rawToken = await createEmailToken(user.id, EmailTokenType.EMAIL_VERIFICATION);
   await sendVerificationEmail({
     to: user.email,
@@ -266,15 +341,20 @@ export async function sendUserVerificationAction(id: string): Promise<void> {
 }
 
 export async function revokeSession(userId: string, sessionId: string): Promise<void> {
-  const sessionRepo = appDataSource.getRepository(UserSession);
+  const sessionRepo = AppDataSource.getRepository(UserSession);
   const session = await sessionRepo.findOne({ where: { id: sessionId, userId } });
-  if (!session) throw new AppError('Session not found', 404, 'NOT_FOUND');
+  if (!session)
+    throw new AppError(
+      AppErrorMessage.SESSION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   session.isRevoked = true;
   await sessionRepo.save(session);
 }
 
 export async function revokeAllSessions(userId: string): Promise<void> {
-  const sessionRepo = appDataSource.getRepository(UserSession);
+  const sessionRepo = AppDataSource.getRepository(UserSession);
   await sessionRepo.update({ userId }, { isRevoked: true });
   const user = await userRepo.findOne({ where: { id: userId } });
   if (user) {
@@ -289,7 +369,12 @@ export async function impersonateUser(
   reason: string,
 ): Promise<{ token: string }> {
   const user = await userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   const admin = await userRepo.findOneOrFail({ where: { id: adminId } });
 
@@ -309,25 +394,47 @@ export async function impersonateUser(
   return { token };
 }
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function updateUserDetail(id: string, dto: UpdateUserDetailDto): Promise<User> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   if (dto.email && dto.email !== user.email) {
     const exists = await userRepo.findOne({ where: { email: dto.email } });
     if (exists && exists.id !== id) {
-      throw new AppError('Email already in use', 400, 'EMAIL_TAKEN');
+      throw new AppError(
+        AppErrorMessage.EMAIL_IN_USE,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.EMAIL_TAKEN,
+      );
     }
     user.email = dto.email;
   }
 
   if (dto.name !== undefined) user.name = dto.name;
-  if (dto.companyName !== undefined) user.companyName = dto.companyName;
-  if (dto.country !== undefined) user.country = dto.country;
+  if (dto.companyName !== undefined && dto.companyName !== null) user.companyName = dto.companyName;
+  if (dto.country !== undefined && dto.country !== null) {
+    const countryObj = await countryRepo.findOne({
+      where: [{ id: dto.country }, { name: dto.country }, { code: dto.country }],
+    });
+    if (!countryObj) {
+      throw new AppError(
+        'Country not found',
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
+    }
+    user.country = countryObj;
+  }
 
   if (dto.status !== undefined) {
-    user.status = dto.status as any;
-    if (dto.status === 'suspended' ?? dto.status === 'archived') {
+    user.status = dto.status;
+    if (dto.status === 'suspended' || dto.status === 'archived') {
       user.tokenVersion += 1;
     }
   }
@@ -342,7 +449,7 @@ export async function updateUserDetail(id: string, dto: UpdateUserDetailDto): Pr
   return userRepo.save(user);
 }
 
-export async function getUserStats(): Promise<any> {
+export async function getUserStats(): Promise<UserStatsDto> {
   const total = await userRepo.count();
   const active = await userRepo.count({
     where: { status: UserStatus.ACTIVE, emailVerified: true, isBlocked: false },
@@ -366,8 +473,7 @@ export async function getUserStats(): Promise<any> {
   const blocked = await userRepo.count({ where: { isBlocked: true } });
 
   const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
-  const onlineNow = await appDataSource
-    .getRepository(UserSession)
+  const onlineNow = await AppDataSource.getRepository(UserSession)
     .createQueryBuilder('session')
     .select('DISTINCT session.userId')
     .where(
@@ -411,25 +517,29 @@ export async function getUserStats(): Promise<any> {
   };
 }
 
-export async function getUserOverview(id: string): Promise<any> {
+export async function getUserOverview(id: string) {
   const user = await userRepo.findOne({
     where: { id },
     relations: ['approvedBy'],
   });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
-  const notesCount = await appDataSource.getRepository(UserNote).count({ where: { userId: id } });
+  const notesCount = await AppDataSource.getRepository(UserNote).count({ where: { userId: id } });
 
   const createdTendersCount = await tenderRepo.count({ where: { createdById: id } });
-  const downloadCount = await appDataSource.getRepository(DownloadHistory).count({
+  const downloadCount = await AppDataSource.getRepository(DownloadHistory).count({
     where: { userId: id },
   });
-  const loginCount = await appDataSource.getRepository(SecurityLog).count({
-    where: { userId: id, event: 'auth.login' },
+  const loginCount = await AppDataSource.getRepository(SecurityLog).count({
+    where: { userId: id, event: SecurityEvent.USER_LOGIN },
   });
 
-  const storageResult = await appDataSource
-    .getRepository(DownloadHistory)
+  const storageResult = await AppDataSource.getRepository(DownloadHistory)
     .createQueryBuilder('dl')
     .select('SUM(dl.fileSize)', 'totalSize')
     .where('dl.userId = :userId', { userId: id })
@@ -468,9 +578,14 @@ export async function getUserOverview(id: string): Promise<any> {
   };
 }
 
-export async function getUserSecurity(id: string): Promise<any> {
+export async function getUserSecurity(id: string): Promise<UserSecurityDto> {
   const user = await userRepo.findOne({ where: { id } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   return {
     emailVerified: user.emailVerified,
@@ -482,8 +597,8 @@ export async function getUserSecurity(id: string): Promise<any> {
   };
 }
 
-export async function getUserSessions(id: string): Promise<any[]> {
-  const sessions = await appDataSource.getRepository(UserSession).find({
+export async function getUserSessions(id: string): Promise<UserSessionDto[]> {
+  const sessions = await AppDataSource.getRepository(UserSession).find({
     where: { userId: id, isRevoked: false },
     order: { createdAt: 'DESC' },
   });
@@ -496,9 +611,9 @@ export async function getUserSessions(id: string): Promise<any[]> {
   }));
 }
 
-export async function getUserDevices(id: string): Promise<any[]> {
-  const logs = await appDataSource.getRepository(SecurityLog).find({
-    where: { userId: id, event: 'auth.login' },
+export async function getUserDevices(id: string): Promise<UserDeviceDto[]> {
+  const logs = await AppDataSource.getRepository(SecurityLog).find({
+    where: { userId: id, event: SecurityEvent.USER_LOGIN },
     order: { createdAt: 'DESC' },
     take: 10,
   });
@@ -506,7 +621,9 @@ export async function getUserDevices(id: string): Promise<any[]> {
     id: l.id,
     ipAddress: l.ipAddress,
     userAgent: l.userAgent,
-    location: l.location ?? 'Unknown',
+    location:
+      // l.location ??
+      'Unknown',
     lastUsedAt: l.createdAt,
   }));
 }
@@ -515,10 +632,9 @@ export async function getUserActivity(
   id: string,
   page: number = 1,
   limit: number = 20,
-): Promise<{ activities: any[]; total: number }> {
+): Promise<{ activities: UserActivityDetailDto[]; total: number }> {
   const skip = (page - 1) * limit;
-  const qb = appDataSource
-    .getRepository(SecurityLog)
+  const qb = AppDataSource.getRepository(SecurityLog)
     .createQueryBuilder('log')
     .where('log.userId = :userId', { userId: id })
     .orderBy('log.createdAt', 'DESC')
@@ -537,8 +653,8 @@ export async function getUserActivity(
   return { activities, total };
 }
 
-export async function getUserTimeline(id: string): Promise<any[]> {
-  const timeline: any[] = [];
+export async function getUserTimeline(id: string): Promise<UserTimelineEvent[]> {
+  const timeline: UserTimelineEvent[] = [];
   const user = await userRepo.findOneOrFail({ where: { id } });
 
   timeline.push({
@@ -561,7 +677,7 @@ export async function getUserTimeline(id: string): Promise<any[]> {
     order: { createdAt: 'ASC' },
   });
   for (const sub of subs) {
-    const planName = sub.planVersion?.name ?? 'Subscription';
+    const planName = sub.planVersion.name;
     timeline.push({
       event: 'Subscribed',
       timestamp: sub.createdAt,
@@ -575,7 +691,7 @@ export async function getUserTimeline(id: string): Promise<any[]> {
   });
   for (const l of logs) {
     let description = l.action;
-    if (l.action === 'user.block') {
+    if (l.action === UserPermissions.BLOCK.key) {
       description = l.after?.['isBlocked'] ? 'User account blocked.' : 'User account unblocked.';
     } else if (l.action === 'user.suspend') {
       description = 'User status changed to suspended.';
@@ -603,7 +719,7 @@ export async function getUserAuditLogs(
   return { logs, total };
 }
 
-export async function getUserSubscription(id: string): Promise<any> {
+export async function getUserSubscription(id: string): Promise<UserSubscriptionOverviewDto> {
   const activeSub = await subRepo.findOne({
     where: { userId: id, status: SubscriptionStatus.ACTIVE },
     relations: ['plan', 'planVersion'],
@@ -619,7 +735,7 @@ export async function getUserSubscription(id: string): Promise<any> {
     activeSubscription: activeSub
       ? {
           id: activeSub.id,
-          planName: activeSub.planVersion?.name ?? 'Subscription',
+          planName: activeSub.planVersion.name,
           status: activeSub.status,
           startedAt: activeSub.createdAt,
           expiresAt: activeSub.endDate,
@@ -635,8 +751,8 @@ export async function getUserSubscription(id: string): Promise<any> {
   };
 }
 
-export async function getUserNotes(id: string): Promise<any[]> {
-  const notes = await appDataSource.getRepository(UserNote).find({
+export async function getUserNotes(id: string): Promise<UserNoteDetailDto[]> {
+  const notes = await AppDataSource.getRepository(UserNote).find({
     where: { userId: id },
     relations: ['admin'],
     order: { createdAt: 'DESC' },
@@ -654,19 +770,24 @@ export async function createUserNote(
   adminId: string,
   note: string,
 ): Promise<UserNote> {
-  const noteRepo = appDataSource.getRepository(UserNote);
+  const noteRepo = AppDataSource.getRepository(UserNote);
   const userNote = noteRepo.create({ userId, adminId, note });
   return noteRepo.save(userNote);
 }
 
 export async function createAdmin(dto: CreateAdminDto): Promise<User> {
   const exists = await userRepo.findOne({ where: { email: dto.email } });
-  if (exists) throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
+  if (exists)
+    throw new AppError(
+      AppErrorMessage.EMAIL_REGISTERED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.EMAIL_TAKEN,
+    );
 
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
   // Validate assigned roles
-  const roleRepo = appDataSource.getRepository(Role);
+  const roleRepo = AppDataSource.getRepository(Role);
   const roles = await roleRepo
     .createQueryBuilder('role')
     .where('role.id IN (:...roleIds)', { roleIds: dto.roleIds })
@@ -675,13 +796,13 @@ export async function createAdmin(dto: CreateAdminDto): Promise<User> {
 
   if (roles.length !== dto.roleIds.length) {
     throw new AppError(
-      'One or more assigned roles are invalid or inactive.',
-      400,
-      'VALIDATION_ERROR',
+      AppErrorMessage.ROLE_INVALID_OR_INACTIVE,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.VALIDATION_ERROR,
     );
   }
 
-  const saved = await appDataSource.transaction(async (transactionManager) => {
+  const saved = await AppDataSource.transaction(async (transactionManager) => {
     const admin = transactionManager.create(User, {
       name: dto.name,
       email: dto.email,
@@ -718,15 +839,15 @@ export async function listAllPlans(): Promise<Plan[]> {
 
 export async function createPlan(dto: CreatePlanDto, createdById?: string): Promise<Plan> {
   const plan = planRepo.create({
-    status: dto.isActive ? 'ACTIVE' : 'ARCHIVED',
+    status: dto.isActive ? PlanStatus.ACTIVE : PlanStatus.ARCHIVED,
   });
   const savedPlan = await planRepo.save(plan);
 
-  const versionRepo = appDataSource.getRepository(PlanVersion);
+  const versionRepo = AppDataSource.getRepository(PlanVersion);
   const version = versionRepo.create({
     planId: savedPlan.id,
     version: 1,
-    status: 'PUBLISHED',
+    status: PlanVersionStatus.PUBLISHED,
     name: dto.name,
     subtitle: '',
     description: '',
@@ -742,7 +863,7 @@ export async function createPlan(dto: CreatePlanDto, createdById?: string): Prom
     targetCountry: dto.targetCountry ?? null,
     targetCategoryId: dto.targetCategoryId ?? null,
     bundleSize: dto.bundleSize ?? null,
-    createdById: createdById ?? null,
+    createdBy: createdById ?? null,
   });
   await versionRepo.save(version);
 
@@ -751,9 +872,15 @@ export async function createPlan(dto: CreatePlanDto, createdById?: string): Prom
   return planRepo.save(savedPlan);
 }
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function updatePlan(id: string, dto: UpdatePlanDto): Promise<Plan> {
   const plan = await planRepo.findOne({ where: { id }, relations: ['activeVersion'] });
-  if (!plan) throw new AppError('Plan not found', 404, 'NOT_FOUND');
+  if (!plan)
+    throw new AppError(
+      AppErrorMessage.PLAN_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   if (plan.activeVersion) {
     const activeVer = plan.activeVersion;
@@ -768,18 +895,20 @@ export async function updatePlan(id: string, dto: UpdatePlanDto): Promise<Plan> 
     if (dto.targetCategoryId !== undefined)
       activeVer.targetCategoryId = dto.targetCategoryId ?? null;
     if (dto.bundleSize !== undefined) activeVer.bundleSize = dto.bundleSize ?? null;
-    await appDataSource.getRepository(PlanVersion).save(activeVer);
+    await AppDataSource.getRepository(PlanVersion).save(activeVer);
   }
 
   if (dto.isActive !== undefined) {
-    plan.status = dto.isActive ? 'ACTIVE' : 'ARCHIVED';
+    plan.status = dto.isActive ? PlanStatus.ACTIVE : PlanStatus.ARCHIVED;
   }
   return planRepo.save(plan);
 }
 
 // ─── Analytics ────────────────────────────────────────────────────────────────
 
-export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<unknown[]> {
+export async function getRevenueAnalytics(
+  dto: AnalyticsQueryDto,
+): Promise<RevenueAnalyticsResultDto[]> {
   const format = dto.groupBy === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
 
   const qb = txnRepo
@@ -797,8 +926,8 @@ export async function getRevenueAnalytics(dto: AnalyticsQueryDto): Promise<unkno
   return qb.getRawMany();
 }
 
-export async function getTopDownloads(): Promise<unknown[]> {
-  return appDataSource.query(`
+export async function getTopDownloads(): Promise<TopDownloadResultDto[]> {
+  return AppDataSource.query(`
     SELECT
       t.id,
       t.title,
@@ -812,7 +941,7 @@ export async function getTopDownloads(): Promise<unknown[]> {
   `);
 }
 
-export async function getUserGrowth(dto: AnalyticsQueryDto): Promise<unknown[]> {
+export async function getUserGrowth(dto: AnalyticsQueryDto): Promise<UserGrowthResultDto[]> {
   const format = dto.groupBy === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
 
   const qb = userRepo
@@ -845,6 +974,7 @@ export async function listAllSubscriptions(opts: {
 
 // ─── Category Management ──────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function listAllCategories(
   query: Partial<CategoryQueryDto> = {},
 ): Promise<{ categories: Category[]; total: number }> {
@@ -854,25 +984,7 @@ export async function listAllCategories(
 
   const qb = categoryRepo
     .createQueryBuilder('category')
-    .leftJoin('category.tenders', 'tender')
-    .leftJoinAndSelect('category.createdByUser', 'creator')
-    .select([
-      'category.id',
-      'category.code',
-      'category.name',
-      'category.slug',
-      'category.description',
-      'category.isActive',
-      'category.createdAt',
-      'category.updatedAt',
-      'category.deletedAt',
-      'creator.id',
-      'creator.name',
-      'creator.email',
-    ])
-    .addSelect('COALESCE(COUNT(DISTINCT tender.tender_id), 0)::int', 'activeTenderCount')
-    .groupBy('category.id')
-    .addGroupBy('creator.id')
+    .leftJoinAndSelect('category.createdBy', 'creator')
     .orderBy('category.code', 'ASC');
 
   if (query.status === 'ARCHIVED') {
@@ -961,23 +1073,12 @@ export async function listAllCategories(
   const total = await countQb.getCount();
 
   qb.offset(skip).limit(limit);
-  const { entities, raw } = await qb.getRawAndEntities();
-
-  const categories = entities.map((entity, index) => {
-    entity.activeTenderCount = parseInt(raw[index]?.activeTenderCount ?? '0', 10);
-    return entity;
-  });
+  const categories = await qb.getMany();
 
   return { categories, total };
 }
 
-export async function getCategoryStats(): Promise<{
-  total: number;
-  active: number;
-  inactive: number;
-  archived: number;
-  tendersCount: number;
-}> {
+export async function getCategoryStats(): Promise<CategoryStatsDto> {
   const total = await categoryRepo.count({ withDeleted: true });
   const active = await categoryRepo.count({ where: { isActive: true, isDeleted: false } });
   const inactive = await categoryRepo.count({ where: { isActive: false, isDeleted: false } });
@@ -1003,7 +1104,11 @@ export async function getCategoryHistory(id: string): Promise<AuditLog[]> {
 export async function getCategoryById(id: string): Promise<Category> {
   const category = await categoryRepo.findOne({ where: { id } });
   if (!category) {
-    throw new AppError('Category not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.CATEGORY_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   return category;
 }
@@ -1012,6 +1117,7 @@ export async function generateUniqueSlug(name: string): Promise<string> {
   const baseSlug = generateSlug(name);
   let slug = baseSlug;
   let counter = 1;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
     const exists = await categoryRepo.findOne({ where: { slug } });
     if (!exists) {
@@ -1022,6 +1128,7 @@ export async function generateUniqueSlug(name: string): Promise<string> {
   }
 }
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function createCategory(dto: CreateCategoryDto, adminId?: string): Promise<Category> {
   let { code } = dto;
   if (!code) {
@@ -1035,17 +1142,23 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
   }
 
   let { slug } = dto;
-  if (!slug) {
-    slug = await generateUniqueSlug(dto.name);
-  }
+  slug ??= await generateUniqueSlug(dto.name);
 
   const existingCode = await categoryRepo.findOne({ where: { code }, withDeleted: true });
   if (existingCode) {
-    throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
+    throw new AppError(
+      AppErrorMessage.CATEGORY_CODE_EXISTS,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.CATEGORY_CODE_TAKEN,
+    );
   }
   const existingSlug = await categoryRepo.findOne({ where: { slug }, withDeleted: true });
   if (existingSlug) {
-    throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
+    throw new AppError(
+      AppErrorMessage.CATEGORY_SLUG_EXISTS,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.CATEGORY_SLUG_TAKEN,
+    );
   }
 
   const category = categoryRepo.create({
@@ -1053,25 +1166,36 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
     name: dto.name,
     slug,
     description: dto.description ?? null,
-    isActive: dto.isActive !== undefined ? dto.isActive : true,
-    createdBy: adminId ?? null,
+    isActive: dto.isActive ?? true,
+    createdBy: adminId as string,
     updatedBy: adminId ?? null,
     isDeleted: false,
   });
 
   let retries = 3;
+
   while (retries > 0) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       return await categoryRepo.save(category);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.code === '23505') {
         const detail = err.detail ?? '';
         if (detail.includes('code')) {
-          throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
+          throw new AppError(
+            AppErrorMessage.CATEGORY_CODE_EXISTS,
+            HttpStatusCode.CONFLICT,
+            AppErrorCode.CATEGORY_CODE_TAKEN,
+          );
         }
         if (detail.includes('slug')) {
           if (dto.slug) {
-            throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
+            throw new AppError(
+              AppErrorMessage.CATEGORY_SLUG_EXISTS,
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_SLUG_TAKEN,
+            );
           }
           category.slug = await generateUniqueSlug(dto.name);
           retries--;
@@ -1082,12 +1206,13 @@ export async function createCategory(dto: CreateCategoryDto, adminId?: string): 
     }
   }
   throw new AppError(
-    'Failed to generate unique slug after multiple attempts',
-    409,
-    'CATEGORY_SLUG_CONFLICT',
+    AppErrorMessage.SLUG_GENERATION_FAILED,
+    HttpStatusCode.CONFLICT,
+    AppErrorCode.CATEGORY_SLUG_CONFLICT,
   );
 }
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export async function updateCategory(
   id: string,
   dto: UpdateCategoryDto,
@@ -1095,7 +1220,11 @@ export async function updateCategory(
 ): Promise<Category> {
   const category = await categoryRepo.findOne({ where: { id } });
   if (!category) {
-    throw new AppError('Category not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.CATEGORY_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   let { slug } = dto;
@@ -1117,7 +1246,11 @@ export async function updateCategory(
       withDeleted: true,
     });
     if (existingCode) {
-      throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
+      throw new AppError(
+        AppErrorMessage.CATEGORY_CODE_EXISTS,
+        HttpStatusCode.CONFLICT,
+        AppErrorCode.CATEGORY_CODE_TAKEN,
+      );
     }
   }
   if (updates.slug && updates.slug !== category.slug) {
@@ -1126,7 +1259,11 @@ export async function updateCategory(
       withDeleted: true,
     });
     if (existingSlug) {
-      throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
+      throw new AppError(
+        AppErrorMessage.CATEGORY_SLUG_EXISTS,
+        HttpStatusCode.CONFLICT,
+        AppErrorCode.CATEGORY_SLUG_TAKEN,
+      );
     }
   }
 
@@ -1135,16 +1272,26 @@ export async function updateCategory(
   let retries = 3;
   while (retries > 0) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       return await categoryRepo.save(category);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       if (err.code === '23505') {
         const detail = err.detail ?? '';
         if (detail.includes('code')) {
-          throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
+          throw new AppError(
+            AppErrorMessage.CATEGORY_CODE_EXISTS,
+            HttpStatusCode.CONFLICT,
+            AppErrorCode.CATEGORY_CODE_TAKEN,
+          );
         }
         if (detail.includes('slug')) {
           if (dto.slug) {
-            throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
+            throw new AppError(
+              AppErrorMessage.CATEGORY_SLUG_EXISTS,
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_SLUG_TAKEN,
+            );
           }
           category.slug = await generateUniqueSlug(category.name);
           retries--;
@@ -1155,26 +1302,33 @@ export async function updateCategory(
     }
   }
   throw new AppError(
-    'Failed to generate unique slug after multiple attempts',
-    409,
-    'CATEGORY_SLUG_CONFLICT',
+    AppErrorMessage.SLUG_GENERATION_FAILED,
+    HttpStatusCode.CONFLICT,
+    AppErrorCode.CATEGORY_SLUG_CONFLICT,
   );
 }
 
 export async function deleteCategory(id: string, adminId?: string): Promise<void> {
-  const category = await categoryRepo.findOne({ where: { id } });
+  const category = await categoryRepo.findOne({
+    where: { id },
+    relations: ['tenders', 'tenders.tender'],
+  });
   if (!category) {
-    throw new AppError('Category not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.CATEGORY_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
-  const hasTenders = await appDataSource.getRepository(TenderVersion).findOne({
-    where: { categoryId: id },
-  });
-  if (hasTenders) {
+  const hasActiveTenders = category.tenders.some(
+    (tv) => tv.tender.status === TenderLifecycleStatus.ACTIVE,
+  );
+  if (hasActiveTenders) {
     throw new AppError(
-      'Cannot delete category with associated tenders',
-      400,
-      'CATEGORY_HAS_TENDERS',
+      AppErrorMessage.CATEGORY_DELETE_ASSOCIATED_TENDERS,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.CATEGORY_HAS_TENDERS,
     );
   }
 
@@ -1188,14 +1342,11 @@ export async function deleteCategory(id: string, adminId?: string): Promise<void
 export async function processBatchCategories(
   items: BatchCategoryItemDto[],
   adminId?: string,
-): Promise<{
-  created: number;
-  updated: number;
-  deleted: number;
-}> {
-  return await appDataSource.transaction(async (transactionalEntityManager) => {
+): Promise<BatchCategoriesResultDto> {
+  // eslint-disable-next-line sonarjs/cognitive-complexity, complexity
+  return await AppDataSource.transaction(async (transactionalEntityManager) => {
     const categoryTxRepo = transactionalEntityManager.getRepository(Category);
-    const tenderTxRepo = transactionalEntityManager.getRepository(Tender);
+    // const tenderTxRepo = transactionalEntityManager.getRepository(Tender);
 
     // 1. Fetch all existing categories (including soft-deleted ones)
     const allCategories = await categoryTxRepo.find({ withDeleted: true });
@@ -1209,11 +1360,14 @@ export async function processBatchCategories(
 
     let created = 0;
     let updated = 0;
-    let deleted = 0;
+    // let deleted = 0;
 
     // 3. Process items in-memory
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      if (!item) {
+        continue;
+      }
 
       if (item.action === 'delete') {
         const category = codeMap.get(item.code);
@@ -1223,7 +1377,7 @@ export async function processBatchCategories(
             category.updatedBy = adminId;
           }
           categoriesToDelete.push(category);
-          deleted++;
+          // deleted++;
         }
         continue;
       }
@@ -1245,9 +1399,9 @@ export async function processBatchCategories(
         if (item.slug) {
           if (item.slug !== category.slug && slugSet.has(item.slug)) {
             throw new AppError(
-              `Slug conflict at item ${i + 1} (code ${item.code}): Slug '${item.slug}' is already taken`,
-              409,
-              'CATEGORY_SLUG_TAKEN',
+              AppErrorMessage.SLUG_CONFLICT_BATCH(i + 1, item.code, item.slug),
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_SLUG_TAKEN,
             );
           }
           slugSet.delete(category.slug);
@@ -1280,7 +1434,7 @@ export async function processBatchCategories(
         newCategory.code = item.code;
         newCategory.name = name;
         newCategory.description = item.description ?? null;
-        newCategory.isActive = item.isActive !== undefined ? item.isActive : true;
+        newCategory.isActive = item.isActive ?? true;
         newCategory.isDeleted = false;
         if (adminId) {
           newCategory.createdBy = adminId;
@@ -1290,9 +1444,9 @@ export async function processBatchCategories(
         if (item.slug) {
           if (slugSet.has(item.slug)) {
             throw new AppError(
-              `Slug conflict at item ${i + 1} (code ${item.code}): Slug '${item.slug}' is already taken`,
-              409,
-              'CATEGORY_SLUG_TAKEN',
+              AppErrorMessage.SLUG_CONFLICT_BATCH(i + 1, item.code, item.slug),
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_SLUG_TAKEN,
             );
           }
           newCategory.slug = item.slug;
@@ -1310,7 +1464,8 @@ export async function processBatchCategories(
         }
 
         categoriesToSave.push(newCategory);
-        codeMap.set(item.code, newCategory); // prevent internal duplicate code issue
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        codeMap.set(item?.code, newCategory); // prevent internal duplicate code issue
         created++;
       }
     }
@@ -1327,12 +1482,12 @@ export async function processBatchCategories(
 
       if (tenderVersions.length > 0) {
         const failedCodes = Array.from(
-          new Set(tenderVersions.map((t) => t.category?.code).filter(Boolean)),
+          new Set(tenderVersions.map((t) => t.category.code).filter(Boolean)),
         );
         throw new AppError(
-          `Cannot delete categories because they are associated with active tenders: ${failedCodes.join(', ')}`,
-          400,
-          'CATEGORY_HAS_TENDERS',
+          AppErrorMessage.CATEGORY_DELETE_TENDERS_ASSOCIATED(failedCodes.join(', ')),
+          HttpStatusCode.BAD_REQUEST,
+          AppErrorCode.CATEGORY_HAS_TENDERS,
         );
       }
 
@@ -1344,14 +1499,23 @@ export async function processBatchCategories(
     if (categoriesToSave.length > 0) {
       try {
         await categoryTxRepo.save(categoriesToSave);
-      } catch (err: any) {
-        if (err.code === '23505') {
-          const detail = err.detail ?? '';
+      } catch (err: unknown) {
+        const error = err as { code: string; detail?: string };
+        if (error.code === '23505') {
+          const detail = error.detail ?? '';
           if (detail.includes('code')) {
-            throw new AppError('Category code already exists', 409, 'CATEGORY_CODE_TAKEN');
+            throw new AppError(
+              AppErrorMessage.CATEGORY_CODE_EXISTS,
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_CODE_TAKEN,
+            );
           }
           if (detail.includes('slug')) {
-            throw new AppError('Category slug already exists', 409, 'CATEGORY_SLUG_TAKEN');
+            throw new AppError(
+              AppErrorMessage.CATEGORY_SLUG_EXISTS,
+              HttpStatusCode.CONFLICT,
+              AppErrorCode.CATEGORY_SLUG_TAKEN,
+            );
           }
         }
         throw err;
@@ -1371,7 +1535,7 @@ export async function listAllStates(
   const limit = Math.min(100, Math.max(1, query.limit ?? 20));
   const skip = (page - 1) * limit;
 
-  const qb = stateRepo.createQueryBuilder('state');
+  const qb = stateRepo.createQueryBuilder('state').leftJoinAndSelect('state.country', 'country');
 
   if (query.code !== undefined && query.code !== '') {
     qb.andWhere('state.code = :code', { code: query.code });
@@ -1385,14 +1549,18 @@ export async function listAllStates(
     qb.andWhere('state.type = :type', { type: query.type });
   }
 
-  if (query.country !== undefined && query.country !== '') {
-    qb.andWhere('state.country = :country', { country: query.country });
+  if (query.countryId !== undefined) {
+    qb.andWhere('state.countryId = :countryId', { countryId: query.countryId });
+  }
+
+  if (query.countryCode !== undefined && query.countryCode !== '') {
+    qb.andWhere('country.code = :countryCode', { countryCode: query.countryCode.toUpperCase() });
   }
 
   if (query.search !== undefined && query.search !== '') {
     const searchPattern = `%${query.search}%`;
     qb.andWhere(
-      '(state.name ILike :pattern OR state.code ILike :pattern OR state.country ILike :pattern)',
+      '(state.name ILike :pattern OR state.code ILike :pattern OR country.name ILike :pattern OR country.code ILike :pattern)',
       { pattern: searchPattern },
     );
   }
@@ -1404,117 +1572,35 @@ export async function listAllStates(
 }
 
 export async function listDistinctCountries(): Promise<string[]> {
-  const result = await stateRepo
-    .createQueryBuilder('state')
-    .select('DISTINCT state.country', 'country')
-    .orderBy('country', 'ASC')
-    .getRawMany();
-
-  return result
-    .map((r) => r.country)
-    .filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
+  const result = await countryRepo.find({
+    select: ['code'],
+    order: { code: 'ASC' },
+  });
+  return result.map((c) => c.code);
 }
 
 export async function getStateById(id: string): Promise<State> {
-  const state = await stateRepo.findOne({ where: { id } });
+  const state = await stateRepo.findOne({ where: { id }, relations: ['country'] });
   if (!state) {
-    throw new AppError('State not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.STATE_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   return state;
 }
 
-export async function generateUniqueStateSlug(name: string): Promise<string> {
-  const baseSlug = generateSlug(name);
-  let slug = baseSlug;
-  let counter = 1;
-  while (true) {
-    const exists = await stateRepo.findOne({ where: { slug }, withDeleted: true });
-    if (!exists) {
-      return slug;
-    }
-    slug = `${baseSlug}-${counter}`;
-    counter++;
+export async function getCountryById(id: string): Promise<Country> {
+  const country = await countryRepo.findOne({ where: { id } });
+  if (!country) {
+    throw new AppError(
+      AppErrorMessage.COUNTRY_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
-}
-
-export async function createState(dto: CreateStateDto, adminId?: string): Promise<State> {
-  let { slug } = dto;
-  if (!slug) {
-    slug = await generateUniqueStateSlug(dto.name);
-  }
-
-  // Pre-emptive unique checks to avoid DB constraint hits. Check both active and soft-deleted!
-  const existingCode = await stateRepo.findOne({ where: { code: dto.code }, withDeleted: true });
-  if (existingCode) {
-    if (existingCode.deletedAt) {
-      existingCode.deletedAt = null;
-      existingCode.name = dto.name;
-      existingCode.slug = slug;
-      existingCode.type = dto.type;
-      existingCode.country = dto.country ?? 'United States';
-      if (adminId) {
-        existingCode.updatedBy = adminId;
-      }
-      return await stateRepo.save(existingCode);
-    }
-    throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
-  }
-
-  if (dto.slug) {
-    const existingSlug = await stateRepo.findOne({ where: { slug }, withDeleted: true });
-    if (existingSlug) {
-      if (existingSlug.deletedAt) {
-        existingSlug.deletedAt = null;
-        existingSlug.code = dto.code;
-        existingSlug.name = dto.name;
-        existingSlug.type = dto.type;
-        existingSlug.country = dto.country ?? 'United States';
-        if (adminId) {
-          existingSlug.updatedBy = adminId;
-        }
-        return await stateRepo.save(existingSlug);
-      }
-      throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
-    }
-  }
-
-  const state = stateRepo.create({
-    code: dto.code,
-    name: dto.name,
-    slug,
-    type: dto.type,
-    country: dto.country ?? 'United States',
-    createdBy: adminId ?? null,
-    updatedBy: adminId ?? null,
-  });
-
-  let retries = 3;
-  while (retries > 0) {
-    try {
-      return await stateRepo.save(state);
-    } catch (err: any) {
-      if (err.code === '23505') {
-        const detail = err.detail ?? '';
-        if (detail.includes('code')) {
-          throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
-        }
-        if (detail.includes('slug')) {
-          if (dto.slug) {
-            throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
-          }
-          state.slug = await generateUniqueStateSlug(dto.name);
-          retries--;
-          continue;
-        }
-      }
-      throw err;
-    }
-  }
-  throw new AppError(
-    'Failed to generate unique slug after multiple attempts',
-    409,
-    'STATE_SLUG_CONFLICT',
-  );
+  return country;
 }
 
 export async function updateState(
@@ -1522,272 +1608,47 @@ export async function updateState(
   dto: UpdateStateDto,
   adminId?: string,
 ): Promise<State> {
-  const state = await stateRepo.findOne({ where: { id } });
-  if (!state) {
-    throw new AppError('State not found', 404, 'NOT_FOUND');
-  }
-
-  let { slug } = dto;
-  if (dto.name && !slug) {
-    slug = await generateUniqueStateSlug(dto.name);
-  }
-
-  const updates: Partial<State> = {};
-  if (dto.code !== undefined) updates.code = dto.code;
-  if (dto.name !== undefined) updates.name = dto.name;
-  if (slug !== undefined) updates.slug = slug;
-  if (dto.type !== undefined) updates.type = dto.type;
-  if (dto.country !== undefined) updates.country = dto.country;
-  if (adminId !== undefined) updates.updatedBy = adminId;
-
-  if (updates.code && updates.code !== state.code) {
-    const existingCode = await stateRepo.findOne({
-      where: { code: updates.code },
-      withDeleted: true,
-    });
-    if (existingCode) {
-      throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
-    }
-  }
-  if (updates.slug && updates.slug !== state.slug) {
-    const existingSlug = await stateRepo.findOne({
-      where: { slug: updates.slug },
-      withDeleted: true,
-    });
-    if (existingSlug) {
-      throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
-    }
-  }
-
-  Object.assign(state, updates);
-
-  let retries = 3;
-  while (retries > 0) {
-    try {
-      return await stateRepo.save(state);
-    } catch (err: any) {
-      if (err.code === '23505') {
-        const detail = err.detail ?? '';
-        if (detail.includes('code')) {
-          throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
-        }
-        if (detail.includes('slug')) {
-          if (dto.slug) {
-            throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
-          }
-          state.slug = await generateUniqueStateSlug(state.name);
-          retries--;
-          continue;
-        }
-      }
-      throw err;
-    }
-  }
-  throw new AppError(
-    'Failed to generate unique slug after multiple attempts',
-    409,
-    'STATE_SLUG_CONFLICT',
-  );
-}
-
-export async function deleteState(id: string, adminId?: string): Promise<void> {
-  const state = await stateRepo.findOne({ where: { id } });
-  if (!state) {
-    throw new AppError('State not found', 404, 'NOT_FOUND');
-  }
-
-  const hasTenders = await appDataSource.getRepository(TenderVersion).findOne({
-    where: { stateId: id },
-  });
-  if (hasTenders) {
-    throw new AppError('Cannot delete state with associated tenders', 400, 'STATE_HAS_TENDERS');
-  }
-
+  const state = await getStateById(id);
+  state.isActive = dto.isActive;
   if (adminId) {
-    state.updatedBy = adminId;
+    state.updatedById = adminId;
   }
-  await stateRepo.softRemove(state);
+  return await stateRepo.save(state);
 }
 
-export async function processBatchStates(
-  items: BatchStateItemDto[],
+export async function updateCountry(
+  id: string,
+  dto: UpdateCountryBodyDto,
   adminId?: string,
-): Promise<{
-  created: number;
-  updated: number;
-  deleted: number;
-}> {
-  return await appDataSource.transaction(async (transactionalEntityManager) => {
-    const stateTxRepo = transactionalEntityManager.getRepository(State);
-    const tenderTxRepo = transactionalEntityManager.getRepository(Tender);
-
-    const allStates = await stateTxRepo.find({ withDeleted: true });
-
-    const codeMap = new Map<string, State>(allStates.map((s) => [s.code, s]));
-    const slugSet = new Set<string>(allStates.map((s) => s.slug));
-
-    const statesToSave: State[] = [];
-    const statesToDelete: State[] = [];
-
-    let created = 0;
-    let updated = 0;
-    let deleted = 0;
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-
-      if (item.action === 'delete') {
-        const state = codeMap.get(item.code);
-        if (state) {
-          if (adminId) {
-            state.updatedBy = adminId;
-          }
-          statesToDelete.push(state);
-          deleted++;
-        }
-        continue;
-      }
-
-      const name = item.name!;
-      const type = item.type!;
-      const country = item.country ?? 'United States';
-      const state = codeMap.get(item.code);
-
-      if (state) {
-        state.name = name;
-        state.type = type;
-        state.country = country;
-        if (adminId) {
-          state.updatedBy = adminId;
-        }
-
-        if (item.slug) {
-          if (item.slug !== state.slug && slugSet.has(item.slug)) {
-            throw new AppError(
-              `Slug conflict at item ${i + 1} (code ${item.code}): Slug '${item.slug}' is already taken`,
-              409,
-              'STATE_SLUG_TAKEN',
-            );
-          }
-          slugSet.delete(state.slug);
-          state.slug = item.slug;
-          slugSet.add(item.slug);
-        } else {
-          slugSet.delete(state.slug);
-          const baseSlug = generateSlug(name);
-          let slug = baseSlug;
-          let counter = 1;
-          while (slugSet.has(slug)) {
-            slug = `${baseSlug}-${counter}`;
-            counter++;
-          }
-          state.slug = slug;
-          slugSet.add(slug);
-        }
-
-        if (state.deletedAt) {
-          state.deletedAt = null;
-        }
-
-        statesToSave.push(state);
-        updated++;
-      } else {
-        const newState = new State();
-        newState.code = item.code;
-        newState.name = name;
-        newState.type = type;
-        newState.country = country;
-        if (adminId) {
-          newState.createdBy = adminId;
-          newState.updatedBy = adminId;
-        }
-
-        if (item.slug) {
-          if (slugSet.has(item.slug)) {
-            throw new AppError(
-              `Slug conflict at item ${i + 1} (code ${item.code}): Slug '${item.slug}' is already taken`,
-              409,
-              'STATE_SLUG_TAKEN',
-            );
-          }
-          newState.slug = item.slug;
-          slugSet.add(item.slug);
-        } else {
-          const baseSlug = generateSlug(name);
-          let slug = baseSlug;
-          let counter = 1;
-          while (slugSet.has(slug)) {
-            slug = `${baseSlug}-${counter}`;
-            counter++;
-          }
-          newState.slug = slug;
-          slugSet.add(slug);
-        }
-
-        statesToSave.push(newState);
-        codeMap.set(item.code, newState);
-        created++;
-      }
-    }
-
-    if (statesToDelete.length > 0) {
-      const deleteIds = statesToDelete.map((s) => s.id);
-
-      const tenderVersions = await transactionalEntityManager.getRepository(TenderVersion).find({
-        where: { stateId: In(deleteIds) },
-        relations: ['state'],
-      });
-
-      if (tenderVersions.length > 0) {
-        const failedCodes = Array.from(
-          new Set(tenderVersions.map((t) => t.state?.code).filter(Boolean)),
-        );
-        throw new AppError(
-          `Cannot delete states because they are associated with active tenders: ${failedCodes.join(', ')}`,
-          400,
-          'STATE_HAS_TENDERS',
-        );
-      }
-
-      await stateTxRepo.softRemove(statesToDelete);
-    }
-
-    if (statesToSave.length > 0) {
-      try {
-        await stateTxRepo.save(statesToSave);
-      } catch (err: any) {
-        if (err.code === '23505') {
-          const detail = err.detail ?? '';
-          if (detail.includes('code')) {
-            throw new AppError('State code already exists', 409, 'STATE_CODE_TAKEN');
-          }
-          if (detail.includes('slug')) {
-            throw new AppError('State slug already exists', 409, 'STATE_SLUG_TAKEN');
-          }
-        }
-        throw err;
-      }
-    }
-
-    return { created, updated, deleted };
-  });
+): Promise<Country> {
+  const country = await getCountryById(id);
+  country.isActive = dto.isActive;
+  if (adminId) {
+    country.updatedById = adminId;
+  }
+  return await countryRepo.save(country);
 }
 
 // ─── RBAC Admin User Role Assignment & Previews ───────────────────────────────
 
-export async function getUserRoles(userId: string): Promise<any> {
+export async function getUserRoles(userId: string): Promise<UserRolesDto> {
   const user = await userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   if (user.accountType !== AccountType.ADMIN) {
     throw new AppError(
-      'Roles can only be managed for administrator accounts.',
-      400,
-      'VALIDATION_ERROR',
+      AppErrorMessage.ROLES_MANAGED_FOR_ADMIN_ONLY,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.VALIDATION_ERROR,
     );
   }
 
-  const roleRepo = appDataSource.getRepository(Role);
-  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const roleRepo = AppDataSource.getRepository(Role);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
 
   const assigned = await userRoleRepo.find({
     where: { userId },
@@ -1795,22 +1656,22 @@ export async function getUserRoles(userId: string): Promise<any> {
   });
 
   const available = await roleRepo.find({
-    where: { status: 'ACTIVE' as any },
+    where: { status: RoleStatus.ACTIVE },
     relations: ['activeVersion'],
   });
 
   return {
     assigned: assigned.map((ur) => ({
-      id: ur.role?.id,
-      name: ur.role?.activeVersion?.name ?? 'Unnamed Role',
-      slug: ur.role?.slug,
+      id: ur.role.id,
+      name: ur.role.activeVersion?.name ?? 'Unnamed Role',
+      key: ur.role.key,
       expiresAt: ur.expiresAt,
-      isSystemRole: ur.role?.isSystemRole,
+      isSystemRole: ur.role.isSystemRole,
     })),
     available: available.map((r) => ({
       id: r.id,
       name: r.activeVersion?.name ?? 'Unnamed Role',
-      slug: r.slug,
+      key: r.key,
       isSystemRole: r.isSystemRole,
     })),
   };
@@ -1818,37 +1679,43 @@ export async function getUserRoles(userId: string): Promise<any> {
 
 export async function assignUserRoles(
   userId: string,
-  assignments: { roleId: string; expiresAt?: string | null }[],
+  dto: AssignUserRolesBodyDto,
   currentUserId: string,
 ): Promise<void> {
+  const { assignments } = dto;
   if (userId === currentUserId) {
     throw new AppError(
-      'Self-modification of roles is forbidden to prevent self-lockout.',
-      403,
-      'SELF_MODIFICATION_FORBIDDEN',
+      AppErrorMessage.ROLE_SELF_MODIFICATION_FORBIDDEN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.SELF_MODIFICATION_FORBIDDEN,
     );
   }
 
-  if (!assignments ?? assignments.length === 0) {
+  if (assignments.length === 0) {
     throw new AppError(
-      'An administrator must have at least one role assigned. Mutation rejected.',
-      400,
-      'VALIDATION_ERROR',
+      AppErrorMessage.ADMIN_ROLE_MUTATION_REJECTED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.VALIDATION_ERROR,
     );
   }
 
   const user = await userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   if (user.accountType !== AccountType.ADMIN) {
     throw new AppError(
-      'Roles can only be assigned to administrator accounts.',
-      400,
-      'VALIDATION_ERROR',
+      AppErrorMessage.ROLES_ASSIGNED_TO_ADMIN_ONLY,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.VALIDATION_ERROR,
     );
   }
 
-  const roleRepo = appDataSource.getRepository(Role);
-  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const roleRepo = AppDataSource.getRepository(Role);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
   const roleIds = assignments.map((a) => a.roleId);
 
   // Validate all roles are active
@@ -1860,24 +1727,25 @@ export async function assignUserRoles(
 
   if (roles.length !== roleIds.length) {
     throw new AppError(
-      'One or more roles being assigned are invalid or inactive.',
-      400,
-      'VALIDATION_ERROR',
+      AppErrorMessage.ROLES_ASSIGNED_INVALID_OR_INACTIVE,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.VALIDATION_ERROR,
     );
   }
 
   // Privilege Escalation Check: Compare against current user's max priority
-  const currentUserRoles = await userRoleRepo.find({
-    where: { userId: currentUserId },
-    relations: ['role'],
-  });
+  // const currentUserRoles = await userRoleRepo.find({
+  //   where: { userId: currentUserId },
+  //   relations: ['role'],
+  // });
   // const currentMaxPriority = currentUserRoles.reduce((max, ur) => {
   //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority ?? 0) : max;
   // }, 0);
 
   // for (const role of roles) {
   //   if (role.priority > currentMaxPriority) {
-  //     throw new AppError('Forbidden: Cannot assign roles with a priority higher than your own highest role priority.', 403, 'PRIVILEGE_ESCALATION');
+  //     throw new AppError('Forbidden: Cannot assign roles with a priority higher
+  //        than your own highest role priority.', 403, 'PRIVILEGE_ESCALATION');
   //   }
   // }
 
@@ -1887,12 +1755,14 @@ export async function assignUserRoles(
   });
   // for (const ur of targetUserRoles) {
   //   if (ur.role && ur.role.priority > currentMaxPriority) {
-  //     throw new AppError('Forbidden: Cannot modify roles of an administrator with a higher role priority than your own.', 403, 'PRIVILEGE_ESCALATION');
+  //     throw new AppError('Forbidden: Cannot modify roles of an administrator
+  //      with a higher role priority than your own.', 403,
+  //      'PRIVILEGE_ESCALATION');
   //   }
   // }
 
   // Last Super Admin Protection
-  const superAdminRole = await roleRepo.findOne({ where: { slug: 'super-admin' } });
+  const superAdminRole = await roleRepo.findOne({ where: { key: 'super-admin' } });
   if (superAdminRole) {
     const targetHasSuperAdmin = targetUserRoles.some((ur) => ur.roleId === superAdminRole.id);
     const newHasSuperAdmin = roleIds.includes(superAdminRole.id);
@@ -1914,15 +1784,15 @@ export async function assignUserRoles(
 
       if (otherSuperAdminsCount === 0) {
         throw new AppError(
-          'Forbidden: Cannot revoke Super Admin role from the last active Super Admin.',
-          403,
-          'LAST_SUPER_ADMIN_PROTECTION',
+          AppErrorMessage.FORBIDDEN_REVOKE_LAST_SUPER_ADMIN,
+          HttpStatusCode.FORBIDDEN,
+          AppErrorCode.LAST_SUPER_ADMIN_PROTECTION,
         );
       }
     }
   }
 
-  await appDataSource.transaction(async (transactionManager) => {
+  await AppDataSource.transaction(async (transactionManager) => {
     // Delete existing roles
     await transactionManager.query('DELETE FROM "user_roles" WHERE "user_id" = $1', [userId]);
 
@@ -1948,57 +1818,69 @@ export async function revokeUserRole(
 ): Promise<void> {
   if (userId === currentUserId) {
     throw new AppError(
-      'Self-modification of roles is forbidden to prevent self-lockout.',
-      403,
-      'SELF_MODIFICATION_FORBIDDEN',
+      AppErrorMessage.ROLE_SELF_MODIFICATION_FORBIDDEN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.SELF_MODIFICATION_FORBIDDEN,
     );
   }
 
   const user = await userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
-  const userRoleRepo = appDataSource.getRepository(UserRole);
-  const roleRepo = appDataSource.getRepository(Role);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
+  const roleRepo = AppDataSource.getRepository(Role);
   const activeRolesCount = await userRoleRepo.count({ where: { userId } });
 
   if (activeRolesCount <= 1) {
     throw new AppError(
-      'An administrator must have at least one role assigned. Revocation rejected.',
-      400,
-      'REVOCATION_REJECTED',
+      AppErrorMessage.ADMIN_ROLE_REVOCATION_REJECTED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.REVOCATION_REJECTED,
     );
   }
 
   const roleToRevoke = await roleRepo.findOne({ where: { id: roleId } });
   if (!roleToRevoke) {
-    throw new AppError('Role not found', 404, 'ROLE_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.ROLE_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.ROLE_NOT_FOUND,
+    );
   }
 
   // Privilege Escalation Check
-  const currentUserRoles = await userRoleRepo.find({
-    where: { userId: currentUserId },
-    relations: ['role'],
-  });
+  // const currentUserRoles = await userRoleRepo.find({
+  //   where: { userId: currentUserId },
+  //   relations: ['role'],
+  // });
   // const currentMaxPriority = currentUserRoles.reduce((max, ur) => {
   //   return ur.role && ur.role.isActive ? Math.max(max, ur.role.priority ?? 0) : max;
   // }, 0);
 
   // if (roleToRevoke.priority > currentMaxPriority) {
-  //   throw new AppError('Forbidden: Cannot revoke roles with a priority higher than your own highest role priority.', 403, 'PRIVILEGE_ESCALATION');
+  //   throw new AppError('Forbidden: Cannot revoke roles with a priority higher
+  //  than your own highest role priority.', 403, 'PRIVILEGE_ESCALATION');
   // }
 
-  const targetUserRoles = await userRoleRepo.find({
-    where: { userId },
-    relations: ['role'],
-  });
+  // const targetUserRoles = await userRoleRepo.find({
+  //   where: { userId },
+  //   relations: ['role'],
+  // });
   // for (const ur of targetUserRoles) {
   //   if (ur.role && ur.role.priority > currentMaxPriority) {
-  //     throw new AppError('Forbidden: Cannot modify roles of an administrator with a higher role priority than your own.', 403, 'PRIVILEGE_ESCALATION');
+  //     throw new AppError('Forbidden: Cannot modify roles of an administrator
+  //      with a higher role priority than your own.', 403,
+  //      'PRIVILEGE_ESCALATION');
   //   }
   // }
 
   // Last Super Admin Protection
-  if (roleToRevoke.slug === 'super-admin') {
+  if (roleToRevoke.key === 'super-admin') {
     const otherSuperAdminsCount = await userRoleRepo.count({
       where: {
         roleId: roleToRevoke.id,
@@ -2015,9 +1897,9 @@ export async function revokeUserRole(
 
     if (otherSuperAdminsCount === 0) {
       throw new AppError(
-        'Forbidden: Cannot revoke Super Admin role from the last active Super Admin.',
-        403,
-        'LAST_SUPER_ADMIN_PROTECTION',
+        AppErrorMessage.FORBIDDEN_REVOKE_LAST_SUPER_ADMIN,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.LAST_SUPER_ADMIN_PROTECTION,
       );
     }
   }
@@ -2028,29 +1910,32 @@ export async function revokeUserRole(
   CacheService.invalidateBackground(`permissions:${userId}`);
 }
 
-export async function previewUserPermissions(userId: string): Promise<any> {
+export async function previewUserPermissions(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
-  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
   const userRoles = await userRoleRepo.find({
     where: { userId },
     relations: ['role', 'role.activeVersion'],
   });
 
   const activeUserRoles = userRoles.filter((ur) => {
-    if (!ur.role ?? ur.role.status !== 'ACTIVE') return false;
+    if (ur.role.status !== RoleStatus.ACTIVE) return false;
     if (ur.expiresAt && ur.expiresAt.getTime() < Date.now()) return false;
     return true;
   });
 
   const roleNames = activeUserRoles.map((ur) => ur.role.activeVersion?.name ?? 'Unnamed Role');
-  const isSuperAdmin = activeUserRoles.some(
-    (ur) => ur.role.isSystemRole ?? ur.role.slug === 'super-admin',
-  );
+  const isSuperAdmin = activeUserRoles.some((ur) => ur.role.isSystemRole === true);
 
-  const permRepo = appDataSource.getRepository(Permission);
-  const modRepo = appDataSource.getRepository(PermissionModule);
+  const permRepo = AppDataSource.getRepository(Permission);
+  const modRepo = AppDataSource.getRepository(PermissionModule);
 
   const modules = await modRepo.find({ order: { displayOrder: 'ASC' } });
   let effectiveKeys = new Set<string>();
@@ -2064,7 +1949,7 @@ export async function previewUserPermissions(userId: string): Promise<any> {
       .filter((id): id is string => !!id);
 
     if (activeVersionIds.length > 0) {
-      const rvpRepo = appDataSource.getRepository(RoleVersionPermission);
+      const rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
       const rvpList = await rvpRepo.find({
         where: { roleVersionId: In(activeVersionIds) },
         select: ['permissionKey'],
@@ -2080,7 +1965,7 @@ export async function previewUserPermissions(userId: string): Promise<any> {
     const modPerms = allPermissions.filter((p) => p.moduleId === mod.id);
     return {
       moduleName: mod.name,
-      moduleSlug: mod.slug,
+      moduleSlug: mod.key,
       permissions: modPerms.map((p) => ({
         key: p.key,
         name: p.name,
@@ -2105,20 +1990,28 @@ export async function approveAdminUser(
 ): Promise<void> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.USER_NOT_FOUND,
+    );
   }
 
   if (user.accountType !== AccountType.ADMIN) {
-    throw new AppError('Only administrator accounts can be approved', 400, 'INVALID_ACCOUNT_TYPE');
+    throw new AppError(
+      AppErrorMessage.ONLY_ADMIN_APPROVED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_ACCOUNT_TYPE,
+    );
   }
 
   user.status = UserStatus.ACTIVE;
-  user.approvedById = approvedByUserId;
+  user.approvedBy = { id: approvedByUserId } as User;
   user.approvedAt = new Date();
   await userRepo.save(user);
 
   // Assign the specified role
-  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
 
   // Clean up any existing roles first to avoid unique constraint violations
   await userRoleRepo.delete({ userId: user.id });
@@ -2146,16 +2039,24 @@ export async function rejectAdminUser(
 ): Promise<void> {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.USER_NOT_FOUND,
+    );
   }
 
   if (user.accountType !== AccountType.ADMIN) {
-    throw new AppError('Only administrator accounts can be rejected', 400, 'INVALID_ACCOUNT_TYPE');
+    throw new AppError(
+      AppErrorMessage.ONLY_ADMIN_REJECTED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_ACCOUNT_TYPE,
+    );
   }
 
   user.status = UserStatus.REJECTED;
   user.rejectionReason = reason;
-  user.approvedById = approvedByUserId;
+  user.approvedBy = { id: approvedByUserId } as User;
   user.approvedAt = new Date();
   await userRepo.save(user);
 

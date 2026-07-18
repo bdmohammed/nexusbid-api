@@ -1,9 +1,9 @@
-import { appDataSource } from '../config/database';
+import { AppDataSource } from '../config/database';
 import { logger } from '../config/logger';
-import { Subscription } from '../entities/Subscription';
+import { Subscription } from '../database/entities/Subscription';
 import { SubscriptionStatus } from '../types/enums';
 
-const subRepo = appDataSource.getRepository(Subscription);
+const subRepo = AppDataSource.getRepository(Subscription);
 
 /**
  * Expire Subscriptions Job — runs hourly.

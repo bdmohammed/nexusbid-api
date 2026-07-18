@@ -1,7 +1,19 @@
+export interface MetricCalculationData {
+  activeMonthlyRevenueCents: number;
+  uniqueVisitors: number;
+  bidsSubmitted: number;
+  bidsAwarded: number;
+  activeSubscribers: number;
+  cancelledThisMonth: number;
+  activeUsers: number;
+  revenueCents: number;
+  [key: string]: number;
+}
+
 export interface CalculatedMetric {
   key: string;
   name: string;
-  calculate: (data: Record<string, any>) => number | string;
+  calculate: (data: MetricCalculationData) => number | string;
 }
 
 export const MetricFormulas: Record<string, CalculatedMetric> = {
@@ -9,7 +21,7 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'mrr',
     name: 'Monthly Recurring Revenue',
     calculate: (data) => {
-      const activeMonthlyPlansRevenue = data['activeMonthlyRevenueCents'] ?? 0;
+      const activeMonthlyPlansRevenue = data.activeMonthlyRevenueCents;
       return (activeMonthlyPlansRevenue / 100).toFixed(2);
     },
   },
@@ -17,7 +29,7 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'arr',
     name: 'Annual Recurring Revenue',
     calculate: (data) => {
-      const activeMonthlyPlansRevenue = data['activeMonthlyRevenueCents'] ?? 0;
+      const activeMonthlyPlansRevenue = data.activeMonthlyRevenueCents;
       return ((activeMonthlyPlansRevenue * 12) / 100).toFixed(2);
     },
   },
@@ -25,8 +37,7 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'conversion_rate',
     name: 'Bid Conversion Rate',
     calculate: (data) => {
-      const uniqueVisitors = data['uniqueVisitors'] ?? 1;
-      const bidsSubmitted = data['bidsSubmitted'] ?? 0;
+      const { uniqueVisitors, bidsSubmitted } = data;
       const rate = (bidsSubmitted / uniqueVisitors) * 100;
       return `${Math.min(100, parseFloat(rate.toFixed(2)))}%`;
     },
@@ -35,8 +46,7 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'bid_success_rate',
     name: 'Bid Success Rate',
     calculate: (data) => {
-      const bidsSubmitted = data['bidsSubmitted'] ?? 1;
-      const bidsAwarded = data['bidsAwarded'] ?? 0;
+      const { bidsSubmitted, bidsAwarded } = data;
       const rate = (bidsAwarded / bidsSubmitted) * 100;
       return `${Math.min(100, parseFloat(rate.toFixed(2)))}%`;
     },
@@ -45,9 +55,8 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'churn_rate',
     name: 'Subscriber Churn Rate',
     calculate: (data) => {
-      const activeCount = data['activeSubscribers'] ?? 1;
-      const cancelledCount = data['cancelledThisMonth'] ?? 0;
-      const rate = (cancelledCount / activeCount) * 100;
+      const { activeSubscribers, cancelledThisMonth } = data;
+      const rate = (cancelledThisMonth / activeSubscribers) * 100;
       return `${Math.min(100, parseFloat(rate.toFixed(2)))}%`;
     },
   },
@@ -55,8 +64,7 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'arpu',
     name: 'Average Revenue Per User',
     calculate: (data) => {
-      const activeUsers = data['activeUsers'] ?? 1;
-      const revenueCents = data['revenueCents'] ?? 0;
+      const { activeUsers, revenueCents } = data;
       return (revenueCents / activeUsers / 100).toFixed(2);
     },
   },
@@ -64,13 +72,10 @@ export const MetricFormulas: Record<string, CalculatedMetric> = {
     key: 'ltv',
     name: 'Customer Lifetime Value',
     calculate: (data) => {
-      const activeUsers = data['activeUsers'] ?? 1;
-      const revenueCents = data['revenueCents'] ?? 0;
-      const activeCount = data['activeSubscribers'] ?? 1;
-      const cancelledCount = data['cancelledThisMonth'] ?? 1;
+      const { activeUsers, revenueCents, activeSubscribers, cancelledThisMonth } = data;
 
       const arpu = revenueCents / activeUsers / 100;
-      const churn = Math.max(0.01, cancelledCount / activeCount);
+      const churn = Math.max(0.01, cancelledThisMonth / activeSubscribers);
       return (arpu / churn).toFixed(2);
     },
   },

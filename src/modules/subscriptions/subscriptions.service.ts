@@ -1,25 +1,25 @@
 import { performance } from 'node:perf_hooks';
 
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { logger } from '../../config/logger';
-import { AppError } from '../../core/AppError';
-import { Coupon } from '../../entities/Coupon';
-import { Plan } from '../../entities/Plan';
-import { Subscription } from '../../entities/Subscription';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
+import { Coupon } from '../../database/entities/Coupon';
+import { Plan } from '../../database/entities/Plan';
+import { Subscription } from '../../database/entities/Subscription';
 import { cancelSubscription as paypalCancelSubscription } from '../../services/paypal/paypal.subscriptions';
-import { SubscriptionStatus } from '../../types/enums';
+import { CouponDiscountType, PlanStatus, SubscriptionStatus } from '../../types/enums';
 
 import type { CreateSubscriptionDto } from './subscriptions.dto';
 
-const planRepository = appDataSource.getRepository(Plan);
-const subscriptionRepository = appDataSource.getRepository(Subscription);
-const couponRepository = appDataSource.getRepository(Coupon);
+const planRepository = AppDataSource.getRepository(Plan);
+const subscriptionRepository = AppDataSource.getRepository(Subscription);
+const couponRepository = AppDataSource.getRepository(Coupon);
 
 // ─── List active plans ────────────────────────────────────────────────────────
 
 export async function listPlans(): Promise<Plan[]> {
   return planRepository.find({
-    where: { status: 'ACTIVE' },
+    where: { status: PlanStatus.ACTIVE },
     relations: [
       'activeVersion',
       'activeVersion.features',
@@ -31,54 +31,68 @@ export async function listPlans(): Promise<Plan[]> {
 
 // ─── Create subscription ──────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function createSubscription(
-  dto: CreateSubscriptionDto & { couponCode?: string },
+  dto: CreateSubscriptionDto,
   user: { userId: string; name: string; email: string; country?: string | null },
 ): Promise<{ approvalUrl: string; subscriptionId: string }> {
   const start = performance.now();
 
   // Verify plan exists and is active
   const plan = await planRepository.findOne({
-    where: { id: dto.planId, status: 'ACTIVE' },
-    relations: ['activeVersion', 'activeVersion.countryPricing', 'activeVersion.categoryPricing'],
+    where: { id: dto.planId, status: PlanStatus.ACTIVE },
+    relations: [
+      'activeVersion',
+      'activeVersion.countryPricing',
+      'activeVersion.countryPricing.country',
+      'activeVersion.categoryPricing',
+    ],
   });
-  if (!plan?.activeVersionId ?? !plan.activeVersion) {
-    throw new AppError('Plan not found or inactive', 404, 'NOT_FOUND');
+  if (!plan?.activeVersionId || !plan.activeVersion) {
+    throw new AppError(
+      AppErrorMessage.PLAN_NOT_FOUND_OR_INACTIVE,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const activeVer = plan.activeVersion;
 
   // Enforce targeting and bundle constraints
   if (activeVer.planType === 'state' && !dto.targetStateId) {
-    throw new AppError('State selection required for state-specific plan', 400, 'STATE_REQUIRED');
+    throw new AppError(
+      AppErrorMessage.STATE_SELECTION_REQUIRED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.STATE_REQUIRED,
+    );
   }
   if (activeVer.planType === 'country' && !dto.targetCountry) {
     throw new AppError(
-      'Country selection required for country-specific plan',
-      400,
-      'COUNTRY_REQUIRED',
+      AppErrorMessage.COUNTRY_SELECTION_REQUIRED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.COUNTRY_REQUIRED,
     );
   }
   if (activeVer.planType === 'category' && !dto.targetCategoryId) {
     throw new AppError(
-      'Category selection required for category-specific plan',
-      400,
-      'CATEGORY_REQUIRED',
+      AppErrorMessage.CATEGORY_SELECTION_REQUIRED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.CATEGORY_REQUIRED,
     );
   }
   if (activeVer.planType === 'bundle') {
-    if (!dto.selectedCategoryIds ?? dto.selectedCategoryIds.length === 0) {
+    if (!dto.selectedCategoryIds || dto.selectedCategoryIds.length === 0) {
       throw new AppError(
-        'Category selections required for custom bundle plan',
-        400,
-        'CATEGORIES_REQUIRED',
+        AppErrorMessage.CATEGORY_SELECTIONS_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.CATEGORIES_REQUIRED,
       );
     }
     if (activeVer.bundleSize && dto.selectedCategoryIds.length > activeVer.bundleSize) {
       throw new AppError(
-        `You can select at most ${activeVer.bundleSize} categories`,
-        400,
-        'MAX_CATEGORIES_EXCEEDED',
+        AppErrorMessage.MAX_CATEGORIES_EXCEEDED(activeVer.bundleSize),
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.MAX_CATEGORIES_EXCEEDED,
       );
     }
   }
@@ -89,7 +103,11 @@ export async function createSubscription(
   });
   if (existingSubscription) {
     if (existingSubscription.paypalSubscriptionId ?? existingSubscription.paypalOrderId) {
-      throw new AppError('You already have an active subscription', 409, 'ALREADY_SUBSCRIBED');
+      throw new AppError(
+        AppErrorMessage.SUBSCRIPTION_ALREADY_ACTIVE,
+        HttpStatusCode.CONFLICT,
+        AppErrorCode.ALREADY_SUBSCRIBED,
+      );
     }
   }
 
@@ -99,10 +117,11 @@ export async function createSubscription(
   let finalPriceCents = activeVer.priceCents;
 
   // 1. Geographic Pricing Override
-  if (user.country && activeVer.countryPricing) {
+  if (user.country && activeVer.countryPricing.length) {
     const countryPricingMatch = activeVer.countryPricing.find(
       (countryPricingItem) =>
-        countryPricingItem.country.toLowerCase() === user.country!.toLowerCase(),
+        countryPricingItem.country.code.toLowerCase() === user.country!.toLowerCase() ||
+        countryPricingItem.country.name.toLowerCase() === user.country!.toLowerCase(),
     );
     if (countryPricingMatch) {
       finalPriceCents = countryPricingMatch.priceCents;
@@ -110,7 +129,11 @@ export async function createSubscription(
   }
 
   // 2. Category Pricing Override
-  if (activeVer.planType === 'category' && dto.targetCategoryId && activeVer.categoryPricing) {
+  if (
+    activeVer.planType === 'category' &&
+    dto.targetCategoryId &&
+    activeVer.categoryPricing.length
+  ) {
     const categoryPricingMatch = activeVer.categoryPricing.find(
       (categoryPricingItem) => categoryPricingItem.categoryId === dto.targetCategoryId,
     );
@@ -124,21 +147,87 @@ export async function createSubscription(
   if (dto.couponCode) {
     const coupon = await couponRepository.findOne({
       where: { code: dto.couponCode, isActive: true },
+      relations: ['restrictedPlans'],
     });
-    if (!coupon) throw new AppError('Coupon not found or inactive', 404, 'COUPON_NOT_FOUND');
+    if (!coupon)
+      throw new AppError(
+        AppErrorMessage.COUPON_NOT_FOUND_OR_INACTIVE,
+        HttpStatusCode.NOT_FOUND,
+        AppErrorCode.COUPON_NOT_FOUND,
+      );
 
+    if (coupon.validFrom && coupon.validFrom > new Date()) {
+      throw new AppError(
+        AppErrorMessage.COUPON_NOT_ACTIVE,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.COUPON_NOT_YET_ACTIVE,
+      );
+    }
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
-      throw new AppError('Coupon has expired', 400, 'COUPON_EXPIRED');
+      throw new AppError(
+        AppErrorMessage.COUPON_EXPIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.COUPON_EXPIRED,
+      );
     }
     if (coupon.maxRedemptions !== null && coupon.redemptionCount >= coupon.maxRedemptions) {
-      throw new AppError('Coupon usage limit reached', 400, 'COUPON_LIMIT_REACHED');
+      throw new AppError(
+        AppErrorMessage.COUPON_LIMIT_REACHED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.COUPON_LIMIT_REACHED,
+      );
+    }
+    if (coupon.minPurchaseCents !== null && finalPriceCents < coupon.minPurchaseCents) {
+      throw new AppError(
+        AppErrorMessage.COUPON_MIN_AMOUNT_NOT_MET,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.COUPON_MIN_PURCHASE_NOT_MET,
+      );
+    }
+    if (coupon.firstPurchaseOnly) {
+      const hasPriorSubscription = await subscriptionRepository.findOne({
+        where: { userId: user.userId },
+      });
+      if (hasPriorSubscription) {
+        throw new AppError(
+          AppErrorMessage.COUPON_FIRST_PURCHASE_ONLY,
+          HttpStatusCode.BAD_REQUEST,
+          AppErrorCode.COUPON_FIRST_PURCHASE_ONLY,
+        );
+      }
+    }
+    if (coupon.maxRedemptionsPerUser !== null) {
+      const userRedemptionCount = await subscriptionRepository.count({
+        where: { userId: user.userId, couponId: coupon.id },
+      });
+      if (userRedemptionCount >= coupon.maxRedemptionsPerUser) {
+        throw new AppError(
+          AppErrorMessage.COUPON_USER_LIMIT_REACHED,
+          HttpStatusCode.BAD_REQUEST,
+          AppErrorCode.COUPON_USER_LIMIT_REACHED,
+        );
+      }
+    }
+    if (coupon.restrictedPlans.length) {
+      const isEligible = coupon.restrictedPlans.some((p) => p.id === plan.id);
+      if (!isEligible) {
+        throw new AppError(
+          AppErrorMessage.COUPON_INVALID_PLAN,
+          HttpStatusCode.BAD_REQUEST,
+          AppErrorCode.COUPON_PLAN_RESTRICTED,
+        );
+      }
     }
 
-    if (coupon.discountType === 'percentage') {
-      finalPriceCents = Math.round(finalPriceCents * (1 - coupon.discountValue / 100));
-    } else if (coupon.discountType === 'fixed') {
+    if (coupon.discountType === CouponDiscountType.PERCENTAGE) {
+      let discount = Math.round(finalPriceCents * (coupon.discountValue / 100));
+      if (coupon.maxDiscountCents !== null && discount > coupon.maxDiscountCents) {
+        discount = coupon.maxDiscountCents;
+      }
+      finalPriceCents = Math.max(0, finalPriceCents - discount);
+    } else if (coupon.discountType === CouponDiscountType.FIXED) {
       finalPriceCents = Math.max(0, finalPriceCents - coupon.discountValue);
-    } else if (coupon.discountType === 'free_month') {
+    } else if (coupon.discountType === CouponDiscountType.FREE_MONTH) {
       finalPriceCents = 0;
     }
 
@@ -167,7 +256,6 @@ export async function createSubscription(
 
   const subscription = subscriptionRepository.create({
     userId: user.userId,
-    planId: plan.id,
     planVersionId: activeVer.id,
     couponId,
     startDate,
@@ -206,12 +294,12 @@ export async function getMySubscription(userId: string): Promise<{
 }> {
   const subscription = await subscriptionRepository.findOne({
     where: { userId, status: SubscriptionStatus.ACTIVE },
-    relations: ['plan', 'planVersion'],
+    relations: ['planVersion', 'planVersion.plan'],
     order: { createdAt: 'DESC' },
   });
 
   if (!subscription) return { subscription: null, plan: null };
-  return { subscription, plan: subscription.plan };
+  return { subscription, plan: subscription.planVersion.plan };
 }
 
 // ─── Cancel subscription ──────────────────────────────────────────────────────
@@ -220,10 +308,15 @@ export async function cancelMySubscription(userId: string): Promise<void> {
   const start = performance.now();
   const subscription = await subscriptionRepository.findOne({
     where: { userId, status: SubscriptionStatus.ACTIVE },
-    relations: ['plan'],
+    relations: ['planVersion', 'planVersion.plan'],
   });
 
-  if (!subscription) throw new AppError('No active subscription found', 404, 'NOT_FOUND');
+  if (!subscription)
+    throw new AppError(
+      AppErrorMessage.NO_ACTIVE_SUBSCRIPTION,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
 
   if (subscription.paypalSubscriptionId) {
     try {

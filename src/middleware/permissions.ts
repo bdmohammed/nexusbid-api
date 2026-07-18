@@ -1,22 +1,29 @@
+import slugify from 'slugify';
 import { In } from 'typeorm';
 
-import { appDataSource } from '../config/database';
-import { AppError } from '../core/AppError';
-import { Permission } from '../entities/Permission';
-import { RoleVersionPermission } from '../entities/RoleVersionPermission';
-import { UserRole } from '../entities/UserRole';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
+import { Permission } from '../database/entities/Permission';
+import { RoleVersionPermission } from '../database/entities/RoleVersionPermission';
+import { UserRole } from '../database/entities/UserRole';
 import { CacheService } from '../services/cache.service';
-import { AccountType } from '../types/enums';
+import { AccountType, RoleStatus } from '../types/enums';
 
 import type { NextFunction, Request, Response } from 'express';
+import { AppDataSource } from '@/config/database';
 
 export const loadPermissions = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
   if (!req.user) {
-    return next(new AppError('Authentication required', 401, 'UNAUTHENTICATED'));
+    return next(
+      new AppError(
+        AppErrorMessage.AUTHENTICATION_REQUIRED,
+        HttpStatusCode.UNAUTHORIZED,
+        AppErrorCode.UNAUTHENTICATED,
+      ),
+    );
   }
 
   if (req.user.accountType !== AccountType.ADMIN) {
@@ -37,30 +44,35 @@ export const loadPermissions = async (
     }
 
     // Cache miss - resolve from DB
-    const userRoleRepo = appDataSource.getRepository(UserRole);
+    const userRoleRepo = AppDataSource.getRepository(UserRole);
 
     // Find all active, non-expired role assignments for user
     const userRoles = await userRoleRepo.find({
       where: { userId },
-      relations: ['role'],
+      relations: ['role', 'role.activeVersion'],
     });
 
     const activeUserRoles = userRoles.filter((ur) => {
-      if (!ur.role ?? ur.role.status !== 'ACTIVE') return false;
+      if (ur.role.status !== RoleStatus.ACTIVE) return false;
       if (ur.expiresAt && ur.expiresAt.getTime() < Date.now()) return false;
       return true;
     });
 
-    const roleSlugs = activeUserRoles.map((ur) => ur.role.slug);
+    const roleSlugs = activeUserRoles
+      .map((ur) => {
+        if (ur.role.isSystemRole) return 'super-admin';
+        return ur.role.activeVersion?.name
+          ? slugify(ur.role.activeVersion.name, { lower: true, strict: true })
+          : '';
+      })
+      .filter(Boolean);
     let permissionKeys: string[] = [];
 
     // If user has Super Admin role, they get ALL permissions
-    const hasSuperAdmin = activeUserRoles.some(
-      (ur) => ur.role.isSystemRole ?? ur.role.slug === 'super-admin',
-    );
+    const hasSuperAdmin = activeUserRoles.some((ur) => ur.role.isSystemRole);
 
     if (hasSuperAdmin) {
-      const permissionRepo = appDataSource.getRepository(Permission);
+      const permissionRepo = AppDataSource.getRepository(Permission);
       const allPermissions = await permissionRepo.find({ select: ['key'] });
       permissionKeys = allPermissions.map((p) => p.key);
     } else if (activeUserRoles.length > 0) {
@@ -69,7 +81,7 @@ export const loadPermissions = async (
         .filter((id): id is string => !!id);
 
       if (activeVersionIds.length > 0) {
-        const rvpRepo = appDataSource.getRepository(RoleVersionPermission);
+        const rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
         const rvpList = await rvpRepo.find({
           where: { roleVersionId: In(activeVersionIds) },
           select: ['permissionKey'],
@@ -85,10 +97,14 @@ export const loadPermissions = async (
     await CacheService.set(cacheKey, { roles: roleSlugs, permissions: permissionKeys }, 300);
 
     next();
-  } catch (err) {
+  } catch {
     // Fail closed: return 500 error response to prevent any unauthorized bypass
     return next(
-      new AppError('Failed to load authorization permissions', 500, 'PERMISSION_LOAD_FAILED'),
+      new AppError(
+        AppErrorMessage.PERMISSIONS_LOAD_FAILED,
+        HttpStatusCode.INTERNAL_SERVER_ERROR,
+        AppErrorCode.PERMISSION_LOAD_FAILED,
+      ),
     );
   }
 };
@@ -96,7 +112,7 @@ export const loadPermissions = async (
 export const requirePermission = (permissionKey: string) => {
   return [
     loadPermissions,
-    (req: Request, res: Response, next: NextFunction): void => {
+    (req: Request, _res: Response, next: NextFunction): void => {
       // Super Admin bypasses all checks
       if (req.roles?.includes('super-admin')) {
         return next();
@@ -104,7 +120,13 @@ export const requirePermission = (permissionKey: string) => {
 
       if (!req.permissions?.includes(permissionKey)) {
         req.log.warn({ requiredPermission: permissionKey }, 'Forbidden: Insufficient Permissions');
-        return next(new AppError('Forbidden: Insufficient Permissions', 403, 'FORBIDDEN'));
+        return next(
+          new AppError(
+            AppErrorMessage.FORBIDDEN_INSUFFICIENT_PERMISSIONS,
+            HttpStatusCode.FORBIDDEN,
+            AppErrorCode.FORBIDDEN,
+          ),
+        );
       }
       next();
     },
@@ -114,7 +136,7 @@ export const requirePermission = (permissionKey: string) => {
 export const requireAnyPermission = (permissionKeys: string[]) => {
   return [
     loadPermissions,
-    (req: Request, res: Response, next: NextFunction): void => {
+    (req: Request, _res: Response, next: NextFunction): void => {
       if (req.roles?.includes('super-admin')) {
         return next();
       }
@@ -125,7 +147,13 @@ export const requireAnyPermission = (permissionKeys: string[]) => {
           { requiredAnyPermission: permissionKeys },
           'Forbidden: Insufficient Permissions',
         );
-        return next(new AppError('Forbidden: Insufficient Permissions', 403, 'FORBIDDEN'));
+        return next(
+          new AppError(
+            AppErrorMessage.FORBIDDEN_INSUFFICIENT_PERMISSIONS,
+            HttpStatusCode.FORBIDDEN,
+            AppErrorCode.FORBIDDEN,
+          ),
+        );
       }
       next();
     },
@@ -135,7 +163,7 @@ export const requireAnyPermission = (permissionKeys: string[]) => {
 export const requireAllPermissions = (permissionKeys: string[]) => {
   return [
     loadPermissions,
-    (req: Request, res: Response, next: NextFunction): void => {
+    (req: Request, _res: Response, next: NextFunction): void => {
       if (req.roles?.includes('super-admin')) {
         return next();
       }
@@ -146,7 +174,13 @@ export const requireAllPermissions = (permissionKeys: string[]) => {
           { requiredAllPermissions: permissionKeys },
           'Forbidden: Insufficient Permissions',
         );
-        return next(new AppError('Forbidden: Insufficient Permissions', 403, 'FORBIDDEN'));
+        return next(
+          new AppError(
+            AppErrorMessage.FORBIDDEN_INSUFFICIENT_PERMISSIONS,
+            HttpStatusCode.FORBIDDEN,
+            AppErrorCode.FORBIDDEN,
+          ),
+        );
       }
       next();
     },
@@ -156,10 +190,16 @@ export const requireAllPermissions = (permissionKeys: string[]) => {
 export const requireSuperAdmin = () => {
   return [
     loadPermissions,
-    (req: Request, res: Response, next: NextFunction): void => {
+    (req: Request, _res: Response, next: NextFunction): void => {
       if (!req.roles?.includes('super-admin')) {
         req.log.warn({ requiredRole: 'super-admin' }, 'Forbidden: Super Admin Access Required');
-        return next(new AppError('Forbidden: Super Admin Access Required', 403, 'FORBIDDEN'));
+        return next(
+          new AppError(
+            AppErrorMessage.FORBIDDEN_SUPER_ADMIN_REQUIRED,
+            HttpStatusCode.FORBIDDEN,
+            AppErrorCode.FORBIDDEN,
+          ),
+        );
       }
       next();
     },

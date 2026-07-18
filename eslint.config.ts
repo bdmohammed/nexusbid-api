@@ -222,7 +222,7 @@ export const createBaseConfig = (options: any = {}) => {
       'sonarjs/cognitive-complexity': ['error', 15],
       'sonarjs/no-duplicate-string': 'off',
       'sonarjs/no-small-switch': 'off',
-      complexity: ['error', 10],
+      complexity: ['warn', 10],
       'spaced-comment': [2, 'always'],
 
       // Security

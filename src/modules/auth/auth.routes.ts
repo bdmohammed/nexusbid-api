@@ -12,14 +12,17 @@ import { validate } from '../../middleware/validate';
 
 import * as controller from './auth.controller';
 import {
-  ChangePasswordDto,
-  EmailChangeDto,
-  ForgotPasswordDto,
-  LoginDto,
-  RegisterDto,
-  ResendVerificationDto,
-  ResetPasswordDto,
-  VerifyEmailDto,
+  ChangePasswordSchema,
+  EmailChangeSchema,
+  ForgotPasswordSchema,
+  IdParamSchema,
+  LoginSchema,
+  OAuthCallbackQuerySchema,
+  OAuthProviderSchema,
+  RegisterSchema,
+  ResendVerificationSchema,
+  ResetPasswordSchema,
+  VerifyEmailSchema,
 } from './auth.dto';
 import * as oauthController from './oauth.controller';
 
@@ -32,7 +35,8 @@ const router = Router();
  * /api/v1/auth/csrf-token:
  *   get:
  *     summary: Get CSRF token
- *     description: Required before any state-mutating request (POST/PATCH/DELETE). Pass the returned token in the `x-csrf-token` header.
+ *     description: Required before any state-mutating request (POST/PATCH/DELETE). Pass the
+ *     returned token in the `x-csrf-token` header.
  *     operationId: getCsrfToken
  *     tags: [Auth]
  *     security: []
@@ -93,7 +97,7 @@ router.get('/csrf-token', controller.getCsrfToken);
  *       429:
  *         $ref: '#/components/responses/RateLimited'
  */
-router.post('/register', registerLimiter, validate(RegisterDto), controller.register);
+router.post('/register', registerLimiter, validate(RegisterSchema), controller.register);
 
 /**
  * @swagger
@@ -132,7 +136,7 @@ router.post('/register', registerLimiter, validate(RegisterDto), controller.regi
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/verify-email', validate(VerifyEmailDto), controller.verifyEmail);
+router.post('/verify-email', validate(VerifyEmailSchema), controller.verifyEmail);
 
 /**
  * @swagger
@@ -175,7 +179,7 @@ router.post('/verify-email', validate(VerifyEmailDto), controller.verifyEmail);
 router.post(
   '/resend-verification',
   resendVerificationLimiter,
-  validate(ResendVerificationDto),
+  validate(ResendVerificationSchema),
   controller.resendVerification,
 );
 
@@ -227,7 +231,7 @@ router.post(
  *       429:
  *         $ref: '#/components/responses/RateLimited'
  */
-router.post('/login', loginLimiter, validate(LoginDto), controller.login);
+router.post('/login', loginLimiter, validate(LoginSchema), controller.login);
 
 /**
  * @swagger
@@ -269,7 +273,7 @@ router.post('/login', loginLimiter, validate(LoginDto), controller.login);
 router.post(
   '/forgot-password',
   passwordResetLimiter,
-  validate(ForgotPasswordDto),
+  validate(ForgotPasswordSchema),
   controller.forgotPassword,
 );
 
@@ -313,7 +317,7 @@ router.post(
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/reset-password', validate(ResetPasswordDto), controller.resetPassword);
+router.post('/reset-password', validate(ResetPasswordSchema), controller.resetPassword);
 
 // ─── Protected routes ─────────────────────────────────────────────────────────
 
@@ -322,7 +326,8 @@ router.post('/reset-password', validate(ResetPasswordDto), controller.resetPassw
  * /api/v1/auth/logout:
  *   post:
  *     summary: Logout and invalidate the current session
- *     description: Revokes the current session and clears HTTP-Only cookies `nexusbid_token` and `nexusbid_refresh` server-side.
+ *     description: Revokes the current session and clears HTTP-Only cookies `nexusbid_token` and
+ *    `nexusbid_refresh` server-side.
  *     operationId: logout
  *     tags: [Auth]
  *     security:
@@ -495,7 +500,12 @@ router.get('/sessions', authenticate, controller.getSessions);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.delete('/sessions/:id', authenticate, controller.revokeSession);
+router.delete(
+  '/sessions/:id',
+  authenticate,
+  validate(IdParamSchema, 'params'),
+  controller.revokeSession,
+);
 
 /**
  * @swagger
@@ -564,7 +574,7 @@ router.delete('/sessions', authenticate, controller.revokeAllSessions);
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/email/change/verify', validate(VerifyEmailDto), controller.verifyEmailChange);
+router.post('/email/change/verify', validate(VerifyEmailSchema), controller.verifyEmailChange);
 
 /**
  * @swagger
@@ -582,7 +592,7 @@ router.post('/email/change/verify', validate(VerifyEmailDto), controller.verifyE
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/ChangePasswordDto'
+ *             $ref: '#/components/schemas/ChangePasswordSchema'
  *     responses:
  *       200:
  *         description: Password changed successfully. User is logged out.
@@ -603,7 +613,7 @@ router.post('/email/change/verify', validate(VerifyEmailDto), controller.verifyE
 router.post(
   '/password/change',
   authenticate,
-  validate(ChangePasswordDto),
+  validate(ChangePasswordSchema),
   controller.changePassword,
 );
 
@@ -612,7 +622,8 @@ router.post(
  * /api/v1/auth/email/change:
  *   post:
  *     summary: Request email change
- *     description: Initiates email change verification process. Sends confirmation links to both current and new emails.
+ *     description: Initiates email change verification process. Sends confirmation links to both
+ *     current and new emails.
  *     operationId: requestEmailChange
  *     tags: [Auth]
  *     security:
@@ -639,7 +650,12 @@ router.post(
  *       409:
  *         $ref: '#/components/responses/Conflict'
  */
-router.post('/email/change', authenticate, validate(EmailChangeDto), controller.requestEmailChange);
+router.post(
+  '/email/change',
+  authenticate,
+  validate(EmailChangeSchema),
+  controller.requestEmailChange,
+);
 
 /**
  * @swagger
@@ -711,7 +727,12 @@ router.get('/devices', authenticate, controller.getDevices);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.post('/devices/:id/trust', authenticate, controller.trustDevice);
+router.post(
+  '/devices/:id/trust',
+  authenticate,
+  validate(IdParamSchema, 'params'),
+  controller.trustDevice,
+);
 
 /**
  * @swagger
@@ -743,7 +764,12 @@ router.post('/devices/:id/trust', authenticate, controller.trustDevice);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.delete('/devices/:id', authenticate, controller.revokeDevice);
+router.delete(
+  '/devices/:id',
+  authenticate,
+  validate(IdParamSchema, 'params'),
+  controller.revokeDevice,
+);
 
 // ─── OAuth Social Sign-In ─────────────────────────────────────────────────────
 
@@ -766,16 +792,22 @@ router.delete('/devices/:id', authenticate, controller.revokeDevice);
  *         description: OAuth provider name
  *     responses:
  *       302:
- *         description: Redirect to provider authorization page. Cookie/Header parameters not required as it initiates a browser-level redirection.
+ *         description: Redirect to provider authorization page. Cookie/Header parameters not
+ *         required as it initiates a browser-level redirection.
  */
-router.get('/oauth/:provider', oauthController.redirectToProvider);
+router.get(
+  '/oauth/:provider',
+  validate(OAuthProviderSchema, 'params'),
+  oauthController.redirectToProvider,
+);
 
 /**
  * @swagger
  * /api/v1/auth/oauth/{provider}/callback:
  *   get:
  *     summary: Handle OAuth provider callback
- *     description: Exchanges authorization code for user profile, logs/registers the user, and redirects to frontend. Sets HttpOnly cookies.
+ *     description: Exchanges authorization code for user profile, logs/registers the user, and
+ *     redirects to frontend. Sets HttpOnly cookies.
  *     operationId: handleOAuthCallback
  *     tags: [Auth]
  *     security: []
@@ -803,6 +835,11 @@ router.get('/oauth/:provider', oauthController.redirectToProvider);
  *       302:
  *         description: Redirects caller to frontend app (either success dashboard or login page with error query)
  */
-router.get('/oauth/:provider/callback', oauthController.handleCallback);
+router.get(
+  '/oauth/:provider/callback',
+  validate(OAuthProviderSchema, 'params'),
+  validate(OAuthCallbackQuerySchema, 'query'),
+  oauthController.handleCallback,
+);
 
 export { router as authRouter };

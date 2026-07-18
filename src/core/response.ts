@@ -2,7 +2,7 @@ import { getTraceId } from '../config/requestContext';
 
 import type { Response } from 'express';
 
-interface ApiResponse<T = unknown> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   message: string;
   data?: T | undefined;

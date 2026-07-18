@@ -1,15 +1,16 @@
-import { appDataSource } from '../../../config/database';
+import { AppDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
-import { AnalyticsEvent } from '../../../entities/AnalyticsEvent';
+import { AnalyticsEvent } from '../../../database/entities/AnalyticsEvent';
+import { AnalyticsEventType } from '../../../types/enums';
 
-const eventRepo = appDataSource.getRepository(AnalyticsEvent);
+const eventRepo = AppDataSource.getRepository(AnalyticsEvent);
 
 export async function trackAnalyticsEvent(
-  eventType: string,
+  eventType: AnalyticsEventType,
   actorId: string | null = null,
   entityType: string | null = null,
   entityId: string | null = null,
-  properties: Record<string, any> = {},
+  properties: Record<string, string | number | boolean | null | undefined> = {},
 ): Promise<void> {
   // Execute asynchronously (non-blocking for HTTP requests)
   process.nextTick(async () => {
@@ -37,15 +38,22 @@ export function trackUserRegistered(
   device: string,
   browser: string,
 ): void {
-  trackAnalyticsEvent('USER_REGISTERED', userId, 'User', userId, { country, device, browser });
+  void trackAnalyticsEvent(AnalyticsEventType.USER_REGISTERED, userId, 'User', userId, {
+    country,
+    device,
+    browser,
+  });
 }
 
 export function trackUserVerified(userId: string): void {
-  trackAnalyticsEvent('USER_VERIFIED', userId, 'User', userId);
+  void trackAnalyticsEvent(AnalyticsEventType.USER_VERIFIED, userId, 'User', userId);
 }
 
 export function trackUserLoggedIn(userId: string, device: string, browser: string): void {
-  trackAnalyticsEvent('USER_LOGGED_IN', userId, 'User', userId, { device, browser });
+  void trackAnalyticsEvent(AnalyticsEventType.USER_LOGGED_IN, userId, 'User', userId, {
+    device,
+    browser,
+  });
 }
 
 export function trackTenderCreated(
@@ -56,7 +64,7 @@ export function trackTenderCreated(
   budget: number,
   country: string,
 ): void {
-  trackAnalyticsEvent('TENDER_CREATED', createdById, 'Tender', tenderId, {
+  void trackAnalyticsEvent(AnalyticsEventType.TENDER_CREATED, createdById, 'Tender', tenderId, {
     categoryId,
     tenderType,
     budget,
@@ -72,7 +80,7 @@ export function trackTenderPublished(
   budget: number,
   country: string,
 ): void {
-  trackAnalyticsEvent('TENDER_PUBLISHED', publisherId, 'Tender', tenderId, {
+  void trackAnalyticsEvent(AnalyticsEventType.TENDER_PUBLISHED, publisherId, 'Tender', tenderId, {
     categoryId,
     tenderType,
     budget,
@@ -87,7 +95,7 @@ export function trackTenderAwarded(
   finalPrice: number,
   evaluationTimeSeconds: number,
 ): void {
-  trackAnalyticsEvent('TENDER_AWARDED', awarderId, 'Tender', tenderId, {
+  void trackAnalyticsEvent(AnalyticsEventType.TENDER_AWARDED, awarderId, 'Tender', tenderId, {
     winnerId,
     finalPrice,
     evaluationTimeSeconds,
@@ -100,10 +108,16 @@ export function trackSubscriptionCreated(
   planId: string,
   priceCents: number,
 ): void {
-  trackAnalyticsEvent('SUBSCRIPTION_CREATED', userId, 'Subscription', subscriptionId, {
-    planId,
-    priceCents,
-  });
+  void trackAnalyticsEvent(
+    AnalyticsEventType.SUBSCRIPTION_CREATED,
+    userId,
+    'Subscription',
+    subscriptionId,
+    {
+      planId,
+      priceCents,
+    },
+  );
 }
 
 export function trackPaymentSuccessful(
@@ -113,11 +127,17 @@ export function trackPaymentSuccessful(
   currency: string,
   planId: string,
 ): void {
-  trackAnalyticsEvent('PAYMENT_SUCCESSFUL', userId, 'Transaction', transactionId, {
-    amountCents,
-    currency,
-    planId,
-  });
+  void trackAnalyticsEvent(
+    AnalyticsEventType.PAYMENT_SUCCESSFUL,
+    userId,
+    'Transaction',
+    transactionId,
+    {
+      amountCents,
+      currency,
+      planId,
+    },
+  );
 }
 
 export function trackPaymentFailed(
@@ -128,16 +148,24 @@ export function trackPaymentFailed(
   planId: string,
   error: string,
 ): void {
-  trackAnalyticsEvent('PAYMENT_FAILED', userId, 'Transaction', transactionId, {
-    amountCents,
-    currency,
-    planId,
-    error,
-  });
+  void trackAnalyticsEvent(
+    AnalyticsEventType.PAYMENT_FAILED,
+    userId,
+    'Transaction',
+    transactionId,
+    {
+      amountCents,
+      currency,
+      planId,
+      error,
+    },
+  );
 }
 
 export function trackTenderDownloaded(userId: string, tenderId: string, country: string): void {
-  trackAnalyticsEvent('TENDER_DOWNLOADED', userId, 'Tender', tenderId, { country });
+  void trackAnalyticsEvent(AnalyticsEventType.TENDER_DOWNLOADED, userId, 'Tender', tenderId, {
+    country,
+  });
 }
 
 export function trackTenderViewed(
@@ -147,7 +175,11 @@ export function trackTenderViewed(
   device: string,
   browser: string,
 ): void {
-  trackAnalyticsEvent('TENDER_VIEWED', userId, 'Tender', tenderId, { country, device, browser });
+  void trackAnalyticsEvent(AnalyticsEventType.TENDER_VIEWED, userId, 'Tender', tenderId, {
+    country,
+    device,
+    browser,
+  });
 }
 
 export function trackPageView(
@@ -157,7 +189,12 @@ export function trackPageView(
   device: string,
   browser: string,
 ): void {
-  trackAnalyticsEvent('PAGE_VIEW', userId, 'Page', null, { path, country, device, browser });
+  void trackAnalyticsEvent(AnalyticsEventType.PAGE_VIEW, userId, 'Page', null, {
+    path,
+    country,
+    device,
+    browser,
+  });
 }
 
 export function trackSearch(
@@ -166,5 +203,9 @@ export function trackSearch(
   resultsCount: number,
   country: string,
 ): void {
-  trackAnalyticsEvent('SEARCH', userId, 'Search', null, { query, resultsCount, country });
+  void trackAnalyticsEvent(AnalyticsEventType.SEARCH, userId, 'Search', null, {
+    query,
+    resultsCount,
+    country,
+  });
 }

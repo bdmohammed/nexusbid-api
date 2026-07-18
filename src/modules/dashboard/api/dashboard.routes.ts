@@ -2,6 +2,8 @@ import { Router } from 'express';
 
 import { authenticate } from '../../../middleware/authenticate';
 import { loadPermissions, requirePermission } from '../../../middleware/permissions';
+import { validate } from '../../../middleware/validate';
+import { PatchLayoutSchema } from '../dto/dashboard.dto';
 
 import * as controller from './dashboard.controller';
 
@@ -239,7 +241,12 @@ router.get('/quick-actions', requirePermission('dashboard.view'), controller.get
  *             schema:
  *               $ref: '#/components/schemas/SuccessResponse'
  */
-router.patch('/layout', requirePermission('dashboard.view'), controller.updateLayout);
+router.patch(
+  '/layout',
+  requirePermission('dashboard.view'),
+  validate(PatchLayoutSchema, 'body'),
+  controller.updateLayout,
+);
 
 /**
  * @swagger

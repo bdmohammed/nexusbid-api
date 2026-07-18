@@ -1,15 +1,14 @@
-import { appDataSource } from '../config/database';
-import { PurchasedTender } from '../entities/PurchasedTender';
-import { Subscription } from '../entities/Subscription';
-import { Tender } from '../entities/Tender';
+import { AppDataSource } from '../config/database';
+import { PurchasedTender } from '../database/entities/PurchasedTender';
+import { Subscription } from '../database/entities/Subscription';
+import { Tender } from '../database/entities/Tender';
 import { SubscriptionStatus } from '../types/enums';
 
-import type { PlanVersion } from '../entities/PlanVersion';
-import type { TenderVersion } from '@/entities/TenderVersion';
+import type { TenderVersion } from '@/database/entities/TenderVersion';
 
-const subscriptionRepository = appDataSource.getRepository(Subscription);
-const purchasedTenderRepository = appDataSource.getRepository(PurchasedTender);
-const tenderRepository = appDataSource.getRepository(Tender);
+const subscriptionRepository = AppDataSource.getRepository(Subscription);
+const purchasedTenderRepository = AppDataSource.getRepository(PurchasedTender);
+const tenderRepository = AppDataSource.getRepository(Tender);
 
 /**
  * Determines if a user can access the full details and document of a tender.
@@ -22,7 +21,7 @@ const tenderRepository = appDataSource.getRepository(Tender);
  * Never trust client-supplied access claims.
  */
 function checkCountryAccess(subscription: Subscription, version: TenderVersion): boolean {
-  const versionCountry = version.state.country;
+  const versionCountry = version.state.country.code;
   const { targetCountry } = subscription;
   if (versionCountry && targetCountry) {
     return versionCountry.toLowerCase() === targetCountry.toLowerCase();
@@ -86,10 +85,15 @@ export async function hasAccessToTender(userId: string, tenderId: string): Promi
     return checkPurchaseFallback(userId, tenderId);
   }
 
-  // Fetch the tender details (category, state) to verify access
+  // Fetch the tender details (category, state, state.country) to verify access
   const tender = await tenderRepository.findOne({
     where: { id: tenderId },
-    relations: ['activeVersion', 'activeVersion.state', 'activeVersion.category'],
+    relations: [
+      'activeVersion',
+      'activeVersion.state',
+      'activeVersion.state.country',
+      'activeVersion.category',
+    ],
   });
 
   const version = tender?.activeVersion;
@@ -98,9 +102,8 @@ export async function hasAccessToTender(userId: string, tenderId: string): Promi
   }
 
   for (const subscription of validSubscriptions) {
-    const plan =
-      (subscription.planVersion as PlanVersion | null) ?? subscription.plan.activeVersion;
-    if (plan && checkPlanAccess(plan.planType, subscription, version)) {
+    const { planVersion } = subscription;
+    if (checkPlanAccess(planVersion.planType, subscription, version)) {
       return true;
     }
   }

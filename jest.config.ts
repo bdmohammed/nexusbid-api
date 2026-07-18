@@ -1,4 +1,4 @@
-﻿import type { Config } from 'jest';
+import type { Config } from 'jest';
 
 const config: Config = {
   // -- Preset & Transformer ---------------------------------------------------
@@ -13,7 +13,7 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
-    '^@entities/(.*)$': '<rootDir>/src/entities/$1',
+    '^@entities/(.*)$': '<rootDir>/src/database/entities/$1',
     '^@middleware/(.*)$': '<rootDir>/src/middleware/$1',
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
@@ -25,7 +25,7 @@ const config: Config = {
   },
 
   // -- Global setup / teardown (run once, in a separate process) -------------
-  // globalSetup   : initializes appDataSource + runs migrations on test DB
+  // globalSetup   : initializes AppDataSource + runs migrations on test DB
   // globalTeardown: safety-net that destroys any lingering DataSource pool
   globalSetup: '<rootDir>/tests/jest.global-setup.ts',
   globalTeardown: '<rootDir>/tests/jest.global-teardown.ts',

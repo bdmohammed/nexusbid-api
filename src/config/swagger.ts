@@ -396,7 +396,7 @@ All responses use a consistent envelope:
               description: 'Per-tender purchase price in USD cents',
             },
             categoryId: { type: 'string', format: 'uuid', nullable: true },
-            stateId: { type: 'string', format: 'uuid', nullable: true },
+            stateId: { type: 'integer', nullable: true },
             lifecycleStatus: {
               type: 'string',
               enum: ['ACTIVE', 'ARCHIVED', 'CANCELLED'],

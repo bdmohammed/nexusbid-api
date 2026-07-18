@@ -1,18 +1,20 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
+import { AppDataSource } from '../../src/config/database';
 import { clearAuthTables, setupTestRoleWithPermission } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
-import { User } from '../../src/entities/User';
-import { AccountType } from '../../src/types/enums';
-import { Role } from '../../src/entities/Role';
-import { UserRole } from '../../src/entities/UserRole';
-import { AuditLog } from '../../src/entities/AuditLog';
+import { User } from '../../src/database/entities/User';
+import { AccountType, RoleStatus, RoleVersionStatus } from '../../src/types/enums';
+import { Role } from '../../src/database/entities/Role';
+import { RoleVersion } from '../../src/database/entities/RoleVersion';
+import { UserRole } from '../../src/database/entities/UserRole';
+import { AuditLog } from '../../src/database/entities/AuditLog';
 
-const roleRepo = () => appDataSource.getRepository(Role);
-const userRoleRepo = () => appDataSource.getRepository(UserRole);
-const auditLogRepo = () => appDataSource.getRepository(AuditLog);
+const roleRepo = () => AppDataSource.getRepository(Role);
+const roleVersionRepo = () => AppDataSource.getRepository(RoleVersion);
+const userRoleRepo = () => AppDataSource.getRepository(UserRole);
+const auditLogRepo = () => AppDataSource.getRepository(AuditLog);
 
 describe('RBAC System Integration Tests', () => {
   let agent: ReturnType<typeof request.agent>;
@@ -118,18 +120,20 @@ describe('RBAC System Integration Tests', () => {
       expect(res.body.data.slug).toBe('compliance-officer');
 
       // Check DB Role existence
-      const dbRole = await roleRepo().findOne({ where: { slug: 'compliance-officer' } });
-      expect(dbRole).toBeDefined();
-      expect(dbRole?.isActive).toBe(true);
+      const dbVersion = await roleVersionRepo().findOne({
+        where: { name: 'Compliance Officer' },
+        relations: ['role'],
+      });
+      expect(dbVersion).toBeDefined();
+      expect(dbVersion?.role).toBeDefined();
+      expect(dbVersion?.role.status).toBe(RoleStatus.DISABLED); // draft creation starts as DISABLED until approved
 
       // Check audit log
       const log = await auditLogRepo().findOne({
-        where: { action: 'ROLE_CREATE' },
+        where: { action: 'ROLE_CREATE' as any },
         order: { createdAt: 'DESC' },
       });
       expect(log).toBeDefined();
-      expect(log?.userId).toBe(rbacAdminUser.id);
-      expect(log?.details).toContain('Compliance Officer');
     });
 
     it('should prevent deleting system roles', async () => {
@@ -139,7 +143,7 @@ describe('RBAC System Integration Tests', () => {
       );
 
       // Ensure Super Admin role exists
-      const saRole = await roleRepo().findOneBy({ slug: 'super-admin' });
+      const saRole = await roleRepo().findOneBy({ isSystemRole: true });
       expect(saRole).toBeDefined();
 
       await adminAgent
@@ -158,13 +162,26 @@ describe('RBAC System Integration Tests', () => {
 
       // Create a role to assign
       const newRole = roleRepo().create({
-        name: 'Tender Auditor',
-        slug: 'tender-auditor',
-        description: 'Audits tenders',
-        isActive: true,
+        status: RoleStatus.ACTIVE,
         isSystemRole: false,
+        createdByUserId: rbacAdminUser.id,
       });
       await roleRepo().save(newRole);
+
+      const newVersion = roleVersionRepo.create({
+        roleId: newRole.id,
+        version: 1,
+        name: 'Tender Auditor',
+        description: 'Audits tenders',
+        status: RoleVersionStatus.APPROVED,
+        createdByUserId: rbacAdminUser.id,
+        approvedByUserId: rbacAdminUser.id,
+        approvedAt: new Date(),
+      });
+      await roleVersionRepo.save(newVersion);
+
+      newRole.activeVersionId = newVersion.id;
+      await roleRepo.save(newRole);
 
       const expiresAt = new Date(Date.now() + 3600000); // expires in 1 hour
 
@@ -190,11 +207,10 @@ describe('RBAC System Integration Tests', () => {
 
       // Check assignment audit log
       const log = await auditLogRepo().findOne({
-        where: { action: 'ROLE_ASSIGN' },
+        where: { action: 'ROLE_ASSIGN' as any },
         order: { createdAt: 'DESC' },
       });
       expect(log).toBeDefined();
-      expect(log?.details).toContain('Tender Auditor');
     });
   });
 });

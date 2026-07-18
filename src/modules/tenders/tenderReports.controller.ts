@@ -1,86 +1,61 @@
-import { appDataSource } from '../../config/database';
-import { logger } from '../../config/logger';
-import { Tender } from '../../entities/Tender';
-import { TenderParticipant } from '../../entities/TenderParticipant';
-import { TenderSubmission } from '../../entities/TenderSubmission';
-import { TenderVersion } from '../../entities/TenderVersion';
+import { AppDataSource } from '../../config/database';
+import { asyncHandler } from '../../core/asyncHandler';
+import { sendOk } from '../../core/response';
+import { Tender } from '../../database/entities/Tender';
+import { TenderParticipant } from '../../database/entities/TenderParticipant';
+import { TenderSubmission } from '../../database/entities/TenderSubmission';
+import { TenderVersion } from '../../database/entities/TenderVersion';
 
-import type { Request, Response } from 'express';
+const tenderRepository = AppDataSource.getRepository(Tender);
+const tenderVersionRepository = AppDataSource.getRepository(TenderVersion);
+const tenderSubmissionRepository = AppDataSource.getRepository(TenderSubmission);
+const tenderParticipantRepository = AppDataSource.getRepository(TenderParticipant);
 
-const tenderRepository = appDataSource.getRepository(Tender);
-const tenderVersionRepository = appDataSource.getRepository(TenderVersion);
-const tenderSubmissionRepository = appDataSource.getRepository(TenderSubmission);
-const tenderParticipantRepository = appDataSource.getRepository(TenderParticipant);
+export const getBudgetReport = asyncHandler(async (_req, res) => {
+  const budgetStatistics = await tenderVersionRepository
+    .createQueryBuilder('tv')
+    .leftJoinAndSelect('tv.category', 'cat')
+    .select('cat.name', 'categoryName')
+    .addSelect('SUM(tv.estimatedBudget)', 'totalBudget')
+    .addSelect('COUNT(tv.id)', 'tenderCount')
+    .groupBy('cat.name')
+    .getRawMany();
 
-export async function getBudgetReport(req: Request, res: Response): Promise<void> {
-  try {
-    const budgetStatistics = await tenderVersionRepository
-      .createQueryBuilder('tv')
-      .leftJoinAndSelect('tv.category', 'cat')
-      .select('cat.name', 'categoryName')
-      .addSelect('SUM(tv.estimatedBudget)', 'totalBudget')
-      .addSelect('COUNT(tv.id)', 'tenderCount')
-      .groupBy('cat.name')
-      .getRawMany();
+  return sendOk(res, budgetStatistics);
+});
 
-    res.json({ success: true, data: budgetStatistics });
-  } catch (error) {
-    logger.error({ error }, 'Error compiling budget report');
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-}
+export const getStatusReport = asyncHandler(async (_req, res) => {
+  const statusStatistics = await tenderRepository
+    .createQueryBuilder('t')
+    .select('t.status', 'status')
+    .addSelect('t.publicationStatus', 'publicationStatus')
+    .addSelect('COUNT(t.id)', 'count')
+    .groupBy('t.status')
+    .addGroupBy('t.publicationStatus')
+    .getRawMany();
 
-export async function getStatusReport(req: Request, res: Response): Promise<void> {
-  try {
-    const statusStatistics = await tenderRepository
-      .createQueryBuilder('t')
-      .select('t.status', 'status')
-      .addSelect('t.publicationStatus', 'publicationStatus')
-      .addSelect('COUNT(t.id)', 'count')
-      .groupBy('t.status')
-      .addGroupBy('t.publicationStatus')
-      .getRawMany();
+  return sendOk(res, statusStatistics);
+});
 
-    res.json({ success: true, data: statusStatistics });
-  } catch (error) {
-    logger.error({ error }, 'Error compiling status report');
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-}
+export const getVendorsReport = asyncHandler(async (_req, res) => {
+  const vendorStatistics = await tenderParticipantRepository
+    .createQueryBuilder('tp')
+    .select('tp.status', 'status')
+    .addSelect('COUNT(tp.id)', 'count')
+    .groupBy('tp.status')
+    .getRawMany();
 
-export async function getVendorsReport(req: Request, res: Response): Promise<void> {
-  try {
-    const vendorStatistics = await tenderParticipantRepository
-      .createQueryBuilder('tp')
-      .select('tp.status', 'status')
-      .addSelect('COUNT(tp.id)', 'count')
-      .groupBy('tp.status')
-      .getRawMany();
+  return sendOk(res, vendorStatistics);
+});
 
-    res.json({ success: true, data: vendorStatistics });
-  } catch (error) {
-    logger.error({ error }, 'Error compiling vendors report');
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-}
+export const getPerformanceReport = asyncHandler(async (_req, res) => {
+  const submissionCount = await tenderSubmissionRepository.count();
+  const activeParticipants = await tenderParticipantRepository.count();
 
-export async function getPerformanceReport(req: Request, res: Response): Promise<void> {
-  try {
-    const submissionCount = await tenderSubmissionRepository.count();
-    const activeParticipants = await tenderParticipantRepository.count();
-
-    // Average time to submission, qualified vs rejected ratios
-    res.json({
-      success: true,
-      data: {
-        totalSubmissions: submissionCount,
-        totalParticipants: activeParticipants,
-        averageSubmissionsPerTender:
-          activeParticipants > 0 ? (submissionCount / activeParticipants).toFixed(2) : 0,
-      },
-    });
-  } catch (error) {
-    logger.error({ error }, 'Error compiling performance report');
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-}
+  return sendOk(res, {
+    totalSubmissions: submissionCount,
+    totalParticipants: activeParticipants,
+    averageSubmissionsPerTender:
+      activeParticipants > 0 ? (submissionCount / activeParticipants).toFixed(2) : 0,
+  });
+});

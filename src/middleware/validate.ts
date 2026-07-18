@@ -1,4 +1,4 @@
-import { AppError } from '../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { ZodSchema } from 'zod';
@@ -26,10 +26,18 @@ export const validate =
       }));
 
       return next(
-        Object.assign(new AppError('Validation failed', 422, 'VALIDATION_ERROR'), { errors }),
+        Object.assign(
+          new AppError(
+            AppErrorMessage.VALIDATION_FAILED,
+            HttpStatusCode.UNPROCESSABLE_ENTITY,
+            AppErrorCode.VALIDATION_ERROR,
+          ),
+          { errors },
+        ),
       );
     }
 
     req.validated = result.data;
+    req[target] = result.data;
     next();
   };

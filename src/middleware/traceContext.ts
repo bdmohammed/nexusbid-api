@@ -4,7 +4,7 @@ import { runWithContext } from '../config/requestContext';
 
 import type { NextFunction, Request, Response } from 'express';
 
-const HEX_REGEX = /^[0-9a-fA-F]+$/;
+const TRACEPARENT_REGEX = /^[0-9a-fA-F]{2}-([0-9a-fA-F]{32})-[0-9a-fA-F]{16}-[0-9a-fA-F]{2}$/;
 
 /**
  * Reads W3C loosely, doesn't fully implement it yet.
@@ -13,35 +13,19 @@ const HEX_REGEX = /^[0-9a-fA-F]+$/;
  */
 function extractTraceIdFromTraceparent(traceparent: string): string | undefined {
   if (!traceparent) return undefined;
-  const parts = traceparent.split('-');
-  if (parts.length === 4) {
-    const [version, traceId, parentId, flags] = parts;
-    if (
-      version.length === 2 &&
-      HEX_REGEX.test(version) &&
-      traceId.length === 32 &&
-      HEX_REGEX.test(traceId) &&
-      parentId.length === 16 &&
-      HEX_REGEX.test(parentId) &&
-      flags.length === 2 &&
-      HEX_REGEX.test(flags)
-    ) {
-      return traceId;
-    }
-  }
-  return undefined;
+  const match = TRACEPARENT_REGEX.exec(traceparent);
+  return match?.[1];
 }
 
 /**
  * Middleware setting up the Request Trace ID (Correlation ID) using AsyncLocalStorage.
  */
 export const traceContext = (req: Request, res: Response, next: NextFunction): void => {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  let traceId = ((req.headers['x-trace-id'] as string) ?? '').trim();
+  let traceId = (req.headers['x-trace-id'] ?? '').toString().trim();
 
   // If X-Trace-Id is absent, try retrieving from W3C traceparent
   if (!traceId) {
-    const traceparent = ((req.headers['traceparent'] as string) ?? '').trim();
+    const traceparent = (req.headers['traceparent'] ?? '').toString().trim();
     const w3cTraceId = extractTraceIdFromTraceparent(traceparent);
     if (w3cTraceId) {
       traceId = w3cTraceId;

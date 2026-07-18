@@ -15,6 +15,35 @@ export type PermissionAction =
   | 'manage'
   | 'custom';
 
+export enum PermissionActions {
+  VIEW = 'view',
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  APPROVE = 'approve',
+  REJECT = 'reject',
+  PUBLISH = 'publish',
+  UNPUBLISH = 'unpublish',
+  ARCHIVE = 'archive',
+  UNARCHIVE = 'unarchive',
+  RESTORE = 'restore',
+  EXPORT = 'export',
+  IMPORT = 'import',
+  MANAGE = 'manage',
+  CUSTOM = 'custom',
+  REVIEW = 'review',
+  ASSIGN = 'assign',
+  COMPARE = 'compare',
+  AUDIT_VIEW = 'audit_view',
+  BLOCK = 'block',
+  UNBLOCK = 'unblock',
+  REMOVE = 'remove',
+  SUSPEND = 'suspend',
+  UNSUSPEND = 'unsuspend',
+  ACTIVATE = 'activate',
+  DEACTIVATE = 'deactivate',
+}
+
 export interface PermissionDependency {
   /**
    * All of these permissions are required.

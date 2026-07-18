@@ -1,24 +1,27 @@
-import { appDataSource } from '../config/database';
+import { v4 as uuidv4 } from 'uuid';
+
+import { AppDataSource } from '../config/database';
 import { asyncHandler } from '../core/asyncHandler';
-import { AuditLog } from '../entities/AuditLog';
+import { AuditLog } from '../database/entities/AuditLog';
 
 import type { NextFunction, Request, Response } from 'express';
 
-const auditLogRepository = appDataSource.getRepository(AuditLog);
+const auditLogRepository = AppDataSource.getRepository(AuditLog);
 
 function buildAuditLogPayload(
   req: Request,
   res: Response,
   action: string,
-  entityType: string,
+  module: string,
   responseBody: Record<string, unknown>,
 ) {
   const { user } = req;
   return {
+    eventId: uuidv4(),
     actorId: user ? user.userId : null,
     actorEmail: user ? user.email : 'unknown',
     action,
-    entityType,
+    module,
     entityId: req.params['id'] ?? null,
     before: (res.locals['auditBefore'] as unknown) ?? null,
     after: responseBody.data ?? null,
@@ -37,22 +40,22 @@ function buildAuditLogPayload(
  *   router.patch('/:id',
  *     authenticate,
  *     requirePermission(PermissionKey.EDIT_TENDER),
- *     auditLogger('tender.edit', 'tender'),
+ *     auditLogger('edit', 'tender'),
  *     controller.update,
  *   );
  *
  * To capture the 'before' state in the controller:
  *   res.locals.auditBefore = { status: tender.status };
  */
-export const auditLogger = (action: string, entityType: string) =>
+export const auditLogger = (action: string, module: string) =>
   asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
 
     res.json = (responseBody: Record<string, unknown>) => {
       // Non-blocking — does not delay the response
       setImmediate(() => {
-        const payload = buildAuditLogPayload(req, res, action, entityType, responseBody);
-        auditLogRepository.save(payload).catch(() => {
+        const payload = buildAuditLogPayload(req, res, action, module, responseBody);
+        void auditLogRepository.save(payload).catch(() => {
           // Silently fail — audit logging should never crash the app
         });
       });

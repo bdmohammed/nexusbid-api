@@ -2,8 +2,20 @@ import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate';
 import { requireSuperAdmin } from '../../middleware/permissions';
+import { validate } from '../../middleware/validate';
 
 import * as controller from './plans.controller';
+import {
+  AssignReviewerBodySchema,
+  CreateCouponSchema,
+  CreateFeatureCatalogItemSchema,
+  CreatePlanSchema,
+  InitiateSubscriptionMigrationSchema,
+  PlanIdParamSchema,
+  ReviewIdParamSchema,
+  SubmitReviewActionBodySchema,
+  VersionIdParamSchema,
+} from './plans.dto';
 
 const router = Router();
 
@@ -117,7 +129,13 @@ router.get(
  *         description: Feature added successfully
  */
 router.get('/features', authenticate, requireSuperAdmin(), controller.getFeatureCatalog);
-router.post('/features', authenticate, requireSuperAdmin(), controller.createFeatureCatalogItem);
+router.post(
+  '/features',
+  authenticate,
+  requireSuperAdmin(),
+  validate(CreateFeatureCatalogItemSchema, 'body'),
+  controller.createFeatureCatalogItem,
+);
 
 // ─── Coupon Codes ────────────────────────────────────────────────────────────
 
@@ -163,7 +181,13 @@ router.post('/features', authenticate, requireSuperAdmin(), controller.createFea
  *         description: Coupon created
  */
 router.get('/coupons', authenticate, requireSuperAdmin(), controller.listCoupons);
-router.post('/coupons', authenticate, requireSuperAdmin(), controller.createCoupon);
+router.post(
+  '/coupons',
+  authenticate,
+  requireSuperAdmin(),
+  validate(CreateCouponSchema, 'body'),
+  controller.createCoupon,
+);
 
 /**
  * @swagger
@@ -188,6 +212,7 @@ router.post(
   '/coupons/:id/toggle',
   authenticate,
   requireSuperAdmin(),
+  validate(PlanIdParamSchema, 'params'),
   controller.toggleCouponStatus,
 );
 
@@ -224,6 +249,7 @@ router.post(
   '/migrations',
   authenticate,
   requireSuperAdmin(),
+  validate(InitiateSubscriptionMigrationSchema, 'body'),
   controller.initiateSubscriptionMigration,
 );
 
@@ -305,9 +331,15 @@ router.get('/', authenticate, controller.listAllPlans);
  *                     data:
  *                       $ref: '#/components/schemas/SubscriptionPlan'
  */
-router.get('/:id', authenticate, controller.getPlanById);
+router.get('/:id', authenticate, validate(PlanIdParamSchema, 'params'), controller.getPlanById);
 
-router.post('/', authenticate, requireSuperAdmin(), controller.createPlan);
+router.post(
+  '/',
+  authenticate,
+  requireSuperAdmin(),
+  validate(CreatePlanSchema, 'body'),
+  controller.createPlan,
+);
 
 /**
  * @swagger
@@ -336,7 +368,13 @@ router.post('/', authenticate, requireSuperAdmin(), controller.createPlan);
  *       201:
  *         description: Version draft created
  */
-router.post('/:id/versions', authenticate, requireSuperAdmin(), controller.createPlanVersionDraft);
+router.post(
+  '/:id/versions',
+  authenticate,
+  requireSuperAdmin(),
+  validate(PlanIdParamSchema, 'params'),
+  controller.createPlanVersionDraft,
+);
 
 /**
  * @swagger
@@ -364,6 +402,7 @@ router.post(
   '/versions/:versionId/submit',
   authenticate,
   requireSuperAdmin(),
+  validate(VersionIdParamSchema, 'params'),
   controller.submitPlanForReview,
 );
 
@@ -402,6 +441,8 @@ router.post(
   '/reviews/:reviewId/assign',
   authenticate,
   requireSuperAdmin(),
+  validate(ReviewIdParamSchema, 'params'),
+  validate(AssignReviewerBodySchema, 'body'),
   controller.assignPlanReviewer,
 );
 
@@ -441,6 +482,8 @@ router.post(
   '/reviews/:reviewId/action',
   authenticate,
   requireSuperAdmin(),
+  validate(ReviewIdParamSchema, 'params'),
+  validate(SubmitReviewActionBodySchema, 'body'),
   controller.submitPlanReviewAction,
 );
 
@@ -470,6 +513,7 @@ router.post(
   '/versions/:versionId/publish',
   authenticate,
   requireSuperAdmin(),
+  validate(VersionIdParamSchema, 'params'),
   controller.publishPlanVersion,
 );
 

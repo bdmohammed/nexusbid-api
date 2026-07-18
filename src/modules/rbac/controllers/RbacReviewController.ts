@@ -1,43 +1,50 @@
-import { z } from 'zod';
-
-import { appDataSource } from '../../../config/database';
+import { AppDataSource } from '../../../config/database';
 import { asyncHandler } from '../../../core/asyncHandler';
-import { RoleReview } from '../../../entities/RoleReview';
+import { RoleReview } from '../../../database/entities/RoleReview';
 import { RbacService } from '../rbac.service';
 
-import type { Request, Response } from 'express';
-
-const SubmitReviewSchema = z.object({
-  reviewerIds: z.array(z.string().uuid()).min(1, 'At least one reviewer is required'),
-});
-
-const ReviewActionSchema = z.object({
-  status: z.enum(['APPROVED', 'REJECTED', 'CHANGES_REQUESTED']),
-  comment: z.string().max(500).optional().default(''),
-});
+import type {
+  IdParamDto,
+  ReviewActionDto,
+  ReviewIdParamDto,
+  SubmitReviewDto,
+  SuccessResponse,
+  VersionIdParamDto,
+} from '../rbac.dto';
 
 export class RbacReviewController {
-  public static submitVersion = asyncHandler(async (req: Request, res: Response) => {
+  public static submitVersion = asyncHandler<
+    VersionIdParamDto,
+    SuccessResponse<RoleReview>,
+    SubmitReviewDto
+  >(async (req, res) => {
     const { versionId } = req.params;
-    const body = SubmitReviewSchema.parse(req.body);
+    const { body } = req;
     const review = await RbacService.submitRoleVersion(
-      versionId!,
+      versionId,
       body.reviewerIds,
       req.user!.userId,
     );
     res.status(201).json({ success: true, data: review });
   });
 
-  public static submitReview = asyncHandler(async (req: Request, res: Response) => {
+  public static submitReview = asyncHandler<
+    ReviewIdParamDto,
+    SuccessResponse<null>,
+    ReviewActionDto
+  >(async (req, res) => {
     const { reviewId } = req.params;
-    const body = ReviewActionSchema.parse(req.body);
-    await RbacService.reviewRoleVersion(reviewId!, body.status, body.comment, req.user!.userId);
+    const { body } = req;
+    await RbacService.reviewRoleVersion(reviewId, body.status, body.comment, req.user!.userId);
     res.json({ success: true, message: 'Review decision submitted successfully' });
   });
 
-  public static getReviewDetails = asyncHandler(async (req: Request, res: Response) => {
+  public static getReviewDetails = asyncHandler<
+    IdParamDto,
+    SuccessResponse<RoleReview | undefined>
+  >(async (req, res) => {
     const { id } = req.params;
-    const review = await appDataSource.getRepository(RoleReview).findOne({
+    const review = await AppDataSource.getRepository(RoleReview).findOne({
       where: { id },
       relations: [
         'assignments',
@@ -47,6 +54,6 @@ export class RbacReviewController {
         'roleVersion',
       ],
     });
-    res.json({ success: true, data: review });
+    res.json({ success: true, data: review ?? undefined });
   });
 }

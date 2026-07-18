@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate';
 import { requireAnyPermission, requirePermission } from '../../middleware/permissions';
 import { requireAccountType } from '../../middleware/requireAccountType';
+import { validate } from '../../middleware/validate';
 import { AccountType } from '../../types/enums';
 
 // Let's import Export Controller correctly
@@ -11,6 +12,20 @@ import { RbacReviewController } from './controllers/RbacReviewController';
 import { RbacRoleController } from './controllers/RbacRoleController';
 import { RbacStatsController } from './controllers/RbacStatsController';
 import { RbacVersionController } from './controllers/RbacVersionController';
+import {
+  AssignRoleSchema,
+  CompareVersionsParamsSchema,
+  CreateRoleSchema,
+  DuplicateRoleBodySchema,
+  IdParamSchema,
+  ListRolesQuerySchema,
+  ReviewActionSchema,
+  ReviewIdParamSchema,
+  RoleIdParamSchema,
+  SubmitReviewSchema,
+  UpdateRoleSchema,
+  VersionIdParamSchema,
+} from './rbac.dto';
 
 const router = Router();
 
@@ -175,7 +190,12 @@ router.use(requireAccountType(AccountType.ADMIN));
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.get('/roles', requirePermission('ROLE_VIEW'), RbacRoleController.getRoles);
+router.get(
+  '/roles',
+  requirePermission('ROLE_VIEW'),
+  validate(ListRolesQuerySchema, 'query'),
+  RbacRoleController.getRoles,
+);
 
 /**
  * @swagger
@@ -210,7 +230,12 @@ router.get('/roles', requirePermission('ROLE_VIEW'), RbacRoleController.getRoles
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get('/roles/:id', requirePermission('ROLE_VIEW'), RbacRoleController.getRoleById);
+router.get(
+  '/roles/:id',
+  requirePermission('ROLE_VIEW'),
+  validate(IdParamSchema, 'params'),
+  RbacRoleController.getRoleById,
+);
 
 /**
  * @swagger
@@ -263,7 +288,12 @@ router.get('/roles/:id', requirePermission('ROLE_VIEW'), RbacRoleController.getR
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.post('/roles', requirePermission('ROLE_CREATE'), RbacRoleController.createRole);
+router.post(
+  '/roles',
+  requirePermission('ROLE_CREATE'),
+  validate(CreateRoleSchema, 'body'),
+  RbacRoleController.createRole,
+);
 
 /**
  * @swagger
@@ -318,7 +348,13 @@ router.post('/roles', requirePermission('ROLE_CREATE'), RbacRoleController.creat
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
-router.put('/roles/:id', requirePermission('ROLE_UPDATE'), RbacRoleController.updateRole);
+router.put(
+  '/roles/:id',
+  requirePermission('ROLE_UPDATE'),
+  validate(IdParamSchema, 'params'),
+  validate(UpdateRoleSchema, 'body'),
+  RbacRoleController.updateRole,
+);
 
 /**
  * @swagger
@@ -354,7 +390,12 @@ router.put('/roles/:id', requirePermission('ROLE_UPDATE'), RbacRoleController.up
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.delete('/roles/:id', requirePermission('ROLE_ARCHIVE'), RbacRoleController.deleteRole);
+router.delete(
+  '/roles/:id',
+  requirePermission('ROLE_ARCHIVE'),
+  validate(IdParamSchema, 'params'),
+  RbacRoleController.deleteRole,
+);
 
 /**
  * @swagger
@@ -400,6 +441,8 @@ router.delete('/roles/:id', requirePermission('ROLE_ARCHIVE'), RbacRoleControlle
 router.post(
   '/roles/:id/duplicate',
   requirePermission('ROLE_CREATE'),
+  validate(IdParamSchema, 'params'),
+  validate(DuplicateRoleBodySchema, 'body'),
   RbacRoleController.duplicateRole,
 );
 
@@ -434,6 +477,7 @@ router.post(
 router.post(
   '/roles/:id/restore',
   requirePermission('ROLE_RESTORE'),
+  validate(IdParamSchema, 'params'),
   RbacRoleController.restoreRole,
 );
 
@@ -512,7 +556,12 @@ router.get('/assignments', requirePermission('ROLE_ASSIGN'), RbacRoleController.
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  */
-router.post('/assignments', requirePermission('ROLE_ASSIGN'), RbacRoleController.assignRole);
+router.post(
+  '/assignments',
+  requirePermission('ROLE_ASSIGN'),
+  validate(AssignRoleSchema, 'body'),
+  RbacRoleController.assignRole,
+);
 
 /**
  * @swagger
@@ -540,6 +589,7 @@ router.post('/assignments', requirePermission('ROLE_ASSIGN'), RbacRoleController
 router.delete(
   '/assignments/:id',
   requirePermission('ROLE_ASSIGN'),
+  validate(IdParamSchema, 'params'),
   RbacRoleController.revokeAssignment,
 );
 
@@ -645,6 +695,7 @@ router.get('/modules', requirePermission('ROLE_VIEW'), RbacRoleController.getMod
 router.get(
   '/roles/:roleId/versions',
   requirePermission('ROLE_VIEW'),
+  validate(RoleIdParamSchema, 'params'),
   RbacVersionController.getRoleVersions,
 );
 
@@ -674,6 +725,7 @@ router.get(
 router.post(
   '/versions/:id/lock',
   requirePermission('ROLE_UPDATE'),
+  validate(IdParamSchema, 'params'),
   RbacVersionController.lockVersion,
 );
 
@@ -703,6 +755,7 @@ router.post(
 router.post(
   '/versions/:id/unlock',
   requirePermission('ROLE_UPDATE'),
+  validate(IdParamSchema, 'params'),
   RbacVersionController.unlockVersion,
 );
 
@@ -758,6 +811,7 @@ router.post(
 router.get(
   '/roles/:id/versions/:v1/compare/:v2',
   requirePermission('ROLE_COMPARE'),
+  validate(CompareVersionsParamsSchema, 'params'),
   RbacVersionController.compareVersions,
 );
 
@@ -816,6 +870,8 @@ router.get(
 router.post(
   '/versions/:versionId/submit',
   requirePermission('ROLE_UPDATE'),
+  validate(VersionIdParamSchema, 'params'),
+  validate(SubmitReviewSchema, 'body'),
   RbacReviewController.submitVersion,
 );
 
@@ -867,6 +923,8 @@ router.post(
 router.post(
   '/reviews/:reviewId/action',
   requireAnyPermission(['ROLE_REVIEW', 'ROLE_APPROVE', 'ROLE_REJECT']),
+  validate(ReviewIdParamSchema, 'params'),
+  validate(ReviewActionSchema, 'body'),
   RbacReviewController.submitReview,
 );
 
@@ -897,7 +955,12 @@ router.post(
  *                     data:
  *                       type: object
  */
-router.get('/reviews/:id', requirePermission('ROLE_REVIEW'), RbacReviewController.getReviewDetails);
+router.get(
+  '/reviews/:id',
+  requirePermission('ROLE_REVIEW'),
+  validate(IdParamSchema, 'params'),
+  RbacReviewController.getReviewDetails,
+);
 
 // ─── Stats & Export ──────────────────────────────────────────────────────────
 

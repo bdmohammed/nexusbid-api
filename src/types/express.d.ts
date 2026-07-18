@@ -1,5 +1,7 @@
 import type { AccountType } from './enums';
 
+import 'express-serve-static-core';
+
 export interface JwtPayload {
   sub: string;
   userId: string; // Backward compatibility alias for sub
@@ -26,5 +28,16 @@ declare global {
       /** Attached by validate middleware after Zod parsing */
       validated?: unknown;
     }
+  }
+}
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    id?: string;
+    traceId?: string;
+    requestId?: string;
+    'x-trace-id'?: string;
+    'x-request-id'?: string;
+    traceparent?: string;
   }
 }

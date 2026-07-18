@@ -1,23 +1,23 @@
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { logger } from '../../config/logger';
-import { AppError } from '../../core/AppError';
-import { DownloadHistory } from '../../entities/DownloadHistory';
-import { EvaluationTemplate } from '../../entities/EvaluationTemplate';
-import { Tender } from '../../entities/Tender';
-import { TenderAmendment } from '../../entities/TenderAmendment';
-import { TenderClarification } from '../../entities/TenderClarification';
-import { TenderCommittee } from '../../entities/TenderCommittee';
-import { TenderDocument } from '../../entities/TenderDocument';
-import { TenderEvaluation } from '../../entities/TenderEvaluation';
-import { TenderInvitation } from '../../entities/TenderInvitation';
-import { TenderParticipant } from '../../entities/TenderParticipant';
-import { TenderQuestion } from '../../entities/TenderQuestion';
-import { TenderReview } from '../../entities/TenderReview';
-import { TenderReviewAssignment } from '../../entities/TenderReviewAssignment';
-import { TenderReviewComment } from '../../entities/TenderReviewComment';
-import { TenderTemplate } from '../../entities/TenderTemplate';
-import { TenderVersion } from '../../entities/TenderVersion';
-import { TenderWatcher } from '../../entities/TenderWatcher';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
+import { DownloadHistory } from '../../database/entities/DownloadHistory';
+import { EvaluationTemplate } from '../../database/entities/EvaluationTemplate';
+import { Tender } from '../../database/entities/Tender';
+import { TenderAmendment } from '../../database/entities/TenderAmendment';
+import { TenderClarification } from '../../database/entities/TenderClarification';
+import { TenderCommittee } from '../../database/entities/TenderCommittee';
+import { TenderDocument } from '../../database/entities/TenderDocument';
+import { TenderEvaluation } from '../../database/entities/TenderEvaluation';
+import { TenderInvitation } from '../../database/entities/TenderInvitation';
+import { TenderParticipant } from '../../database/entities/TenderParticipant';
+import { TenderQuestion } from '../../database/entities/TenderQuestion';
+import { TenderReview } from '../../database/entities/TenderReview';
+import { TenderReviewAssignment } from '../../database/entities/TenderReviewAssignment';
+import { TenderReviewComment } from '../../database/entities/TenderReviewComment';
+import { TenderTemplate } from '../../database/entities/TenderTemplate';
+import { TenderVersion } from '../../database/entities/TenderVersion';
+import { TenderWatcher } from '../../database/entities/TenderWatcher';
 import { generateDownloadUrl } from '../../services/s3.service';
 import {
   TenderLifecycleStatus,
@@ -46,26 +46,36 @@ import type {
   UpdateTenderStatusDto,
 } from './tenders.dto';
 import type { Request } from 'express';
-import type { SelectQueryBuilder } from 'typeorm';
+import type { DeepPartial, SelectQueryBuilder } from 'typeorm';
 
-const tenderRepository = appDataSource.getRepository(Tender);
-const tenderVersionRepository = appDataSource.getRepository(TenderVersion);
-const tenderDocumentRepository = appDataSource.getRepository(TenderDocument);
-const tenderReviewRepository = appDataSource.getRepository(TenderReview);
-const tenderReviewAssignmentRepository = appDataSource.getRepository(TenderReviewAssignment);
-const tenderReviewCommentRepository = appDataSource.getRepository(TenderReviewComment);
-const tenderCommitteeRepository = appDataSource.getRepository(TenderCommittee);
-const tenderParticipantRepository = appDataSource.getRepository(TenderParticipant);
-const tenderEvaluationRepository = appDataSource.getRepository(TenderEvaluation);
-const tenderWatcherRepository = appDataSource.getRepository(TenderWatcher);
-const tenderInvitationRepository = appDataSource.getRepository(TenderInvitation);
-const tenderTemplateRepository = appDataSource.getRepository(TenderTemplate);
-const tenderQuestionRepository = appDataSource.getRepository(TenderQuestion);
-const tenderClarificationRepository = appDataSource.getRepository(TenderClarification);
-const tenderAmendmentRepository = appDataSource.getRepository(TenderAmendment);
-const downloadHistoryRepository = appDataSource.getRepository(DownloadHistory);
+const tenderRepository = AppDataSource.getRepository(Tender);
+const tenderVersionRepository = AppDataSource.getRepository(TenderVersion);
+const tenderDocumentRepository = AppDataSource.getRepository(TenderDocument);
+const tenderReviewRepository = AppDataSource.getRepository(TenderReview);
+const tenderReviewAssignmentRepository = AppDataSource.getRepository(TenderReviewAssignment);
+const tenderReviewCommentRepository = AppDataSource.getRepository(TenderReviewComment);
+const tenderCommitteeRepository = AppDataSource.getRepository(TenderCommittee);
+const tenderParticipantRepository = AppDataSource.getRepository(TenderParticipant);
+const tenderEvaluationRepository = AppDataSource.getRepository(TenderEvaluation);
+const tenderWatcherRepository = AppDataSource.getRepository(TenderWatcher);
+const tenderInvitationRepository = AppDataSource.getRepository(TenderInvitation);
+const tenderTemplateRepository = AppDataSource.getRepository(TenderTemplate);
+const tenderQuestionRepository = AppDataSource.getRepository(TenderQuestion);
+const tenderClarificationRepository = AppDataSource.getRepository(TenderClarification);
+const tenderAmendmentRepository = AppDataSource.getRepository(TenderAmendment);
+const downloadHistoryRepository = AppDataSource.getRepository(DownloadHistory);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function removeUndefined<T extends object>(obj: T): { [K in keyof T]: Exclude<T[K], undefined> } {
+  const result = { ...obj };
+  (Object.keys(result) as Array<keyof T>).forEach((key) => {
+    if (result[key] === undefined) {
+      delete result[key];
+    }
+  });
+  return result as { [K in keyof T]: Exclude<T[K], undefined> };
+}
 
 function getVal<T>(val: T | null | undefined, fallback: T): T {
   if (val === null || val === undefined) {
@@ -111,7 +121,7 @@ function applyTenderFilters(qb: SelectQueryBuilder<Tender>, params: TenderSearch
   }
 }
 
-function mapTenderSummary(t: Tender): any {
+function mapTenderSummary(t: Tender) {
   const active = t.activeVersion;
   if (!active) {
     return {
@@ -148,7 +158,7 @@ function mapTenderSummary(t: Tender): any {
   };
 }
 
-function mapTenderDetails(tender: Tender, hasAccess: boolean): any {
+function mapTenderDetails(tender: Tender, hasAccess: boolean) {
   const active = tender.activeVersion;
   if (!active) {
     return {
@@ -260,9 +270,7 @@ function mapTenderDetails(tender: Tender, hasAccess: boolean): any {
 
 // ─── Public: List Tenders ─────────────────────────────────────────────────────
 
-export async function listTenders(
-  params: TenderSearchQueryDto,
-): Promise<{ tenders: any[]; total: number; page: number; limit: number }> {
+export async function listTenders(params: TenderSearchQueryDto) {
   const page = getVal(params.page, 1);
   const limit = getVal(params.limit, 20);
 
@@ -297,10 +305,7 @@ export async function listTenders(
 
 // ─── Public: Get Tender by Slug ───────────────────────────────────────────────
 
-export async function getTenderBySlug(
-  slug: string,
-  userId?: string,
-): Promise<{ tender: any; hasAccess: boolean }> {
+export async function getTenderBySlug(slug: string, userId?: string) {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
 
   const qb = tenderRepository
@@ -321,7 +326,11 @@ export async function getTenderBySlug(
   const tender = await qb.getOne();
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.TENDER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   let hasAccess = false;
@@ -347,7 +356,11 @@ export async function getDownloadUrl(
   });
 
   if (!doc) {
-    throw new AppError('Document not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.DOCUMENT_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const { tenderId } = doc.tenderVersion;
@@ -355,9 +368,9 @@ export async function getDownloadUrl(
   const allowed = await hasAccessToTender(userId, tenderId);
   if (!allowed && !doc.isPublic) {
     throw new AppError(
-      'Access denied: Active subscription or purchase required',
-      403,
-      'ACCESS_DENIED',
+      AppErrorMessage.ACCESS_DENIED_SUBSCRIPTION,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCESS_DENIED,
     );
   }
 
@@ -388,7 +401,7 @@ export async function getDownloadUrl(
 
 export async function createTender(dto: CreateTenderDto, createdById: string): Promise<Tender> {
   // Generate sequence reference number
-  const [{ nextval }] = await appDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
+  const [{ nextval }] = await AppDataSource.query("SELECT nextval('tender_ref_seq') as nextval");
   const referenceNo = `TDR-${new Date().getFullYear()}-${String(nextval).padStart(6, '0')}`;
 
   const tender = tenderRepository.create({
@@ -400,13 +413,34 @@ export async function createTender(dto: CreateTenderDto, createdById: string): P
 
   const savedTender = await tenderRepository.save(tender);
 
-  const version = tenderVersionRepository.create({
-    ...dto,
+  const { templateId, ...versionFields } = dto;
+
+  const versionData = {
+    ...versionFields,
     tenderId: savedTender.id,
     version: 1,
     status: TenderVersionStatus.DRAFT,
     createdById,
-  } as any) as unknown as TenderVersion;
+    siteVisitDate: dto.siteVisitDate
+      ? new Date(dto.siteVisitDate)
+      : dto.siteVisitDate === null
+        ? null
+        : undefined,
+    openingDate: dto.openingDate
+      ? new Date(dto.openingDate)
+      : dto.openingDate === null
+        ? null
+        : undefined,
+    closingDate: dto.closingDate
+      ? new Date(dto.closingDate)
+      : dto.closingDate === null
+        ? null
+        : undefined,
+  };
+
+  const version = tenderVersionRepository.create(
+    removeUndefined(versionData) as DeepPartial<TenderVersion>,
+  );
 
   const savedVersion = await tenderVersionRepository.save(version);
 
@@ -418,6 +452,7 @@ export async function createTender(dto: CreateTenderDto, createdById: string): P
 
 // ─── Admin: Update Tender ─────────────────────────────────────────────────────
 
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function updateTender(
   id: string,
   dto: UpdateTenderDto,
@@ -429,35 +464,71 @@ export async function updateTender(
   });
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.TENDER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const active = tender.activeVersion;
   if (!active) {
-    throw new AppError('No active version found', 404, 'NO_ACTIVE_VERSION');
+    throw new AppError(
+      AppErrorMessage.NO_ACTIVE_VERSION,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NO_ACTIVE_VERSION,
+    );
   }
 
   // Concurrency Check (Optimistic Locking)
   if (dto.dbVersion !== undefined && active.dbVersion !== dto.dbVersion) {
     throw new AppError(
-      'Conflict: Tender was modified by another user',
-      409,
-      'CONCURRENCY_CONFLICT',
+      AppErrorMessage.TENDER_CONFLICT_MODIFIED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.CONCURRENCY_CONFLICT,
     );
   }
 
   // If the active version is not in DRAFT mode, we must spawn a new version draft
   if (active.status !== TenderVersionStatus.DRAFT) {
     const nextVerNum = active.version + 1;
-    const newVersion = tenderVersionRepository.create({
-      ...active,
+    const {
+      id: _oldId,
+      createdAt: _oldCreatedAt,
+      tender: _tenderRelation,
+      category: _categoryRelation,
+      state: _stateRelation,
+      documents: _docsRelation,
+      reviews: _reviewsRelation,
+      ...activeFields
+    } = active;
+
+    const newVersionData = {
+      ...activeFields,
       ...dto,
-      id: undefined, // Let DB generate new UUID
       version: nextVerNum,
       status: TenderVersionStatus.DRAFT,
       createdById,
-      createdAt: new Date(),
-    } as any) as unknown as TenderVersion;
+      siteVisitDate: dto.siteVisitDate
+        ? new Date(dto.siteVisitDate)
+        : dto.siteVisitDate === null
+          ? null
+          : active.siteVisitDate,
+      openingDate: dto.openingDate
+        ? new Date(dto.openingDate)
+        : dto.openingDate === null
+          ? null
+          : active.openingDate,
+      closingDate: dto.closingDate
+        ? new Date(dto.closingDate)
+        : dto.closingDate === null
+          ? null
+          : active.closingDate,
+    };
+
+    const newVersion = tenderVersionRepository.create(
+      removeUndefined(newVersionData) as DeepPartial<TenderVersion>,
+    );
 
     const savedVersion = await tenderVersionRepository.save(newVersion);
 
@@ -498,7 +569,11 @@ export async function updateTenderStatus(
   });
 
   if (!tender) {
-    throw new AppError('Tender not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.TENDER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   if (dto.status && tender.activeVersion) {
@@ -524,7 +599,15 @@ export async function updateTenderStatus(
 
 // ─── Admin: Statistics aggregations ──────────────────────────────────────────
 
-export async function getTenderStatistics(): Promise<any> {
+export async function getTenderStatistics(): Promise<{
+  totalTenders: number;
+  draftCount: number;
+  reviewCount: number;
+  publishedCount: number;
+  sumBudget: number;
+  totalBudget: number;
+  totalParticipants: number;
+}> {
   const totalTenders = await tenderRepository.count();
   const draftCount = await tenderVersionRepository.count({
     where: { status: TenderVersionStatus.DRAFT },
@@ -550,6 +633,7 @@ export async function getTenderStatistics(): Promise<any> {
     publishedCount,
     totalBudget: parseInt(sumBudget?.sum ?? '0', 10),
     totalParticipants,
+    sumBudget,
   };
 }
 
@@ -566,7 +650,11 @@ export async function registerDocument(
   });
 
   if (!tender?.activeVersion) {
-    throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.TENDER_ACTIVE_VERSION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const doc = tenderDocumentRepository.create({
@@ -621,7 +709,11 @@ export async function answerQuestion(
 ): Promise<TenderQuestion> {
   const question = await tenderQuestionRepository.findOne({ where: { id: questionId } });
   if (!question) {
-    throw new AppError('Question not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.QUESTION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   question.answerText = dto.answerText;
@@ -661,7 +753,7 @@ export async function createAmendment(
     amendmentNumber: dto.amendmentNumber,
     changedFields: dto.changedFields,
     publishedById: createdById,
-  } as any) as unknown as TenderAmendment;
+  });
 
   return tenderAmendmentRepository.save(amend);
 }
@@ -688,7 +780,7 @@ export async function submitEvaluation(
   dto: SubmitEvaluationDto,
   evaluatedById: string,
 ): Promise<TenderEvaluation> {
-  const evaluationTemplateRepository = appDataSource.getRepository(EvaluationTemplate);
+  const evaluationTemplateRepository = AppDataSource.getRepository(EvaluationTemplate);
   let template = await evaluationTemplateRepository.findOne({ where: { name: dto.criteriaName } });
   if (!template) {
     template = evaluationTemplateRepository.create({
@@ -710,7 +802,7 @@ export async function submitEvaluation(
     passed: dto.passed,
     remarks: dto.remarks ?? null,
     evaluatedById,
-  } as any) as unknown as TenderEvaluation;
+  });
 
   return tenderEvaluationRepository.save(evalRow);
 }
@@ -727,7 +819,11 @@ export async function assignReviewers(
   });
 
   if (!tender?.activeVersion) {
-    throw new AppError('Tender active version not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.TENDER_ACTIVE_VERSION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   // Create review session
@@ -764,7 +860,11 @@ export async function submitReviewComment(
   });
 
   if (!review) {
-    throw new AppError('Review session not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.REVIEW_SESSION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const comment = tenderReviewCommentRepository.create({
@@ -793,7 +893,7 @@ export async function toggleWatcher(
   tenderId: string,
   userId: string,
   dto: TenderWatcherDto,
-): Promise<any> {
+): Promise<{ watching: boolean }> {
   const existing = await tenderWatcherRepository.findOne({ where: { tenderId, userId } });
 
   if (existing) {
@@ -810,7 +910,7 @@ export async function toggleWatcher(
     tenderId,
     userId,
     channels,
-  } as any) as unknown as TenderWatcher;
+  });
 
   await tenderWatcherRepository.save(watcher);
   return { watching: true };

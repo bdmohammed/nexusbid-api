@@ -9,11 +9,15 @@
 import { v4 as uuidv4 } from 'uuid';
 
 import { logger } from '../../config/logger';
-import { AppError } from '../../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
 
 function assertPdfExtension(fileName: string): void {
   if (!fileName.toLowerCase().endsWith('.pdf')) {
-    throw new AppError('Only PDF files are allowed', 400, 'INVALID_FILE_TYPE');
+    throw new AppError(
+      AppErrorMessage.ONLY_PDF_ALLOWED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_FILE_TYPE,
+    );
   }
 }
 

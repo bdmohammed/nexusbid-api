@@ -9,7 +9,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 
 import { env } from '../config/env';
-import { AppError } from '../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
 import { S3_URL_EXPIRY } from '../core/constants';
 
 // ─── Local env: swap in dummy implementation (no real AWS calls) ─────────────
@@ -31,7 +31,11 @@ const s3Client = new S3Client({
  */
 function assertPdfExtension(fileName: string): void {
   if (!fileName.toLowerCase().endsWith('.pdf')) {
-    throw new AppError('Only PDF files are allowed', 400, 'INVALID_FILE_TYPE');
+    throw new AppError(
+      AppErrorMessage.ONLY_PDF_ALLOWED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_FILE_TYPE,
+    );
   }
 }
 

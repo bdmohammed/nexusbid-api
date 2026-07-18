@@ -14,9 +14,9 @@ export default async function globalTeardown(): Promise<void> {
   dotenv.config({ path: path.resolve(process.cwd(), '.env.test'), override: true });
 
   try {
-    const { appDataSource } = await import('../src/config/database');
-    if (appDataSource.isInitialized) {
-      await appDataSource.destroy();
+    const { AppDataSource } = await import('../src/config/database');
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy();
       console.log('[globalTeardown] DataSource destroyed');
     }
   } catch {

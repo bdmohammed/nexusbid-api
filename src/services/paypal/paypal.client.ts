@@ -2,7 +2,7 @@ import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 
 const PAYPAL_BASE =
-  env.PAYPAL_ENV === 'production' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+  env.PAYPAL_ENV === 'prod' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
 
 interface TokenCache {
   accessToken: string;

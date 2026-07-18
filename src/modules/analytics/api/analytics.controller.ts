@@ -1,254 +1,119 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { AppError } from '../../../core/AppError';
-import {
-  AnalyticsQuerySchema,
-  CreateScheduledReportSchema,
-  RequestExportSchema,
-  SaveDashboardLayoutSchema,
-} from '../dto/analytics.dto';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../../core/AppError';
+import { asyncHandler } from '../../../core/asyncHandler';
 import * as analyticsService from '../services/analytics.service';
 
-import type { NextFunction, Request, Response } from 'express';
+import type {
+  AlertIdParamDto,
+  AnalyticsQueryDto,
+  CreateScheduledReportDto,
+  FilenameParamDto,
+  RequestExportDto,
+  SaveDashboardLayoutDto,
+} from '../dto/analytics.dto';
+import type { JwtPayload } from '@/types/express';
 
-// Helper to check user permission
-function ensurePermission(req: Request, permission: string): void {
-  const userPermissions = (req as any).user?.permissions ?? [];
-  if (!userPermissions.includes(permission)) {
-    throw new AppError('Unauthorized access to metrics', 403, 'FORBIDDEN');
-  }
-}
+export const getOverview = asyncHandler<{}, object, {}, AnalyticsQueryDto>(async (req, res) => {
+  const data = await analyticsService.getOverviewStats(req.query);
+  res.json({ success: true, data });
+});
 
-export async function getOverview(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const filters = AnalyticsQuerySchema.parse(req.query);
-    const data = await analyticsService.getOverviewStats(filters);
+export const getTenders = asyncHandler<{}, object, {}, AnalyticsQueryDto>(async (req, res) => {
+  const data = await analyticsService.getTenderAnalytics(req.query);
+  res.json({ success: true, data });
+});
+
+export const getUsersMetrics = asyncHandler<{}, object, {}, AnalyticsQueryDto>(async (req, res) => {
+  const data = await analyticsService.getUserAnalytics(req.query);
+  res.json({ success: true, data });
+});
+
+export const getRevenueMetrics = asyncHandler<{}, object, {}, AnalyticsQueryDto>(
+  async (req, res) => {
+    const data = await analyticsService.getRevenueAnalytics(req.query);
     res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+  },
+);
 
-export async function getTenders(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const filters = AnalyticsQuerySchema.parse(req.query);
-    const data = await analyticsService.getTenderAnalytics(filters);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+export const getCategoriesMetrics = asyncHandler(async (req, res) => {
+  const data = await analyticsService.getCategoryAnalytics();
+  res.json({ success: true, data });
+});
 
-export async function getUsersMetrics(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.users');
-    const filters = AnalyticsQuerySchema.parse(req.query);
-    const data = await analyticsService.getUserAnalytics(filters);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getRevenueMetrics(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.financial');
-    const filters = AnalyticsQuerySchema.parse(req.query);
-    const data = await analyticsService.getRevenueAnalytics(filters);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getCategoriesMetrics(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const data = await analyticsService.getCategoryAnalytics();
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getSystemMetrics(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.system');
-    const data = await analyticsService.getSystemPerformanceMetrics();
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+export const getSystemMetrics = asyncHandler(async (req, res) => {
+  const data = await analyticsService.getSystemPerformanceMetrics();
+  res.json({ success: true, data });
+});
 
 // ─── Dashboard Customization & Alerting ──────────────────────────────────────
 
-export async function getDashboard(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const userId = (req as any).user?.id;
-    if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');
+export const getDashboard = asyncHandler(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  const data = await analyticsService.getDashboardLayout(userId);
+  res.json({ success: true, data });
+});
 
-    const data = await analyticsService.getDashboardLayout(userId);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+export const saveDashboard = asyncHandler<{}, object, SaveDashboardLayoutDto>(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  const data = await analyticsService.saveDashboardLayout(userId, req.body);
+  res.json({ success: true, data });
+});
 
-export async function saveDashboard(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const userId = (req as any).user?.id;
-    if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');
+export const getAlertsList = asyncHandler(async (req, res) => {
+  const data = await analyticsService.listActiveAlerts();
+  res.json({ success: true, data });
+});
 
-    const dto = SaveDashboardLayoutSchema.parse(req.body);
-    const data = await analyticsService.saveDashboardLayout(userId, dto);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getAlertsList(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const data = await analyticsService.listActiveAlerts();
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function resolveAlertTrigger(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.view');
-    const userId = (req as any).user?.id;
-    if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');
-
-    const { alertId } = req.params;
-    const data = await analyticsService.resolveAlert(alertId, userId);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+export const resolveAlertTrigger = asyncHandler<AlertIdParamDto>(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  const { alertId } = req.params;
+  const data = await analyticsService.resolveAlert(alertId, userId);
+  res.json({ success: true, data });
+});
 
 // ─── Asynchronous Exports & Download ────────────────────────────────────────
 
-export async function requestDataExport(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.export');
-    const userId = (req as any).user?.id;
-    if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');
+export const requestDataExport = asyncHandler<{}, object, RequestExportDto>(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  const data = await analyticsService.createExportJob(userId, req.body.exportType);
+  res.json({ success: true, data, message: 'Export job queued successfully.' });
+});
 
-    const dto = RequestExportSchema.parse(req.body);
-    const data = await analyticsService.createExportJob(userId, dto.exportType);
-    res.json({ success: true, data, message: 'Export job queued successfully.' });
-  } catch (err) {
-    next(err);
+export const getExportJobs = asyncHandler(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  const data = await analyticsService.getExportJobsList(userId);
+  res.json({ success: true, data });
+});
+
+export const downloadExportFile = asyncHandler<FilenameParamDto>(async (req, res) => {
+  const { filename } = req.params;
+  const exportDir = path.join(__dirname, '..', '..', '..', '..', 'exports');
+  const filePath = path.join(exportDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    throw new AppError(
+      AppErrorMessage.FILE_NOT_FOUND_OR_EXPIRED,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
-}
 
-export async function getExportJobs(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.export');
-    const userId = (req as any).user?.id;
-    if (!userId) throw new AppError('User not logged in', 401, 'UNAUTHORIZED');
-
-    const data = await analyticsService.getExportJobsList(userId);
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function downloadExportFile(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const { filename } = req.params;
-    const exportDir = path.join(__dirname, '..', '..', '..', '..', 'exports');
-    const filePath = path.join(exportDir, filename);
-
-    if (!fs.existsSync(filePath)) {
-      throw new AppError('File not found or link has expired', 404, 'NOT_FOUND');
-    }
-
-    res.download(filePath);
-  } catch (err) {
-    next(err);
-  }
-}
+  res.download(filePath);
+});
 
 // ─── Scheduled Reports ───────────────────────────────────────────────────────
 
-export async function createReportSchedule(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.reports');
-    const dto = CreateScheduledReportSchema.parse(req.body);
-    const data = await analyticsService.createScheduledReport(dto);
+export const createReportSchedule = asyncHandler<{}, object, CreateScheduledReportDto>(
+  async (req, res) => {
+    const { userId } = req.user as JwtPayload;
+    const data = await analyticsService.createScheduledReport(userId, req.body);
     res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+  },
+);
 
-export async function listReportSchedules(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    ensurePermission(req, 'analytics.reports');
-    const data = await analyticsService.listScheduledReports();
-    res.json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-}
+export const listReportSchedules = asyncHandler(async (_req, res) => {
+  const data = await analyticsService.listScheduledReports();
+  res.json({ success: true, data });
+});

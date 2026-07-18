@@ -1,33 +1,59 @@
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
 import { asyncHandler } from '../../core/asyncHandler';
 import { sendCreated, sendOk } from '../../core/response';
 
 import * as service from './subscriptions.service';
 
+import type { JwtPayload } from '../../types/express';
 import type { CreateSubscriptionDto } from './subscriptions.dto';
-import type { Request, Response } from 'express';
 
-export const getPlans = asyncHandler(async (_req: Request, res: Response) => {
+export const getPlans = asyncHandler(async (_req, res) => {
   const plans = await service.listPlans();
   return sendOk(res, plans);
 });
 
-export const createSubscription = asyncHandler(async (req: Request, res: Response) => {
-  const dto = req.validated as CreateSubscriptionDto;
-  const result = await service.createSubscription(dto, {
-    userId: req.user!.userId,
-    name: 'User', // will be enriched from user record in service if needed
-    email: req.user!.email,
-  });
-  return sendCreated(res, result, 'Subscription initiated. Complete payment on PayPal.');
-});
+export const createSubscription = asyncHandler<{}, object, CreateSubscriptionDto>(
+  async (req, res) => {
+    const { userId, email } = req.user as JwtPayload;
+    if (!userId || !email) {
+      throw new AppError(
+        AppErrorMessage.USER_NOT_LOGGED_IN,
+        HttpStatusCode.UNAUTHORIZED,
+        AppErrorCode.UNAUTHORIZED,
+      );
+    }
+    const result = await service.createSubscription(req.body, {
+      userId,
+      name: 'User',
+      email,
+    });
+    return sendCreated(res, result, 'Subscription initiated. Complete payment on PayPal.');
+  },
+);
 
-export const getMySubscription = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.getMySubscription(req.user!.userId);
+export const getMySubscription = asyncHandler(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  if (!userId) {
+    throw new AppError(
+      AppErrorMessage.USER_NOT_LOGGED_IN,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.UNAUTHORIZED,
+    );
+  }
+  const result = await service.getMySubscription(userId);
   return sendOk(res, result);
 });
 
-export const cancelMySubscription = asyncHandler(async (req: Request, res: Response) => {
-  await service.cancelMySubscription(req.user!.userId);
+export const cancelMySubscription = asyncHandler(async (req, res) => {
+  const { userId } = req.user as JwtPayload;
+  if (!userId) {
+    throw new AppError(
+      AppErrorMessage.USER_NOT_LOGGED_IN,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.UNAUTHORIZED,
+    );
+  }
+  await service.cancelMySubscription(userId);
   return sendOk(
     res,
     null,

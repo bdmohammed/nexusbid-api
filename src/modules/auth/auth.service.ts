@@ -4,17 +4,18 @@ import * as bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { MoreThan } from 'typeorm';
 
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { env } from '../../config/env';
-import { AppError } from '../../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
 import { BCRYPT_ROUNDS, JWT_COOKIE_NAME } from '../../core/constants';
-import { EmailToken } from '../../entities/EmailToken';
-import { Role, RoleStatus } from '../../entities/Role';
-import { RoleVersion, RoleVersionStatus } from '../../entities/RoleVersion';
-import { User } from '../../entities/User';
-import { UserDevice } from '../../entities/UserDevice';
-import { UserRole } from '../../entities/UserRole';
-import { UserSession } from '../../entities/UserSession';
+import { Country } from '../../database/entities/Country';
+import { EmailToken } from '../../database/entities/EmailToken';
+import { Role } from '../../database/entities/Role';
+import { RoleVersion } from '../../database/entities/RoleVersion';
+import { User } from '../../database/entities/User';
+import { UserDevice } from '../../database/entities/UserDevice';
+import { UserRole } from '../../database/entities/UserRole';
+import { UserSession } from '../../database/entities/UserSession';
 import {
   sendAdminApprovalStatusEmail,
   sendAdminBootstrapNotification, // keep imports aligned if needed, but not needed
@@ -30,7 +31,7 @@ import {
   getValidTokenDetails,
   verifyAndConsumeToken,
 } from '../../services/token.service';
-import { AccountType, EmailTokenType, UserStatus } from '../../types/enums';
+import { AccountType, EmailTokenType, SecurityEvent, UserStatus } from '../../types/enums';
 
 import {
   checkPasswordHistory,
@@ -44,9 +45,11 @@ import { logSecurityEvent } from './securityLog.service';
 import type { JwtPayload } from '../../types/express.d';
 import type { LoginDto, RegisterDto } from './auth.dto';
 import type { Response } from 'express';
+import type { DeepPartial } from 'typeorm';
+import { RoleStatus, RoleVersionStatus } from '@/types/enums';
 
-const userRepository = appDataSource.getRepository(User);
-const userSessionRepository = appDataSource.getRepository(UserSession);
+const userRepository = AppDataSource.getRepository(User);
+const userSessionRepository = AppDataSource.getRepository(UserSession);
 
 export const REFRESH_COOKIE_NAME = 'nexusbid_refresh_token';
 
@@ -78,7 +81,11 @@ function sanitizeUser(
 async function generateAndSetTokens(
   res: Response,
   user: User,
-  connectionContext: { userAgent: string | null; ipAddress: string | null; rememberMe?: boolean },
+  connectionContext: {
+    userAgent: string | null;
+    ipAddress: string | null;
+    rememberMe?: boolean | undefined;
+  },
 ): Promise<void> {
   const isAdmin = user.accountType === AccountType.ADMIN;
 
@@ -124,7 +131,7 @@ async function generateAndSetTokens(
   // 4. Set Access Token Cookie
   res.cookie(JWT_COOKIE_NAME, accessToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
+    secure: ['prod', 'uat'].includes(env.NODE_ENV),
     sameSite: 'lax',
     maxAge: ACCESS_COOKIE_MAX_AGE,
   });
@@ -132,7 +139,7 @@ async function generateAndSetTokens(
   // 5. Set Refresh Token Cookie (scoped to /api/v1/auth)
   res.cookie(REFRESH_COOKIE_NAME, rawRefreshToken, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
+    secure: ['prod', 'uat'].includes(env.NODE_ENV),
     sameSite: 'lax',
     maxAge: refreshTtl,
     path: '/api/v1/auth',
@@ -150,7 +157,11 @@ export async function registerUser(
     select: ['id'],
   });
   if (exists) {
-    throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
+    throw new AppError(
+      AppErrorMessage.EMAIL_REGISTERED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.EMAIL_TAKEN,
+    );
   }
 
   // Verify that the password is not leaked/breached
@@ -158,17 +169,40 @@ export async function registerUser(
 
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
-  const user = userRepository.create({
+  let country: Country | undefined;
+  if (dto.country) {
+    const countryRepo = AppDataSource.getRepository(Country);
+    const countryObj = await countryRepo.findOne({
+      where: [{ id: dto.country }, { name: dto.country }, { code: dto.country }],
+    });
+    if (!countryObj) {
+      throw new AppError(
+        'Country not found',
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
+    }
+    country = countryObj;
+  }
+
+  const userInput: DeepPartial<User> = {
     name: dto.name,
     email: dto.email,
     passwordHash,
-    companyName: dto.companyName ?? null,
-    country: dto.country ?? null,
     accountType: AccountType.USER,
     status: UserStatus.PENDING_EMAIL_VERIFICATION,
     emailVerified: false,
     passwordChangedAt: new Date(),
-  });
+  };
+
+  if (dto.companyName) {
+    userInput.companyName = dto.companyName;
+  }
+  if (country) {
+    userInput.country = country;
+  }
+
+  const user = userRepository.create(userInput);
 
   await userRepository.save(user);
 
@@ -179,7 +213,7 @@ export async function registerUser(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'register.success',
+    event: SecurityEvent.REGISTER_SUCCESS,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
   });
@@ -215,7 +249,7 @@ export async function resendVerification(
   }
 
   // Delete any pending verification tokens for this user first
-  const emailTokenRepository = appDataSource.getRepository(EmailToken);
+  const emailTokenRepository = AppDataSource.getRepository(EmailToken);
   await emailTokenRepository.delete({ userId: user.id, type: EmailTokenType.EMAIL_VERIFICATION });
 
   // Create a new token and send the email
@@ -230,18 +264,22 @@ export async function resendVerification(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'resend_verification.success',
+    event: SecurityEvent.RESEND_VERIFICATION_SUCCESS,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
   });
 }
 
 export async function loginUser(
-  dto: LoginDto & { rememberMe?: boolean; captchaToken?: string },
+  dto: LoginDto,
   res: Response,
   connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<ReturnType<typeof sanitizeUser>> {
-  const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+  const GENERIC_ERROR = new AppError(
+    AppErrorMessage.INVALID_CREDENTIALS,
+    HttpStatusCode.UNAUTHORIZED,
+    AppErrorCode.INVALID_CREDENTIALS,
+  );
 
   const user = await userRepository.findOne({
     where: { email: dto.email },
@@ -249,7 +287,7 @@ export async function loginUser(
   if (!user) {
     await logSecurityEvent({
       email: dto.email,
-      event: 'login.failed',
+      event: SecurityEvent.LOGIN_FAILED,
       ipAddress: connectionContext.ipAddress,
       userAgent: connectionContext.userAgent,
       details: { reason: 'User not found' },
@@ -263,15 +301,15 @@ export async function loginUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.failed',
+      event: SecurityEvent.LOGIN_FAILED,
       ipAddress: connectionContext.ipAddress,
       userAgent: connectionContext.userAgent,
       details: { reason: 'Account locked out' },
     });
     throw new AppError(
-      `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`,
-      403,
-      'ACCOUNT_LOCKED',
+      AppErrorMessage.ACCOUNT_LOCKED_TEMPORARY(minutesLeft),
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCOUNT_LOCKED,
     );
   }
 
@@ -281,12 +319,16 @@ export async function loginUser(
       await logSecurityEvent({
         userId: user.id,
         email: user.email,
-        event: 'captcha.failed',
+        event: SecurityEvent.CAPTCHA_FAILED,
         ipAddress: connectionContext.ipAddress,
         userAgent: connectionContext.userAgent,
         details: { reason: 'CAPTCHA token missing' },
       });
-      throw new AppError('CAPTCHA verification required', 400, 'CAPTCHA_REQUIRED');
+      throw new AppError(
+        AppErrorMessage.CAPTCHA_VERIFICATION_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.CAPTCHA_REQUIRED,
+      );
     }
     try {
       await verifyCaptcha(dto.captchaToken);
@@ -294,7 +336,7 @@ export async function loginUser(
       await logSecurityEvent({
         userId: user.id,
         email: user.email,
-        event: 'captcha.failed',
+        event: SecurityEvent.CAPTCHA_FAILED,
         ipAddress: connectionContext.ipAddress,
         userAgent: connectionContext.userAgent,
         details: { reason: 'CAPTCHA verification failed' },
@@ -307,11 +349,11 @@ export async function loginUser(
   const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
   if (!passwordMatch) {
     const failedAttempts = user.failedLoginAttempts + 1;
-    const updates: any = { failedLoginAttempts: failedAttempts };
+    const updates = { failedLoginAttempts: failedAttempts };
     let reason = 'Incorrect password';
 
     if (failedAttempts >= 5) {
-      updates.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000); // 15-minute lockout
+      // updates.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000); // 15-minute lockout
       updates.failedLoginAttempts = 0; // reset counter
       reason = 'Account locked out (5 failed attempts)';
     }
@@ -320,7 +362,7 @@ export async function loginUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.failed',
+      event: SecurityEvent.LOGIN_FAILED,
       ipAddress: connectionContext.ipAddress,
       userAgent: connectionContext.userAgent,
       details: { reason, failedAttempts },
@@ -339,15 +381,15 @@ export async function loginUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.failed',
+      event: SecurityEvent.LOGIN_FAILED,
       ipAddress: connectionContext.ipAddress,
       userAgent: connectionContext.userAgent,
       details: { reason: 'Email not verified' },
     });
     throw new AppError(
-      'Please verify your email address before logging in',
-      403,
-      'EMAIL_NOT_VERIFIED',
+      AppErrorMessage.VERIFY_EMAIL_BEFORE_LOGIN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.EMAIL_NOT_VERIFIED,
     );
   }
 
@@ -355,19 +397,23 @@ export async function loginUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.failed',
+      event: SecurityEvent.LOGIN_FAILED,
       ipAddress: connectionContext.ipAddress,
       userAgent: connectionContext.userAgent,
       details: { reason: 'Account suspended' },
     });
-    throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
+    throw new AppError(
+      AppErrorMessage.ACCOUNT_SUSPENDED_CONTACT_SUPPORT,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCOUNT_BLOCKED,
+    );
   }
 
   // Successful login event log
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'login.success',
+    event: SecurityEvent.LOGIN_SUCCESS,
     ipAddress: connectionContext.ipAddress,
     userAgent: connectionContext.userAgent,
   });
@@ -399,7 +445,11 @@ export async function refreshSession(
   connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<void> {
   if (!reqToken) {
-    throw new AppError('Refresh token required', 401, 'REFRESH_TOKEN_REQUIRED');
+    throw new AppError(
+      AppErrorMessage.REFRESH_TOKEN_REQUIRED,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.REFRESH_TOKEN_REQUIRED,
+    );
   }
 
   const tokenHash = crypto.createHash('sha256').update(reqToken).digest('hex');
@@ -411,27 +461,40 @@ export async function refreshSession(
   });
 
   if (!session) {
-    throw new AppError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN');
+    throw new AppError(
+      AppErrorMessage.INVALID_REFRESH_TOKEN,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.INVALID_REFRESH_TOKEN,
+    );
   }
 
   // Replay Detection: if the session has already been revoked, revoke ALL active sessions of this user
   if (session.isRevoked) {
     await userSessionRepository.update({ userId: session.userId }, { isRevoked: true });
     throw new AppError(
-      'Potential refresh token reuse detected. All sessions revoked for safety.',
-      401,
-      'REPLAY_DETECTED',
+      AppErrorMessage.REFRESH_TOKEN_REUSE_DETECTED,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.REPLAY_DETECTED,
     );
   }
 
   // Expiration Check
   if (session.expiresAt < new Date()) {
-    throw new AppError('Refresh token expired', 401, 'REFRESH_TOKEN_EXPIRED');
+    throw new AppError(
+      AppErrorMessage.REFRESH_TOKEN_EXPIRED,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.REFRESH_TOKEN_EXPIRED,
+    );
   }
 
   const { user } = session;
-  if (!user ?? user.isBlocked) {
-    throw new AppError('User not found or suspended', 401, 'UNAUTHORIZED');
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!user || user.isBlocked) {
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND_OR_SUSPENDED,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.UNAUTHORIZED,
+    );
   }
 
   // RTR: Invalidate the used refresh token session
@@ -447,6 +510,7 @@ export async function refreshSession(
 /**
  * Logs out the user by revoking their current database session and clearing cookies.
  */
+
 export async function logoutUser(
   res: Response,
   rawRefreshToken: string | undefined,
@@ -463,20 +527,22 @@ export async function logoutUser(
     });
     if (session) {
       await userSessionRepository.update(session.id, { isRevoked: true });
+      // eslint-disable-next-line prefer-destructuring
       userId = session.userId;
-      email = session.user?.email ?? null;
+      // eslint-disable-next-line prefer-destructuring
+      email = session.user.email;
     }
   }
 
   res.clearCookie(JWT_COOKIE_NAME, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
+    secure: ['prod', 'uat'].includes(env.NODE_ENV),
     sameSite: 'lax',
   });
 
   res.clearCookie(REFRESH_COOKIE_NAME, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
+    secure: ['prod', 'uat'].includes(env.NODE_ENV),
     sameSite: 'lax',
     path: '/api/v1/auth',
   });
@@ -485,7 +551,7 @@ export async function logoutUser(
     await logSecurityEvent({
       userId,
       email,
-      event: 'logout',
+      event: SecurityEvent.LOGOUT,
       ipAddress: connectionContext?.ipAddress ?? null,
       userAgent: connectionContext?.userAgent ?? null,
     });
@@ -494,7 +560,12 @@ export async function logoutUser(
 
 export async function getProfile(userId: string): Promise<ReturnType<typeof sanitizeUser>> {
   const user = await userRepository.findOne({ where: { id: userId } });
-  if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
+  if (!user)
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   return sanitizeUser(user);
 }
 
@@ -540,7 +611,7 @@ export async function resetPassword(
     await logSecurityEvent({
       userId,
       email: user.email,
-      event: 'password.change',
+      event: SecurityEvent.PASSWORD_CHANGE,
       ipAddress: connectionContext?.ipAddress ?? null,
       userAgent: connectionContext?.userAgent ?? null,
       details: { method: 'forgot_password_reset' },
@@ -551,10 +622,7 @@ export async function resetPassword(
 /**
  * Returns all active (non-revoked, non-expired) sessions for the user.
  */
-export async function getUserSessions(
-  userId: string,
-  currentRawRefreshToken?: string,
-): Promise<any[]> {
+export async function getUserSessions(userId: string, currentRawRefreshToken?: string) {
   const sessions = await userSessionRepository.find({
     where: { userId, isRevoked: false, expiresAt: MoreThan(new Date()) },
     order: { createdAt: 'DESC' },
@@ -580,7 +648,11 @@ export async function getUserSessions(
 export async function revokeSessionById(userId: string, sessionId: string): Promise<void> {
   const session = await userSessionRepository.findOne({ where: { id: sessionId, userId } });
   if (!session) {
-    throw new AppError('Session not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.SESSION_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   await userSessionRepository.update(session.id, { isRevoked: true });
 }
@@ -613,13 +685,21 @@ export async function changeUserPassword(
 ): Promise<void> {
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   // 1. Verify current password
   const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
   if (!isMatch) {
-    throw new AppError('Incorrect current password', 400, 'INCORRECT_CURRENT_PASSWORD');
+    throw new AppError(
+      AppErrorMessage.INCORRECT_CURRENT_PASSWORD,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INCORRECT_CURRENT_PASSWORD,
+    );
   }
 
   // 2. Verify breach detection
@@ -652,7 +732,7 @@ export async function changeUserPassword(
   await logSecurityEvent({
     userId,
     email: user.email,
-    event: 'password.change',
+    event: SecurityEvent.PASSWORD_CHANGE,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
     details: { method: 'settings_password_change' },
@@ -670,13 +750,21 @@ export async function requestEmailChange(
 ): Promise<void> {
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   // Check if the new email is already taken
   const exists = await userRepository.findOne({ where: { email: newEmail }, select: ['id'] });
   if (exists) {
-    throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
+    throw new AppError(
+      AppErrorMessage.EMAIL_REGISTERED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.EMAIL_TAKEN,
+    );
   }
 
   // Set pending email
@@ -704,7 +792,7 @@ export async function requestEmailChange(
   await logSecurityEvent({
     userId,
     email: user.email,
-    event: 'email.change.request',
+    event: SecurityEvent.EMAIL_CHANGE_REQUEST,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
     details: { newEmail },
@@ -722,11 +810,19 @@ export async function verifyEmailChange(
 
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   if (!user.pendingEmail) {
-    throw new AppError('No email change request found', 400, 'NO_EMAIL_CHANGE_REQUEST');
+    throw new AppError(
+      AppErrorMessage.NO_EMAIL_CHANGE_REQUEST,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.NO_EMAIL_CHANGE_REQUEST,
+    );
   }
 
   // Final check to make sure pending email wasn't registered in the meantime
@@ -735,7 +831,11 @@ export async function verifyEmailChange(
     select: ['id'],
   });
   if (exists) {
-    throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
+    throw new AppError(
+      AppErrorMessage.EMAIL_REGISTERED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.EMAIL_TAKEN,
+    );
   }
 
   const newEmail = user.pendingEmail;
@@ -760,7 +860,7 @@ export async function verifyEmailChange(
   await logSecurityEvent({
     userId,
     email: newEmail,
-    event: 'email.change.verify',
+    event: SecurityEvent.EMAIL_CHANGE_SUCCESS,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
     details: { oldEmail, newEmail },
@@ -771,7 +871,7 @@ export async function verifyEmailChange(
  * Retrieves recognized devices for a specific user.
  */
 export async function getUserDevices(userId: string): Promise<UserDevice[]> {
-  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  const userDeviceRepository = AppDataSource.getRepository(UserDevice);
   return userDeviceRepository.find({
     where: { userId },
     order: { lastActiveAt: 'DESC' },
@@ -782,10 +882,14 @@ export async function getUserDevices(userId: string): Promise<UserDevice[]> {
  * Marks a specific device as trusted.
  */
 export async function trustDeviceById(userId: string, deviceId: string): Promise<void> {
-  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  const userDeviceRepository = AppDataSource.getRepository(UserDevice);
   const device = await userDeviceRepository.findOne({ where: { id: deviceId, userId } });
   if (!device) {
-    throw new AppError('Device not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.DEVICE_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   await userDeviceRepository.update(device.id, { isTrusted: true });
 }
@@ -794,10 +898,14 @@ export async function trustDeviceById(userId: string, deviceId: string): Promise
  * Revokes a specific device (deletes it, forcing it to trigger login verification again on next login).
  */
 export async function revokeDeviceById(userId: string, deviceId: string): Promise<void> {
-  const userDeviceRepository = appDataSource.getRepository(UserDevice);
+  const userDeviceRepository = AppDataSource.getRepository(UserDevice);
   const device = await userDeviceRepository.findOne({ where: { id: deviceId, userId } });
   if (!device) {
-    throw new AppError('Device not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.DEVICE_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   await userDeviceRepository.remove(device);
 }
@@ -834,7 +942,11 @@ export async function registerAdmin(
     select: ['id'],
   });
   if (exists) {
-    throw new AppError('Email already registered', 409, 'EMAIL_TAKEN');
+    throw new AppError(
+      AppErrorMessage.EMAIL_REGISTERED,
+      HttpStatusCode.CONFLICT,
+      AppErrorCode.EMAIL_TAKEN,
+    );
   }
 
   // Verify that the password is not leaked/breached
@@ -842,17 +954,40 @@ export async function registerAdmin(
 
   const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS.PASSWORD);
 
-  const user = userRepository.create({
+  let country: Country | undefined;
+  if (dto.country) {
+    const countryRepo = AppDataSource.getRepository(Country);
+    const countryObj = await countryRepo.findOne({
+      where: [{ id: dto.country }, { name: dto.country }, { code: dto.country }],
+    });
+    if (!countryObj) {
+      throw new AppError(
+        'Country not found',
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
+    }
+    country = countryObj;
+  }
+
+  const userInput: DeepPartial<User> = {
     name: dto.name,
     email: dto.email,
     passwordHash,
-    companyName: dto.companyName ?? null,
-    country: dto.country ?? null,
     accountType: AccountType.ADMIN,
     status: UserStatus.PENDING_APPROVAL,
     emailVerified: false,
     passwordChangedAt: new Date(),
-  });
+  };
+
+  if (dto.companyName) {
+    userInput.companyName = dto.companyName;
+  }
+  if (country) {
+    userInput.country = country;
+  }
+
+  const user = userRepository.create(userInput);
 
   await userRepository.save(user);
 
@@ -863,7 +998,7 @@ export async function registerAdmin(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'admin_register.success',
+    event: SecurityEvent.ADMIN_REGISTER_SUCCESS,
     ipAddress: connectionContext?.ipAddress ?? null,
     userAgent: connectionContext?.userAgent ?? null,
   });
@@ -883,17 +1018,21 @@ export async function verifyAdminEmail(
   const userId = await verifyAndConsumeToken(token, EmailTokenType.EMAIL_VERIFICATION);
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.USER_NOT_FOUND,
+    );
   }
 
   user.emailVerified = true;
   await userRepository.save(user);
 
-  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const userRoleRepository = AppDataSource.getRepository(UserRole);
   const superAdminCount = await userRoleRepository.count({
     where: {
       role: {
-        slug: 'super-admin',
+        key: 'super-admin',
       },
     },
     relations: ['role'],
@@ -906,14 +1045,14 @@ export async function verifyAdminEmail(
     const superAdmins = await userRoleRepository.find({
       where: {
         role: {
-          slug: 'super-admin',
+          key: 'super-admin',
         },
       },
       relations: ['user', 'role'],
     });
 
-    for (const sa of superAdmins) {
-      if (sa.user && sa.user.email) {
+    for await (const sa of superAdmins) {
+      if (sa.user.email) {
         await sendAdminRegistrationNotification({
           to: sa.user.email,
           adminName: user.name,
@@ -942,19 +1081,19 @@ export async function verifyBootstrapToken(
   token: string,
 ): Promise<{ name: string; email: string }> {
   // Check if a Super Admin already exists in the system
-  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const userRoleRepository = AppDataSource.getRepository(UserRole);
   const superAdminCount = await userRoleRepository.count({
     where: {
-      role: { slug: 'super-admin' },
+      role: { key: 'super-admin' },
     },
     relations: ['role'],
   });
 
   if (superAdminCount > 0) {
     throw new AppError(
-      'Bootstrap is disabled because a Super Admin already exists.',
-      400,
-      'BOOTSTRAP_DISABLED',
+      AppErrorMessage.BOOTSTRAP_DISABLED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.BOOTSTRAP_DISABLED,
     );
   }
 
@@ -971,19 +1110,19 @@ export async function approveBootstrapAdmin(
   action: 'approve' | 'reject' = 'approve',
 ): Promise<void> {
   // Check if a Super Admin already exists in the system
-  const userRoleRepository = appDataSource.getRepository(UserRole);
+  const userRoleRepository = AppDataSource.getRepository(UserRole);
   const superAdminCount = await userRoleRepository.count({
     where: {
-      role: { slug: 'super-admin' },
+      role: { key: 'super-admin' },
     },
     relations: ['role'],
   });
 
   if (superAdminCount > 0) {
     throw new AppError(
-      'Bootstrap is disabled because a Super Admin already exists.',
-      400,
-      'BOOTSTRAP_DISABLED',
+      AppErrorMessage.BOOTSTRAP_DISABLED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.BOOTSTRAP_DISABLED,
     );
   }
 
@@ -991,7 +1130,11 @@ export async function approveBootstrapAdmin(
   const userId = await verifyAndConsumeToken(token, EmailTokenType.SYSTEM_OWNER_APPROVAL);
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.USER_NOT_FOUND,
+    );
   }
 
   if (action === 'approve') {
@@ -1001,17 +1144,17 @@ export async function approveBootstrapAdmin(
     await userRepository.save(user);
 
     // Assign super-admin role
-    const roleRepository = appDataSource.getRepository(Role);
-    let superAdminRole = await roleRepository.findOne({ where: { slug: 'super-admin' } });
+    const roleRepository = AppDataSource.getRepository(Role);
+    let superAdminRole = await roleRepository.findOne({ where: { key: 'super-admin' } });
     if (!superAdminRole) {
       superAdminRole = roleRepository.create({
-        slug: 'super-admin',
+        key: 'super-admin',
         isSystemRole: true,
         status: RoleStatus.ACTIVE,
       });
       await roleRepository.save(superAdminRole);
 
-      const roleVersionRepository = appDataSource.getRepository(RoleVersion);
+      const roleVersionRepository = AppDataSource.getRepository(RoleVersion);
       const superAdminVersion = roleVersionRepository.create({
         roleId: superAdminRole.id,
         version: 1,
@@ -1059,7 +1202,11 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
   const userId = await verifyAndConsumeToken(token, EmailTokenType.SYSTEM_OWNER_APPROVAL);
   const user = await userRepository.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.USER_NOT_FOUND,
+    );
   }
 
   if (action === 'approve') {
@@ -1067,19 +1214,19 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
     user.emailVerified = true;
     await userRepository.save(user);
 
-    const roleRepository = appDataSource.getRepository(Role);
-    const userRoleRepository = appDataSource.getRepository(UserRole);
+    const roleRepository = AppDataSource.getRepository(Role);
+    const userRoleRepository = AppDataSource.getRepository(UserRole);
 
-    let superAdminRole = await roleRepository.findOne({ where: { slug: 'super-admin' } });
+    let superAdminRole = await roleRepository.findOne({ where: { key: 'super-admin' } });
     if (!superAdminRole) {
       superAdminRole = roleRepository.create({
-        slug: 'super-admin',
+        key: 'super-admin',
         isSystemRole: true,
         status: RoleStatus.ACTIVE,
       });
       await roleRepository.save(superAdminRole);
 
-      const roleVersionRepository = appDataSource.getRepository(RoleVersion);
+      const roleVersionRepository = AppDataSource.getRepository(RoleVersion);
       const superAdminVersion = roleVersionRepository.create({
         roleId: superAdminRole.id,
         version: 1,
@@ -1120,12 +1267,17 @@ export async function ownerReview(token: string, action: 'approve' | 'reject'): 
   }
 }
 
+// eslint-disable-next-line complexity
 export async function loginAdmin(
-  dto: LoginDto & { captchaToken?: string },
+  dto: LoginDto,
   res: Response,
   connectionContext: { userAgent: string | null; ipAddress: string | null },
 ): Promise<ReturnType<typeof sanitizeUser>> {
-  const GENERIC_ERROR = new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+  const GENERIC_ERROR = new AppError(
+    AppErrorMessage.INVALID_CREDENTIALS,
+    HttpStatusCode.UNAUTHORIZED,
+    AppErrorCode.INVALID_CREDENTIALS,
+  );
 
   const user = await userRepository.findOne({
     where: { email: dto.email },
@@ -1142,16 +1294,20 @@ export async function loginAdmin(
   if (user.lockoutUntil && user.lockoutUntil > new Date()) {
     const minutesLeft = Math.ceil((user.lockoutUntil.getTime() - Date.now()) / (60 * 1000));
     throw new AppError(
-      `Account temporarily locked due to too many failed attempts. Try again in ${minutesLeft} minute(s).`,
-      403,
-      'ACCOUNT_LOCKED',
+      AppErrorMessage.ACCOUNT_LOCKED_TEMPORARY(minutesLeft),
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCOUNT_LOCKED,
     );
   }
 
   // Enforce CAPTCHA check if failed login attempts >= 3
   if (user.failedLoginAttempts >= 3) {
     if (!dto.captchaToken) {
-      throw new AppError('CAPTCHA verification required', 400, 'CAPTCHA_REQUIRED');
+      throw new AppError(
+        AppErrorMessage.CAPTCHA_VERIFICATION_REQUIRED,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.CAPTCHA_REQUIRED,
+      );
     }
     await verifyCaptcha(dto.captchaToken);
   }
@@ -1160,9 +1316,9 @@ export async function loginAdmin(
   const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
   if (!passwordMatch) {
     const failedAttempts = user.failedLoginAttempts + 1;
-    const updates: any = { failedLoginAttempts: failedAttempts };
+    const updates = { failedLoginAttempts: failedAttempts };
     if (failedAttempts >= 5) {
-      updates.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
+      // updates.lockoutUntil = new Date(Date.now() + 15 * 60 * 1000);
       updates.failedLoginAttempts = 0;
     }
     await userRepository.update(user.id, updates);
@@ -1179,30 +1335,42 @@ export async function loginAdmin(
   // 4. Check Email Verification & Status
   if (!user.emailVerified) {
     throw new AppError(
-      'Please verify your email address before logging in',
-      403,
-      'EMAIL_NOT_VERIFIED',
+      AppErrorMessage.VERIFY_EMAIL_BEFORE_LOGIN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.EMAIL_NOT_VERIFIED,
     );
   }
 
   // Status check
   if (user.status === UserStatus.PENDING_EMAIL_VERIFICATION) {
-    throw new AppError('Please verify your email before logging in.', 403, 'EMAIL_NOT_VERIFIED');
+    throw new AppError(
+      AppErrorMessage.VERIFY_EMAIL_BEFORE_LOGIN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.EMAIL_NOT_VERIFIED,
+    );
   }
 
   if (user.status === UserStatus.PENDING_APPROVAL) {
-    throw new AppError('Your administrator account is awaiting approval.', 403, 'PENDING_APPROVAL');
+    throw new AppError(
+      AppErrorMessage.ADMIN_ACCOUNT_AWAITING_APPROVAL,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.PENDING_APPROVAL,
+    );
   }
 
   if (user.status === UserStatus.REJECTED) {
-    throw new AppError('Your administrator account request has been rejected.', 403, 'REJECTED');
+    throw new AppError(
+      AppErrorMessage.ADMIN_ACCOUNT_REJECTED,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.REJECTED,
+    );
   }
 
   if (user.status === UserStatus.SUSPENDED) {
     throw new AppError(
-      'Your account has been suspended. Contact the system administrator.',
-      403,
-      'ACCOUNT_BLOCKED',
+      AppErrorMessage.ACCOUNT_SUSPENDED_CONTACT_ADMIN,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCOUNT_BLOCKED,
     );
   }
 

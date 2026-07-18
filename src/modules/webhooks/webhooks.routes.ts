@@ -1,6 +1,9 @@
 import { Router } from 'express';
 
+import { validate } from '../../middleware/validate';
+
 import { handlePayPalWebhook } from './webhooks.controller';
+import { PayPalWebhookSchema } from './webhooks.dto';
 
 const router = Router();
 
@@ -11,7 +14,8 @@ const router = Router();
  *     summary: Handle PayPal Webhook (Public Callback)
  *     description: |
  *       Receives events from PayPal (e.g. subscription activation, cancellation, payment capture).
- *       **Security:** Bypasses CSRF checking. Relies on internal PayPal signature verification headers to authenticate requests.
+ *       **Security:** Bypasses CSRF checking. Relies on internal PayPal signature
+ *       verification headers to authenticate requests.
  *     operationId: handlePayPalWebhook
  *     tags: [Webhooks]
  *     security: []
@@ -51,6 +55,6 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/paypal', handlePayPalWebhook);
+router.post('/paypal', validate(PayPalWebhookSchema, 'body'), handlePayPalWebhook);
 
 export { router as webhooksRouter };

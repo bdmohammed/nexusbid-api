@@ -15,8 +15,8 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
-import { User } from '../../src/entities/User';
+import { AppDataSource } from '../../src/config/database';
+import { User } from '../../src/database/entities/User';
 import { JWT_COOKIE_NAME, EMAIL_TOKEN_TTL } from '../../src/core/constants';
 import { clearAuthTables } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
@@ -39,7 +39,7 @@ const mockSendPasswordResetEmail = sendPasswordResetEmail as jest.MockedFunction
 >;
 
 // â”€â”€ Repositories (direct DB access for test assertions) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const userRepo = () => appDataSource.getRepository(User);
+const userRepo = () => AppDataSource.getRepository(User);
 
 // â”€â”€ Valid registration payload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const VALID_REGISTER = {
@@ -388,7 +388,7 @@ describe('GET /api/v1/auth/me', () => {
     await loginAgent(user.email, password);
 
     // Simulate tokenVersion increment (e.g., after password reset)
-    await appDataSource.getRepository(User).update(user.id, {
+    await AppDataSource.getRepository(User).update(user.id, {
       tokenVersion: user.tokenVersion + 1,
     });
 
@@ -401,7 +401,7 @@ describe('GET /api/v1/auth/me', () => {
     await loginAgent(user.email, password);
 
     // Admin blocks the account after the JWT was issued
-    await appDataSource.getRepository(User).update(user.id, { isBlocked: true });
+    await AppDataSource.getRepository(User).update(user.id, { isBlocked: true });
 
     const res = await agent.get('/api/v1/auth/me').expect(403);
     expect(res.body.code).toBe('ACCOUNT_BLOCKED');

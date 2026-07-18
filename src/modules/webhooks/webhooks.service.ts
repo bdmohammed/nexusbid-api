@@ -1,8 +1,8 @@
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { logger } from '../../config/logger';
-import { Subscription } from '../../entities/Subscription';
-import { Transaction } from '../../entities/Transaction';
-import { WebhookEvent } from '../../entities/WebhookEvent';
+import { Subscription } from '../../database/entities/Subscription';
+import { Transaction } from '../../database/entities/Transaction';
+import { WebhookEvent } from '../../database/entities/WebhookEvent';
 import {
   SubscriptionStatus,
   TransactionStatus,
@@ -10,9 +10,11 @@ import {
   WebhookEventStatus,
 } from '../../types/enums';
 
-const webhookEventRepository = appDataSource.getRepository(WebhookEvent);
-const subscriptionRepository = appDataSource.getRepository(Subscription);
-const transactionRepository = appDataSource.getRepository(Transaction);
+import type { WebhookEventType, WebhookProvider } from '../../types/enums';
+
+const webhookEventRepository = AppDataSource.getRepository(WebhookEvent);
+const subscriptionRepository = AppDataSource.getRepository(Subscription);
+const transactionRepository = AppDataSource.getRepository(Transaction);
 
 interface PayPalWebhookBody {
   event_type: string;
@@ -125,10 +127,12 @@ async function handleSaleCompleted(resource: Record<string, unknown>): Promise<v
       currency: amount?.currency.toLowerCase() ?? 'usd',
       type: TransactionType.SUBSCRIPTION,
       referenceId: subscription.id,
-      paypalOrderId: saleId,
-      paypalCaptureId: saleId,
+      referenceType: 'subscription',
+      provider: 'paypal',
+      providerTransactionId: saleId,
+      providerReferenceId: saleId,
       status: TransactionStatus.SUCCESS,
-      paypalResponse: resource,
+      providerResponse: resource,
     }),
   );
 
@@ -160,15 +164,17 @@ async function handleCaptureCompleted(resource: Record<string, unknown>): Promis
   logger.info({ captureId, orderId }, 'One-time capture completed');
 
   // Update transaction status if it exists
-  await transactionRepository.update(
-    { paypalOrderId: orderId },
-    {
-      status: TransactionStatus.SUCCESS,
-      paypalCaptureId: captureId,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      paypalResponse: resource as any,
-    },
-  );
+  const transaction = await transactionRepository.findOne({
+    where: { providerTransactionId: orderId },
+  });
+  if (transaction) {
+    transaction.status = TransactionStatus.SUCCESS;
+    transaction.providerReferenceId = captureId;
+    transaction.providerResponse = resource;
+    await transactionRepository.save(transaction);
+  } else {
+    logger.warn({ orderId }, 'Transaction not found for capture completed');
+  }
 
   // Activate corresponding subscription if it exists
   const subscription = await subscriptionRepository.findOne({ where: { paypalOrderId: orderId } });
@@ -181,9 +187,9 @@ async function handleCaptureCompleted(resource: Record<string, unknown>): Promis
 // ─── Log raw event (always first) ────────────────────────────────────────────
 
 export async function logRawWebhookEvent(
-  provider: string,
+  provider: WebhookProvider,
   eventId: string,
-  eventType: string,
+  eventType: WebhookEventType,
   payload: Record<string, unknown>,
 ): Promise<void> {
   await webhookEventRepository.upsert(

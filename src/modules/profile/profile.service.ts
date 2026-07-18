@@ -1,21 +1,30 @@
-import { appDataSource } from '../../config/database';
-import { AppError } from '../../core/AppError';
-import { AuditLog } from '../../entities/AuditLog';
-import { SecurityLog } from '../../entities/SecurityLog';
-import { Subscription } from '../../entities/Subscription';
-import { SupportTicket } from '../../entities/SupportTicket';
-import { User } from '../../entities/User';
-import { UserDevice } from '../../entities/UserDevice';
-import { UserSession } from '../../entities/UserSession';
-import { AccountType, SubscriptionStatus, TicketStatus, UserStatus } from '../../types/enums';
+import { AppDataSource } from '../../config/database';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
+import { AuditLog } from '../../database/entities/AuditLog';
+import { Country } from '../../database/entities/Country';
+import { SecurityLog } from '../../database/entities/SecurityLog';
+import { Subscription } from '../../database/entities/Subscription';
+import { SupportTicket } from '../../database/entities/SupportTicket';
+import { SupportTicketMessage } from '../../database/entities/SupportTicketMessage';
+import { User } from '../../database/entities/User';
+import { UserDevice } from '../../database/entities/UserDevice';
+import { UserSession } from '../../database/entities/UserSession';
+import {
+  AccountType,
+  SecurityEvent,
+  SubscriptionStatus,
+  TicketCategory,
+  TicketPriority,
+  TicketStatus,
+  UserStatus,
+} from '../../types/enums';
 
-const userRepo = appDataSource.getRepository(User);
-const sessionRepo = appDataSource.getRepository(UserSession);
-const deviceRepo = appDataSource.getRepository(UserDevice);
-const auditRepo = appDataSource.getRepository(AuditLog);
-const securityRepo = appDataSource.getRepository(SecurityLog);
-const subscriptionRepo = appDataSource.getRepository(Subscription);
-const ticketRepo = appDataSource.getRepository(SupportTicket);
+const userRepo = AppDataSource.getRepository(User);
+const sessionRepo = AppDataSource.getRepository(UserSession);
+const deviceRepo = AppDataSource.getRepository(UserDevice);
+const auditRepo = AppDataSource.getRepository(AuditLog);
+const securityRepo = AppDataSource.getRepository(SecurityLog);
+const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
 function sanitizeUserProfile(user: User) {
   const { passwordHash, tokenVersion, failedLoginAttempts, lockoutUntil, ...safe } = user;
@@ -29,13 +38,22 @@ export async function getProfile(userId: string) {
   });
 
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const sanitized = sanitizeUserProfile(user);
-  const roles =
-    user.userRoles?.map((ur) => ur.role?.activeVersion?.name ?? ur.role?.slug).filter(Boolean) ??
-    [];
+  const roles = user.userRoles.map((ur) => ur.role.activeVersion?.name);
+  // user.userRoles
+  //   .map((ur) => {
+  //     if (!ur.role) return '';
+  //     if (ur.role.isSystemRole) return 'Super Admin';
+  //     return ur.role.activeVersion?.name ?? '';
+  //   })
+  //   .filter(Boolean) ?? [];
 
   return {
     ...sanitized,
@@ -46,11 +64,28 @@ export async function getProfile(userId: string) {
 export async function updateProfile(userId: string, data: { name?: string; country?: string }) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   if (data.name !== undefined) user.name = data.name;
-  if (data.country !== undefined) user.country = data.country;
+  if (data.country !== undefined) {
+    const countryRepo = AppDataSource.getRepository(Country);
+    const countryObj = await countryRepo.findOne({
+      where: [{ id: data.country }, { name: data.country }, { code: data.country }],
+    });
+    if (!countryObj) {
+      throw new AppError(
+        'Country not found',
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.VALIDATION_ERROR,
+      );
+    }
+    user.country = countryObj;
+  }
 
   await userRepo.save(user);
 
@@ -58,7 +93,7 @@ export async function updateProfile(userId: string, data: { name?: string; count
     securityRepo.create({
       userId,
       email: user.email,
-      event: 'profile.update',
+      event: SecurityEvent.PROFILE_UPDATED,
       details: { fields: Object.keys(data) },
     }),
   );
@@ -69,7 +104,11 @@ export async function updateProfile(userId: string, data: { name?: string; count
 export async function updateAvatar(userId: string, avatarUrl: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   user.avatarUrl = avatarUrl;
@@ -81,7 +120,11 @@ export async function updateAvatar(userId: string, avatarUrl: string) {
 export async function removeAvatar(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   user.avatarUrl = null;
@@ -124,7 +167,11 @@ export async function getSecurityHistory(userId: string, page: number = 1, limit
 export async function getTimeline(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const timeline = [];
@@ -154,21 +201,21 @@ export async function getTimeline(userId: string) {
   });
 
   for (const log of securityLogs) {
-    if (log.event === 'password.change') {
+    if (log.event === SecurityEvent.PASSWORD_CHANGED) {
       timeline.push({
         event: 'password_changed',
         title: 'Password Changed',
         timestamp: log.createdAt,
         description: 'Security credential updated',
       });
-    } else if (log.event === '2fa.enable') {
+    } else if (log.event === SecurityEvent.TWO_FACTOR_ENABLED) {
       timeline.push({
         event: '2fa_enabled',
         title: 'Two-Factor Auth Enabled',
         timestamp: log.createdAt,
         description: 'Multi-factor security activated',
       });
-    } else if (log.event === '2fa.disable') {
+    } else if (log.event === SecurityEvent.TWO_FACTOR_DISABLED) {
       timeline.push({
         event: '2fa_disabled',
         title: 'Two-Factor Auth Disabled',
@@ -188,7 +235,7 @@ export async function getTimeline(userId: string) {
   for (const sub of subs) {
     timeline.push({
       event: 'subscription_started',
-      title: `Plan Activated: ${sub.planVersion?.name ?? 'Subscription'}`,
+      title: `Plan Activated: ${sub.planVersion.name}`,
       timestamp: sub.createdAt,
       description: `Access levels configured (Status: ${sub.status})`,
     });
@@ -201,7 +248,11 @@ export async function getTimeline(userId: string) {
 
 export async function getSubscription(userId: string, accountType: AccountType) {
   if (accountType === AccountType.ADMIN) {
-    throw new AppError('Subscriptions only apply to customer accounts', 403, 'FORBIDDEN');
+    throw new AppError(
+      AppErrorMessage.SUBSCRIPTIONS_CUSTOMERS_ONLY,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.FORBIDDEN,
+    );
   }
 
   const activeSub = await subscriptionRepo.findOne({
@@ -219,7 +270,11 @@ export async function getPreferences(userId: string) {
     select: ['id', 'notificationPreferences'],
   });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
   return user.notificationPreferences;
 }
@@ -230,7 +285,11 @@ export async function updatePreferences(
 ) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   user.notificationPreferences = {
@@ -248,20 +307,36 @@ export async function requestProfileChange(
   value: string,
   reason: string,
 ) {
-  const ticket = ticketRepo.create({
-    userId,
-    subject: `Profile Change Request: ${field}`,
-    message: `Requested update for field [${field}] to: [${value}]\nReason: ${reason}`,
-    status: TicketStatus.OPEN,
-  });
+  return AppDataSource.transaction(async (manager) => {
+    const ticket = manager.create(SupportTicket, {
+      userId,
+      subject: `Profile Change Request: ${field}`,
+      status: TicketStatus.OPEN,
+      priority: TicketPriority.MEDIUM,
+      category: TicketCategory.TECHNICAL,
+    });
+    const savedTicket = await manager.save(ticket);
 
-  return ticketRepo.save(ticket);
+    const message = manager.create(SupportTicketMessage, {
+      ticketId: savedTicket.id,
+      senderId: userId,
+      message: `Requested update for field [${field}] to: [${value}]\nReason: ${reason}`,
+      isInternal: false,
+    });
+    await manager.save(message);
+
+    return savedTicket;
+  });
 }
 
 export async function deactivateAccount(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   user.status = UserStatus.DEACTIVATED;
@@ -275,7 +350,7 @@ export async function deactivateAccount(userId: string) {
     securityRepo.create({
       userId,
       email: user.email,
-      event: 'account.deactivate',
+      event: SecurityEvent.ACCOUNT_DEACTIVATED,
     }),
   );
 
@@ -285,11 +360,19 @@ export async function deactivateAccount(userId: string) {
 export async function reactivateAccount(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   if (user.status !== UserStatus.DEACTIVATED) {
-    throw new AppError('Account is not deactivated', 400, 'INVALID_STATUS');
+    throw new AppError(
+      AppErrorMessage.ACCOUNT_NOT_DEACTIVATED,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_STATUS,
+    );
   }
 
   user.status = UserStatus.ACTIVE;
@@ -299,7 +382,7 @@ export async function reactivateAccount(userId: string) {
     securityRepo.create({
       userId,
       email: user.email,
-      event: 'account.reactivate',
+      event: SecurityEvent.ACCOUNT_REACTIVATED,
     }),
   );
 
@@ -309,24 +392,38 @@ export async function reactivateAccount(userId: string) {
 export async function requestDeleteAccount(userId: string) {
   const user = await userRepo.findOne({ where: { id: userId } });
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   // Create a support ticket for deletion
-  const ticket = ticketRepo.create({
-    userId,
-    subject: 'Account Deletion Request',
-    message: `User ${user.name} (${user.email}) requested account deletion.`,
-    status: TicketStatus.OPEN,
-  });
+  await AppDataSource.transaction(async (manager) => {
+    const ticket = manager.create(SupportTicket, {
+      userId,
+      subject: 'Account Deletion Request',
+      status: TicketStatus.OPEN,
+      priority: TicketPriority.HIGH,
+      category: TicketCategory.ACCOUNT,
+    });
+    const savedTicket = await manager.save(ticket);
 
-  await ticketRepo.save(ticket);
+    const message = manager.create(SupportTicketMessage, {
+      ticketId: savedTicket.id,
+      senderId: userId,
+      message: `User ${user.name} (${user.email}) requested account deletion.`,
+      isInternal: false,
+    });
+    await manager.save(message);
+  });
 
   await securityRepo.save(
     securityRepo.create({
       userId,
       email: user.email,
-      event: 'account.delete_request',
+      event: SecurityEvent.ACCOUNT_DELETE_REQUESTED,
     }),
   );
 
@@ -340,7 +437,11 @@ export async function exportProfileData(userId: string) {
   });
 
   if (!user) {
-    throw new AppError('User not found', 404, 'NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.USER_NOT_FOUND,
+      HttpStatusCode.NOT_FOUND,
+      AppErrorCode.NOT_FOUND,
+    );
   }
 
   const sessions = await sessionRepo.find({ where: { userId } });
@@ -355,9 +456,15 @@ export async function exportProfileData(userId: string) {
   return {
     exportedAt: new Date(),
     profile: sanitizeUserProfile(user),
-    roles:
-      user.userRoles?.map((ur) => ur.role?.activeVersion?.name ?? ur.role?.slug).filter(Boolean) ??
-      [],
+    roles: user.userRoles.map((ur) => ur.role.activeVersion?.name),
+    // roles:
+    //   user.userRoles
+    //     .map((ur) => {
+    //       if (ur.role) return '';
+    //       if (ur.role.isSystemRole) return 'Super Admin';
+    //       return ur.role.activeVersion?.name ?? '';
+    //     })
+    //     .filter(Boolean) ?? [],
     sessions: sessions.map((s) => ({
       userAgent: s.userAgent,
       ipAddress: s.ipAddress,
@@ -380,7 +487,7 @@ export async function exportProfileData(userId: string) {
       createdAt: sl.createdAt,
     })),
     subscriptions: subscription.map((sub) => ({
-      plan: sub.planVersion?.name ?? 'Subscription',
+      plan: sub.planVersion.name,
       status: sub.status,
       endDate: sub.endDate,
       createdAt: sub.createdAt,

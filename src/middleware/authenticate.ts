@@ -1,20 +1,20 @@
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 
-import { appDataSource } from '../config/database';
+import { AppDataSource } from '../config/database';
 import { env } from '../config/env';
 import { setUserId } from '../config/requestContext';
-import { AppError } from '../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
 import { JWT_COOKIE_NAME } from '../core/constants';
-import { User } from '../entities/User';
+import { User } from '../database/entities/User';
 
 import type { JwtPayload } from '../types/express';
 import type { NextFunction, Request, Response } from 'express';
 
-const userRepository = appDataSource.getRepository(User);
+const userRepository = AppDataSource.getRepository(User);
 
-function getRequestId(req: Request & { id?: string }): string {
-  return req.id || (req.headers['x-request-id'] as string) || uuidv4();
+function getRequestId(req: Request): string {
+  return (req.id ?? (req.headers['x-request-id'] as string)) || uuidv4();
 }
 
 function verifyToken(token: string): JwtPayload {
@@ -22,23 +22,43 @@ function verifyToken(token: string): JwtPayload {
     return jwt.verify(token, env.JWT_SECRET) as unknown as JwtPayload;
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'TokenExpiredError') {
-      throw new AppError('Access token expired', 401, 'TOKEN_EXPIRED');
+      throw new AppError(
+        AppErrorMessage.ACCESS_TOKEN_EXPIRED,
+        HttpStatusCode.UNAUTHORIZED,
+        AppErrorCode.TOKEN_EXPIRED,
+      );
     }
-    throw new AppError('Session expired or invalid', 401, 'INVALID_TOKEN');
+    throw new AppError(
+      AppErrorMessage.SESSION_EXPIRED_OR_INVALID,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.INVALID_TOKEN,
+    );
   }
 }
 
-function validateUserAccount(user: User | null, decodedTokenVersion: number): void {
+function validateUserAccount(user: User | null, decodedTokenVersion: number): asserts user is User {
   if (!user) {
-    throw new AppError('Account not found', 401, 'ACCOUNT_NOT_FOUND');
+    throw new AppError(
+      AppErrorMessage.ACCOUNT_NOT_FOUND,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.ACCOUNT_NOT_FOUND,
+    );
   }
 
   if (user.isBlocked) {
-    throw new AppError('Account suspended', 403, 'ACCOUNT_BLOCKED');
+    throw new AppError(
+      AppErrorMessage.ACCOUNT_SUSPENDED,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.ACCOUNT_BLOCKED,
+    );
   }
 
   if (user.tokenVersion !== decodedTokenVersion) {
-    throw new AppError('Session has been revoked', 401, 'SESSION_REVOKED');
+    throw new AppError(
+      AppErrorMessage.SESSION_HAS_BEEN_REVOKED,
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.SESSION_REVOKED,
+    );
   }
 }
 
@@ -49,9 +69,9 @@ function validatePasswordStatus(
   const bypassForcedReset = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
   if (user.mustResetPassword && !bypassForcedReset.some((route) => path.startsWith(route))) {
     throw new AppError(
-      'You must reset your password before continuing.',
-      403,
-      'FORCED_PASSWORD_RESET',
+      AppErrorMessage.PASSWORD_RESET_REQUIRED,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.FORCED_PASSWORD_RESET,
     );
   }
 
@@ -59,7 +79,11 @@ function validatePasswordStatus(
   const daysSinceChange = (Date.now() - lastChanged.getTime()) / (24 * 60 * 60 * 1000);
   const bypassExpiration = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
   if (daysSinceChange > 90 && !bypassExpiration.some((route) => path.startsWith(route))) {
-    throw new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED');
+    throw new AppError(
+      AppErrorMessage.PASSWORD_EXPIRED,
+      HttpStatusCode.FORBIDDEN,
+      AppErrorCode.PASSWORD_EXPIRED,
+    );
   }
 }
 
@@ -74,7 +98,7 @@ function validatePasswordStatus(
  * - When an admin revokes all sessions
  */
 export const authenticate = async (
-  req: Request & { id?: string },
+  req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> => {
@@ -82,7 +106,13 @@ export const authenticate = async (
   const token = req.cookies[JWT_COOKIE_NAME] as string | undefined;
 
   if (!token) {
-    return next(new AppError('Authentication required', 401, 'UNAUTHENTICATED'));
+    return next(
+      new AppError(
+        AppErrorMessage.AUTHENTICATION_REQUIRED,
+        HttpStatusCode.UNAUTHORIZED,
+        AppErrorCode.UNAUTHENTICATED,
+      ),
+    );
   }
 
   let decodedTokenPayload: JwtPayload;
@@ -109,7 +139,7 @@ export const authenticate = async (
     validateUserAccount(user, decodedTokenPayload.tokenVersion);
 
     const path = req.originalUrl.split('?')[0] ?? '';
-    validatePasswordStatus(user!, path);
+    validatePasswordStatus(user, path);
   } catch (err: unknown) {
     return next(err);
   }
@@ -133,7 +163,7 @@ export const authenticate = async (
  * Used on public routes that show extra data to logged-in users (e.g., tender list).
  */
 export const optionalAuthenticate = async (
-  req: Request & { id?: string },
+  req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> => {

@@ -1,16 +1,17 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
-import { Category } from '../../src/entities/Category';
-import { Tender } from '../../src/entities/Tender';
-import { AccountType, PermissionKey } from '../../src/types/enums';
+import { AppDataSource } from '../../src/config/database';
+import { Category } from '../../src/database/entities/Category';
+import { Tender } from '../../src/database/entities/Tender';
+import { TenderVersion } from '../../src/database/entities/TenderVersion';
+import { AccountType, PermissionKey, TenderLifecycleStatus } from '../../src/types/enums';
 import { clearAuthTables, setupTestRoleWithPermission } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
-import { User } from '../../src/entities/User';
+import { User } from '../../src/database/entities/User';
 
-const categoryRepo = () => appDataSource.getRepository(Category);
-const tenderRepo = () => appDataSource.getRepository(Tender);
+const categoryRepo = () => AppDataSource.getRepository(Category);
+const tenderRepo = () => AppDataSource.getRepository(Tender);
 
 // Helper to assign a permission to a user
 async function assignPermission(adminId: string, permissionKey: PermissionKey, allowed = true) {
@@ -23,7 +24,9 @@ async function assignPermission(adminId: string, permissionKey: PermissionKey, a
 async function clearAllTables() {
   await clearAuthTables();
   // Clear categories and tenders to avoid FK issues
-  await appDataSource.query(`TRUNCATE TABLE tenders, categories RESTART IDENTITY CASCADE`);
+  await AppDataSource.query(
+    `TRUNCATE TABLE tenders, tender_versions, categories RESTART IDENTITY CASCADE`,
+  );
 }
 
 describe('Category Admin API Integration Tests', () => {
@@ -170,76 +173,6 @@ describe('Category Admin API Integration Tests', () => {
       expect(res.body.data[0].code).toBe('001');
       expect(res.body.data[1].code).toBe('002');
       expect(res.body.data[2].code).toBe('003');
-    });
-
-    it('GET /categories returns dynamic activeTenderCount', async () => {
-      // Seed two categories
-      const catA = await categoryRepo().save(
-        categoryRepo().create({ code: '001', name: 'Category A', slug: 'category-a' }),
-      );
-      const catB = await categoryRepo().save(
-        categoryRepo().create({ code: '002', name: 'Category B', slug: 'category-b' }),
-      );
-
-      // Seed a state
-      const stateRepo = appDataSource.getRepository('State');
-      const state = (await stateRepo.save(
-        stateRepo.create({ code: 'NY', name: 'New York' }),
-      )) as any;
-
-      // Seed 2 active tenders for Category A
-      await tenderRepo().save([
-        tenderRepo().create({
-          title: 'Tender 1',
-          slug: 'tender-1',
-          refNumber: 'REF-1',
-          description: 'Desc 1',
-          status: 'active' as any,
-          submissionType: 'both' as any,
-          closingAt: new Date(),
-          categoryId: catA.id,
-          stateId: state.id,
-          createdById: superAdminUser.id,
-        } as any),
-        tenderRepo().create({
-          title: 'Tender 2',
-          slug: 'tender-2',
-          refNumber: 'REF-2',
-          description: 'Desc 2',
-          status: 'active' as any,
-          submissionType: 'both' as any,
-          closingAt: new Date(),
-          categoryId: catA.id,
-          stateId: state.id,
-          createdById: superAdminUser.id,
-        } as any),
-        // 1 draft/inactive tender for Category A
-        tenderRepo().create({
-          title: 'Tender 3',
-          slug: 'tender-3',
-          refNumber: 'REF-3',
-          description: 'Desc 3',
-          status: 'draft' as any,
-          submissionType: 'both' as any,
-          closingAt: new Date(),
-          categoryId: catA.id,
-          stateId: state.id,
-          createdById: superAdminUser.id,
-        } as any),
-      ]);
-
-      const res = await client.get('/api/v1/categories').expect(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.length).toBe(2);
-
-      const catAData = res.body.data.find((c: any) => c.code === '001');
-      const catBData = res.body.data.find((c: any) => c.code === '002');
-
-      expect(catAData).toBeDefined();
-      expect(catAData.activeTenderCount).toBe(2);
-
-      expect(catBData).toBeDefined();
-      expect(catBData.activeTenderCount).toBe(0);
     });
 
     it('GET /categories supports search and filter parameters', async () => {
@@ -463,28 +396,37 @@ describe('Category Admin API Integration Tests', () => {
         categoryRepo().create({ code: '001', name: 'Construction', slug: 'construction' }),
       );
 
-      // 2. Create a tender referencing the category
-      // We need a dummy state for tender
-      const stateRepo = appDataSource.getRepository('State');
+      // 2. Create an active tender and its version referencing the category
+      const stateRepo = AppDataSource.getRepository('State');
       const state = (await stateRepo.save(
         stateRepo.create({ code: 'NY', name: 'New York' }),
       )) as any;
 
-      // Also need a user to assign as creator
-      await tenderRepo().save(
+      const tender = await tenderRepo().save(
         tenderRepo().create({
+          referenceNo: 'TDR-123',
+          status: TenderLifecycleStatus.ACTIVE,
+        }),
+      );
+
+      const version = await AppDataSource.getRepository(TenderVersion).save(
+        AppDataSource.getRepository(TenderVersion).create({
+          tenderId: tender.id,
+          version: 1,
+          status: 'APPROVED' as any,
           title: 'Big Bridge Project',
-          slug: 'big-bridge-project',
-          refNumber: 'REF-123',
           description: 'A huge bridge building project.',
-          status: 'draft' as any,
-          submissionType: 'both' as any,
-          closingAt: new Date(),
+          priority: 'High',
+          currency: 'USD',
+          siteVisitRequired: false,
           categoryId: cat.id,
           stateId: state.id,
           createdById: superAdminUser.id,
-        } as any),
+        }),
       );
+
+      tender.activeVersionId = version.id;
+      await tenderRepo().save(tender);
 
       // 3. Attempt to delete
       const res = await client

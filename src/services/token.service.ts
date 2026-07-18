@@ -2,15 +2,15 @@ import crypto from 'node:crypto';
 
 import { IsNull, MoreThan } from 'typeorm';
 
-import { appDataSource } from '../config/database';
-import { AppError } from '../core/AppError';
+import { AppDataSource } from '../config/database';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
 import { EMAIL_TOKEN_TTL } from '../core/constants';
-import { EmailToken } from '../entities/EmailToken';
+import { EmailToken } from '../database/entities/EmailToken';
 import { EmailTokenType } from '../types/enums';
 
-import type { User } from '../entities/User';
+import type { User } from '../database/entities/User';
 
-const emailTokenRepository = appDataSource.getRepository(EmailToken);
+const emailTokenRepository = AppDataSource.getRepository(EmailToken);
 
 /**
  * Creates a new email token for the given user and type.
@@ -63,7 +63,11 @@ export async function verifyAndConsumeToken(
   });
 
   if (!matched) {
-    throw new AppError('Invalid or expired token', 400, 'INVALID_TOKEN');
+    throw new AppError(
+      AppErrorMessage.INVALID_OR_EXPIRED_TOKEN,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_TOKEN,
+    );
   }
 
   // Mark as used
@@ -104,7 +108,11 @@ export async function getValidTokenDetails(
   });
 
   if (!matched?.user) {
-    throw new AppError('Invalid or expired token', 400, 'INVALID_TOKEN');
+    throw new AppError(
+      AppErrorMessage.INVALID_OR_EXPIRED_TOKEN,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_TOKEN,
+    );
   }
 
   return matched;

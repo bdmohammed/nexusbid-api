@@ -6,23 +6,19 @@ import { asyncHandler } from '../../core/asyncHandler';
 import * as authService from './auth.service';
 import * as oauthService from './oauth.service';
 
-import type { Request, Response } from 'express';
+import type { OAuthCallbackQueryDto, OAuthProviderDto } from './auth.dto';
 
 /**
  * GET /api/v1/auth/oauth/:provider
  * Redirects the client to the chosen OAuth provider's authorization portal.
  */
-export const redirectToProvider = asyncHandler(async (req: Request, res: Response) => {
+export const redirectToProvider = asyncHandler<OAuthProviderDto, void>(async (req, res) => {
   const { provider } = req.params;
-  if (!provider ?? !['google', 'github', 'microsoft'].includes(provider)) {
-    res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=invalid_provider`);
-    return;
-  }
 
   const state = crypto.randomBytes(16).toString('hex');
   res.cookie('oauth_state', state, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'prod' ?? env.NODE_ENV === 'uat',
+    secure: ['prod', 'uat'].includes(env.NODE_ENV),
     sameSite: 'lax',
     maxAge: 15 * 60 * 1000,
   });
@@ -36,54 +32,46 @@ export const redirectToProvider = asyncHandler(async (req: Request, res: Respons
  * Handles OAuth authentication callback, exchanges code for user profile,
  * establishes a session, and redirects to frontend.
  */
-export const handleCallback = asyncHandler(async (req: Request, res: Response) => {
-  const { provider } = req.params;
-  const { code, state } = req.query;
+export const handleCallback = asyncHandler<OAuthProviderDto, void, {}, OAuthCallbackQueryDto>(
+  async (req, res) => {
+    const { provider } = req.params;
+    const { code, state } = req.query;
 
-  if (!provider ?? !['google', 'github', 'microsoft'].includes(provider)) {
-    res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=invalid_provider`);
-    return;
-  }
+    // 1. Verify CSRF State Cookie
+    const savedState = req.cookies['oauth_state'] as string | undefined;
+    res.clearCookie('oauth_state');
 
-  // 1. Verify CSRF State Cookie
-  const savedState = req.cookies['oauth_state'];
-  res.clearCookie('oauth_state');
+    // Skip strict state check in test/local env for easier automated verification
+    if (
+      env.NODE_ENV !== 'test' &&
+      env.NODE_ENV !== 'local' &&
+      (!state || !savedState || state !== savedState)
+    ) {
+      res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=mismatched_state`);
+      return;
+    }
 
-  // Skip strict state check in test/local env for easier automated verification
-  if (
-    env.NODE_ENV !== 'test' &&
-    env.NODE_ENV !== 'local' &&
-    (!state ?? !savedState ?? state !== savedState)
-  ) {
-    res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=mismatched_state`);
-    return;
-  }
+    try {
+      // 2. Exchange authorization code for provider user profile
+      const profile = await oauthService.verifyCallbackAndGetUser(provider, code);
 
-  if (!code ?? typeof code !== 'string') {
-    res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=missing_code`);
-    return;
-  }
+      // 3. Register or link user and return database record
+      const user = await oauthService.authenticateOAuthUser(provider, profile, {
+        userAgent: req.headers['user-agent'] ?? null,
+        ipAddress: req.ip ?? null,
+      });
 
-  try {
-    // 2. Exchange authorization code for provider user profile
-    const profile = await oauthService.verifyCallbackAndGetUser(provider, code);
+      // 4. Track device and set JWT cookies
+      await authService.establishOAuthSession(res, user, {
+        userAgent: req.headers['user-agent'] ?? null,
+        ipAddress: req.ip ?? null,
+      });
 
-    // 3. Register or link user and return database record
-    const user = await oauthService.authenticateOAuthUser(provider, profile, {
-      userAgent: req.headers['user-agent'] ?? null,
-      ipAddress: req.ip ?? null,
-    });
-
-    // 4. Track device and set JWT cookies
-    await authService.establishOAuthSession(res, user, {
-      userAgent: req.headers['user-agent'] ?? null,
-      ipAddress: req.ip ?? null,
-    });
-
-    // 5. Redirect back to frontend customer dashboard
-    res.redirect(env.FRONTEND_CUSTOMER_URL);
-  } catch (err: any) {
-    const errMsg = err.message ?? 'authentication_failed';
-    res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=${encodeURIComponent(errMsg)}`);
-  }
-});
+      // 5. Redirect back to frontend customer dashboard
+      res.redirect(env.FRONTEND_CUSTOMER_URL);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'authentication_failed';
+      res.redirect(`${env.FRONTEND_CUSTOMER_URL}/login?error=${encodeURIComponent(errMsg)}`);
+    }
+  },
+);

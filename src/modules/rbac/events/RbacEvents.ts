@@ -1,15 +1,18 @@
 import { EventEmitter } from 'node:events';
 
+import slugify from 'slugify';
 import { In } from 'typeorm';
 
-import { appDataSource } from '../../../config/database';
+import { AppDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
-import { AuditLog } from '../../../entities/AuditLog';
-import { Permission } from '../../../entities/Permission';
-import { RoleVersionPermission } from '../../../entities/RoleVersionPermission';
-import { User } from '../../../entities/User';
-import { UserRole } from '../../../entities/UserRole';
+import { AuditLog } from '../../../database/entities/AuditLog';
+import { Permission } from '../../../database/entities/Permission';
+import { RoleVersionPermission } from '../../../database/entities/RoleVersionPermission';
+import { User } from '../../../database/entities/User';
+import { UserRole } from '../../../database/entities/UserRole';
 import { CacheService } from '../../../services/cache.service';
+
+import { RoleStatus } from '@/types/enums';
 
 export class RbacEventEmitter extends EventEmitter {}
 export const rbacEventEmitter = new RbacEventEmitter();
@@ -25,8 +28,8 @@ interface RoleEventPayload {
 }
 
 interface RoleUpdatePayload extends RoleEventPayload {
-  before?: Record<string, any>;
-  after?: Record<string, any>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
 }
 
 interface RoleAssignPayload {
@@ -43,17 +46,17 @@ async function createAuditLog(
   action: string,
   entityId: string,
   actorId: string,
-  before: Record<string, any> | null,
-  after: Record<string, any> | null,
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
   ip?: string,
   userAgent?: string,
 ) {
   try {
-    const userRepo = appDataSource.getRepository(User);
+    const userRepo = AppDataSource.getRepository(User);
     const actor = await userRepo.findOne({ where: { id: actorId }, select: ['email'] });
     const actorEmail = actor?.email ?? 'system';
 
-    const auditLogRepo = appDataSource.getRepository(AuditLog);
+    const auditLogRepo = AppDataSource.getRepository(AuditLog);
     const log = auditLogRepo.create({
       actorId,
       actorEmail,
@@ -76,28 +79,33 @@ async function createAuditLog(
 async function rebuildUserPermissionsCache(userId: string) {
   try {
     const cacheKey = `permissions:${userId}`;
-    const userRoleRepo = appDataSource.getRepository(UserRole);
+    const userRoleRepo = AppDataSource.getRepository(UserRole);
 
     const userRoles = await userRoleRepo.find({
       where: { userId },
-      relations: ['role'],
+      relations: ['role', 'role.activeVersion'],
     });
 
     const activeUserRoles = userRoles.filter((ur) => {
-      if (!ur.role ?? ur.role.status !== 'ACTIVE') return false;
+      if (ur.role.status !== RoleStatus.ACTIVE) return false;
       if (ur.expiresAt && ur.expiresAt.getTime() < Date.now()) return false;
       return true;
     });
 
-    const roleSlugs = activeUserRoles.map((ur) => ur.role.slug);
+    const roleSlugs = activeUserRoles
+      .map((ur) => {
+        if (ur.role.isSystemRole) return 'super-admin';
+        return ur.role.activeVersion?.name
+          ? slugify(ur.role.activeVersion.name, { lower: true, strict: true })
+          : '';
+      })
+      .filter(Boolean);
     let permissionKeys: string[] = [];
 
-    const hasSuperAdmin = activeUserRoles.some(
-      (ur) => ur.role.isSystemRole ?? ur.role.slug === 'super-admin',
-    );
+    const hasSuperAdmin = activeUserRoles.some((ur) => ur.role.isSystemRole);
 
     if (hasSuperAdmin) {
-      const permissionRepo = appDataSource.getRepository(Permission);
+      const permissionRepo = AppDataSource.getRepository(Permission);
       const allPermissions = await permissionRepo.find({ select: ['key'] });
       permissionKeys = allPermissions.map((p) => p.key);
     } else if (activeUserRoles.length > 0) {
@@ -106,7 +114,7 @@ async function rebuildUserPermissionsCache(userId: string) {
         .filter((id): id is string => !!id);
 
       if (activeVersionIds.length > 0) {
-        const rvpRepo = appDataSource.getRepository(RoleVersionPermission);
+        const rvpRepo = AppDataSource.getRepository(RoleVersionPermission);
         const rvpList = await rvpRepo.find({
           where: { roleVersionId: In(activeVersionIds) },
           select: ['permissionKey'],
@@ -123,12 +131,12 @@ async function rebuildUserPermissionsCache(userId: string) {
 
 async function rebuildCacheForRoleUsers(roleId: string) {
   try {
-    const userRoleRepo = appDataSource.getRepository(UserRole);
+    const userRoleRepo = AppDataSource.getRepository(UserRole);
     const assignments = await userRoleRepo.find({
       where: { roleId },
       select: ['userId'],
     });
-    for (const assignment of assignments) {
+    for await (const assignment of assignments) {
       await rebuildUserPermissionsCache(assignment.userId);
     }
   } catch (err) {
@@ -199,12 +207,13 @@ rbacEventEmitter.on('RoleApproved', async (payload: RoleEventPayload) => {
 // 5. RoleRejected
 rbacEventEmitter.on('RoleRejected', async (payload: RoleUpdatePayload) => {
   logger.info(payload, 'Event: RoleRejected');
+  const comment = payload.after?.comment;
   await createAuditLog(
     'role.reject',
     payload.roleId,
     payload.userId,
     null,
-    { version: payload.version, comment: payload.after?.comment },
+    { version: payload.version, comment: typeof comment === 'string' ? comment : undefined },
     payload.ip,
     payload.userAgent,
   );

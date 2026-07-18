@@ -1,10 +1,16 @@
-import { appDataSource } from '../config/database';
-import { AppError } from '../core/AppError';
-import { User } from '../entities/User';
+import { AppDataSource } from '../config/database';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../core/AppError';
+import { User } from '../database/entities/User';
 
 import type { NextFunction, Request, Response } from 'express';
 
-const userRepo = appDataSource.getRepository(User);
+const userRepo = AppDataSource.getRepository(User);
+
+const bypassRoutes = [
+  '/api/v1/auth/logout',
+  '/api/v1/auth/reset-password',
+  '/api/v1/auth/password/change',
+];
 
 /**
  * Intercepts requests for users who are marked for a forced password reset.
@@ -12,18 +18,12 @@ const userRepo = appDataSource.getRepository(User);
  */
 export const checkForcedReset = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
   if (!req.user) {
     return next();
   }
-
-  const bypassRoutes = [
-    '/api/v1/auth/logout',
-    '/api/v1/auth/reset-password',
-    '/api/v1/auth/password/change',
-  ];
 
   const path = req.originalUrl.split('?')[0] ?? '';
   if (bypassRoutes.some((route) => path.startsWith(route))) {
@@ -37,7 +37,11 @@ export const checkForcedReset = async (
 
   if (user?.mustResetPassword) {
     return next(
-      new AppError('You must reset your password before continuing.', 403, 'FORCED_PASSWORD_RESET'),
+      new AppError(
+        AppErrorMessage.PASSWORD_RESET_REQUIRED,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.FORCED_PASSWORD_RESET,
+      ),
     );
   }
 
@@ -50,14 +54,12 @@ export const checkForcedReset = async (
  */
 export const checkPasswordExpiration = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ): Promise<void> => {
   if (!req.user) {
     return next();
   }
-
-  const bypassRoutes = ['/api/v1/auth/logout', '/api/v1/auth/password/change'];
 
   const path = req.originalUrl.split('?')[0] ?? '';
   if (bypassRoutes.some((route) => path.startsWith(route))) {
@@ -75,7 +77,11 @@ export const checkPasswordExpiration = async (
 
     if (daysSinceChange > 90) {
       return next(
-        new AppError('Your password has expired and must be changed.', 403, 'PASSWORD_EXPIRED'),
+        new AppError(
+          AppErrorMessage.PASSWORD_EXPIRED,
+          HttpStatusCode.FORBIDDEN,
+          AppErrorCode.PASSWORD_EXPIRED,
+        ),
       );
     }
   }

@@ -2,9 +2,9 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
-import { User } from '../../src/entities/User';
-import { UserSession } from '../../src/entities/UserSession';
+import { AppDataSource } from '../../src/config/database';
+import { User } from '../../src/database/entities/User';
+import { UserSession } from '../../src/database/entities/UserSession';
 import { clearAuthTables } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createVerifiedUser } from '../helpers/builders';
@@ -12,8 +12,8 @@ import { JWT_COOKIE_NAME } from '../../src/core/constants';
 import { REFRESH_COOKIE_NAME } from '../../src/modules/auth/auth.service';
 import { env } from '../../src/config/env';
 
-const userRepo = appDataSource.getRepository(User);
-const sessionRepo = appDataSource.getRepository(UserSession);
+const userRepo = AppDataSource.getRepository(User);
+const sessionRepo = AppDataSource.getRepository(UserSession);
 
 describe('Session Management & Security integration tests', () => {
   let agent: ReturnType<typeof request.agent>;

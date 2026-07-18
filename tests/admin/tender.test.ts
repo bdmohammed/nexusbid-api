@@ -1,10 +1,10 @@
 import request from 'supertest';
 import { app } from '../../src/config/app';
-import { appDataSource } from '../../src/config/database';
-import { State } from '../../src/entities/State';
-import { Category } from '../../src/entities/Category';
-import { Tender } from '../../src/entities/Tender';
-import { TenderVersion } from '../../src/entities/TenderVersion';
+import { AppDataSource } from '../../src/config/database';
+import { State } from '../../src/database/entities/State';
+import { Category } from '../../src/database/entities/Category';
+import { Tender } from '../../src/database/entities/Tender';
+import { TenderVersion } from '../../src/database/entities/TenderVersion';
 import {
   AccountType,
   PermissionKey,
@@ -15,16 +15,16 @@ import {
 import { clearAuthTables, setupTestRoleWithPermission } from '../helpers/db';
 import { getCsrf } from '../helpers/csrf';
 import { createUser } from '../helpers/builders';
-import { User } from '../../src/entities/User';
+import { User } from '../../src/database/entities/User';
 
-const stateRepo = () => appDataSource.getRepository(State);
-const categoryRepo = () => appDataSource.getRepository(Category);
-const tenderRepo = () => appDataSource.getRepository(Tender);
-const versionRepo = () => appDataSource.getRepository(TenderVersion);
+const stateRepo = () => AppDataSource.getRepository(State);
+const categoryRepo = () => AppDataSource.getRepository(Category);
+const tenderRepo = () => AppDataSource.getRepository(Tender);
+const versionRepo = () => AppDataSource.getRepository(TenderVersion);
 
 async function clearAllTables() {
   await clearAuthTables();
-  await appDataSource.query(
+  await AppDataSource.query(
     `TRUNCATE TABLE tenders, tender_versions, states, categories RESTART IDENTITY CASCADE`,
   );
 }

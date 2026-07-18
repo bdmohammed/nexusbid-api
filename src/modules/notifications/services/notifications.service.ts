@@ -1,9 +1,15 @@
-import { appDataSource } from '../../../config/database';
+import { AppDataSource } from '../../../config/database';
 import { logger } from '../../../config/logger';
-import { Notification } from '../../../entities/Notification';
-import { NotificationAction } from '../../../entities/NotificationAction';
-import { NotificationRecipient } from '../../../entities/NotificationRecipient';
-import { UserRole } from '../../../entities/UserRole';
+import { Notification } from '../../../database/entities/Notification';
+import { NotificationAction } from '../../../database/entities/NotificationAction';
+import { NotificationRecipient } from '../../../database/entities/NotificationRecipient';
+import { UserRole } from '../../../database/entities/UserRole';
+import {
+  NotificationActionType,
+  NotificationCategory,
+  NotificationRecipientStatus,
+  NotificationSeverity,
+} from '../../../types/enums';
 import { domainEvents, TENDER_EVENTS } from '../../../utils/domainEvents';
 import { rbacEventEmitter } from '../../rbac/events/RbacEvents';
 
@@ -26,13 +32,15 @@ export function unregisterSSEClient(res: Response) {
   const index = sseClients.findIndex((c) => c.res === res);
   if (index !== -1) {
     const client = sseClients[index];
-    sseClients.splice(index, 1);
-    logger.info({ userId: client.userId }, 'SSE client unregistered');
+    if (client) {
+      sseClients.splice(index, 1);
+      logger.info({ userId: client.userId }, 'SSE client unregistered');
+    }
   }
 }
 
 // ─── Broadcasters ─────────────────────────────────────────────────────────────
-export function broadcastToUser(userId: string, eventName: string, data: any) {
+export function broadcastToUser(userId: string, eventName: string, data: Record<string, string>) {
   const clients = sseClients.filter((c) => c.userId === userId);
   clients.forEach((c) => {
     try {
@@ -44,8 +52,8 @@ export function broadcastToUser(userId: string, eventName: string, data: any) {
 }
 
 export async function broadcastNotification(notificationId: string) {
-  const notifRepo = appDataSource.getRepository(Notification);
-  const userRoleRepo = appDataSource.getRepository(UserRole);
+  const notifRepo = AppDataSource.getRepository(Notification);
+  const userRoleRepo = AppDataSource.getRepository(UserRole);
 
   const notif = await notifRepo.findOne({
     where: { id: notificationId },
@@ -69,19 +77,19 @@ export async function broadcastNotification(notificationId: string) {
     }
   }
 
-  targetUserIds.forEach((uid) => {
-    broadcastToUser(uid, 'notification:new', {
-      ...notif,
-      // Map user-specific status inside the payload
-      status: 'UNREAD',
-    });
-  });
+  // targetUserIds.forEach((uid) => {
+  //   broadcastToUser(uid, 'notification:new', {
+  //     ...notif,
+  //     // Map user-specific status inside the payload
+  //     status: 'UNREAD',
+  //   });
+  // });
 }
 
 // ─── Notification Creator ──────────────────────────────────────────────────────
 export async function createNotification(params: {
-  category: string;
-  severity: string;
+  category: NotificationCategory;
+  severity: NotificationSeverity;
   title: string;
   message: string;
   entityType?: string | null;
@@ -89,17 +97,17 @@ export async function createNotification(params: {
   actionUrl?: string | null;
   actionLabel?: string | null;
   expiresAt?: Date | null;
-  metadata?: any | null;
+  metadata?: Record<string, string> | null;
   recipients: Array<{ userId?: string; roleId?: string; groupName?: string }>;
   actions?: Array<{
     label: string;
-    type: string;
-    payload?: any;
+    type: NotificationActionType;
+    payload?: Record<string, string>;
     permission?: string;
     btnOrder?: number;
   }>;
 }): Promise<Notification> {
-  return appDataSource.transaction(async (manager) => {
+  return AppDataSource.transaction(async (manager) => {
     const notif = manager.create(Notification, {
       category: params.category,
       severity: params.severity,
@@ -122,7 +130,7 @@ export async function createNotification(params: {
         userId: r.userId ?? null,
         roleId: r.roleId ?? null,
         groupName: r.groupName ?? null,
-        status: 'UNREAD',
+        status: NotificationRecipientStatus.UNREAD,
       }),
     );
     await manager.save(NotificationRecipient, recipientsList);
@@ -135,7 +143,7 @@ export async function createNotification(params: {
           label: a.label,
           type: a.type,
           payload: a.payload ?? null,
-          permission: a.permission ?? null,
+          requiredPermissionKey: a.permission ?? null,
           btnOrder: a.btnOrder ?? 0,
         }),
       );
@@ -158,7 +166,7 @@ export function setupNotificationListeners() {
   logger.info('Initializing notification listeners');
 
   // 1. Tender submitted (Needs Review)
-  domainEvents.on(TENDER_EVENTS.SUBMITTED, async (event: any) => {
+  domainEvents.on(TENDER_EVENTS.SUBMITTED, async (event) => {
     try {
       const { tender } = event;
       const title = 'Tender Submitted';
@@ -166,8 +174,8 @@ export function setupNotificationListeners() {
 
       // Find reviewer role or assign to group everyone / support
       await createNotification({
-        category: 'review',
-        severity: 'high',
+        category: NotificationCategory.REVIEW,
+        severity: NotificationSeverity.HIGH,
         title,
         message,
         entityType: 'Tender',
@@ -178,14 +186,14 @@ export function setupNotificationListeners() {
         actions: [
           {
             label: 'Approve',
-            type: 'TENDER_APPROVE',
+            type: NotificationActionType.TENDER_APPROVE,
             payload: { tenderId: tender.id },
             permission: 'approve_tender',
             btnOrder: 1,
           },
           {
             label: 'Reject',
-            type: 'TENDER_REJECT',
+            type: NotificationActionType.TENDER_REJECT,
             payload: { tenderId: tender.id },
             permission: 'approve_tender',
             btnOrder: 2,
@@ -198,15 +206,15 @@ export function setupNotificationListeners() {
   });
 
   // 2. Tender approved
-  domainEvents.on(TENDER_EVENTS.APPROVED, async (event: any) => {
+  domainEvents.on(TENDER_EVENTS.APPROVED, async (event) => {
     try {
       const { tender } = event;
       const title = 'Tender Approved';
       const message = `Tender Reference ${tender.referenceNo} has been successfully approved and scheduled/published.`;
 
       await createNotification({
-        category: 'tender',
-        severity: 'info',
+        category: NotificationCategory.TENDER,
+        severity: NotificationSeverity.INFO,
         title,
         message,
         entityType: 'Tender',
@@ -221,15 +229,15 @@ export function setupNotificationListeners() {
   });
 
   // 3. Role version submitted for review
-  rbacEventEmitter.on('RoleSubmitted', async (event: any) => {
+  rbacEventEmitter.on('RoleSubmitted', async (event) => {
     try {
       const title = 'Role Request Submitted';
       const message = `Role "${event.roleName}" version ${event.version} submitted by user.`;
 
       // Target admins/reviewers
       await createNotification({
-        category: 'review',
-        severity: 'medium',
+        category: NotificationCategory.REVIEW,
+        severity: NotificationSeverity.MEDIUM,
         title,
         message,
         entityType: 'Role',
@@ -240,14 +248,14 @@ export function setupNotificationListeners() {
         actions: [
           {
             label: 'Approve',
-            type: 'ROLE_APPROVE',
+            type: NotificationActionType.ROLE_APPROVE,
             payload: { roleId: event.roleId, version: event.version },
             permission: 'assign_permissions',
             btnOrder: 1,
           },
           {
             label: 'Reject',
-            type: 'ROLE_REJECT',
+            type: NotificationActionType.ROLE_REJECT,
             payload: { roleId: event.roleId, version: event.version },
             permission: 'assign_permissions',
             btnOrder: 2,
@@ -260,14 +268,14 @@ export function setupNotificationListeners() {
   });
 
   // 4. Role approved
-  rbacEventEmitter.on('RoleApproved', async (event: any) => {
+  rbacEventEmitter.on('RoleApproved', async (event) => {
     try {
       const title = 'Role Approved';
       const message = `Role "${event.roleName}" version ${event.version} has been approved.`;
 
       await createNotification({
-        category: 'role',
-        severity: 'info',
+        category: NotificationCategory.SYSTEM,
+        severity: NotificationSeverity.INFO,
         title,
         message,
         entityType: 'Role',
@@ -282,14 +290,14 @@ export function setupNotificationListeners() {
   });
 
   // 5. Role rejected
-  rbacEventEmitter.on('RoleRejected', async (event: any) => {
+  rbacEventEmitter.on('RoleRejected', async (event) => {
     try {
       const title = 'Role Rejected';
       const message = `Role "${event.roleName}" version ${event.version} has been rejected.`;
 
       await createNotification({
-        category: 'role',
-        severity: 'high',
+        category: NotificationCategory.ROLE,
+        severity: NotificationSeverity.HIGH,
         title,
         message,
         entityType: 'Role',
@@ -302,14 +310,14 @@ export function setupNotificationListeners() {
   });
 
   // 6. Role Created Draft
-  rbacEventEmitter.on('RoleCreated', async (event: any) => {
+  rbacEventEmitter.on('RoleCreated', async (event) => {
     try {
       const title = 'New Role Created';
       const message = `A new role "${event.roleName}" has been created as a draft.`;
 
       await createNotification({
-        category: 'role',
-        severity: 'low',
+        category: NotificationCategory.SYSTEM,
+        severity: NotificationSeverity.INFO,
         title,
         message,
         entityType: 'Role',
@@ -322,14 +330,14 @@ export function setupNotificationListeners() {
   });
 
   // 7. Role Reopened
-  rbacEventEmitter.on('RoleReopened', async (event: any) => {
+  rbacEventEmitter.on('RoleReopened', async (event) => {
     try {
       const title = 'Role Review Reopened';
       const message = `Role "${event.roleName}" (V${event.version}) review workflow has been reopened.`;
 
       await createNotification({
-        category: 'role',
-        severity: 'medium',
+        category: NotificationCategory.SYSTEM,
+        severity: NotificationSeverity.MEDIUM,
         title,
         message,
         entityType: 'Role',
@@ -342,14 +350,14 @@ export function setupNotificationListeners() {
   });
 
   // 8. Role Archived
-  rbacEventEmitter.on('RoleArchived', async (event: any) => {
+  rbacEventEmitter.on('RoleArchived', async (event) => {
     try {
       const title = 'Role Archived';
       const message = `Role "${event.roleName}" has been archived.`;
 
       await createNotification({
-        category: 'role',
-        severity: 'info',
+        category: NotificationCategory.SYSTEM,
+        severity: NotificationSeverity.INFO,
         title,
         message,
         entityType: 'Role',

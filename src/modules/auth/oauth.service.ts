@@ -2,18 +2,18 @@ import crypto from 'node:crypto';
 
 import bcrypt from 'bcryptjs';
 
-import { appDataSource } from '../../config/database';
+import { AppDataSource } from '../../config/database';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
-import { AppError } from '../../core/AppError';
+import { AppError, AppErrorCode, AppErrorMessage, HttpStatusCode } from '../../core/AppError';
 import { BCRYPT_ROUNDS } from '../../core/constants';
-import { User } from '../../entities/User';
-import { AccountType } from '../../types/enums';
+import { User } from '../../database/entities/User';
+import { AccountType, SecurityEvent } from '../../types/enums';
 
 import { savePasswordToHistory } from './security.service';
 import { logSecurityEvent } from './securityLog.service';
 
-const userRepository = appDataSource.getRepository(User);
+const userRepository = AppDataSource.getRepository(User);
 
 export interface OAuthProfile {
   providerId: string;
@@ -80,18 +80,24 @@ export function getAuthorizationUrl(provider: string, state: string): string {
       }).toString()}`;
 
     default:
-      throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
+      throw new AppError(
+        AppErrorMessage.INVALID_OAUTH_PROVIDER,
+        HttpStatusCode.BAD_REQUEST,
+        AppErrorCode.INVALID_PROVIDER,
+      );
   }
 }
 
 /**
  * Verifies code callback and fetches user profile from the provider.
  */
+// eslint-disable-next-line complexity, sonarjs/cognitive-complexity
 export async function verifyCallbackAndGetUser(
   provider: string,
   code: string,
 ): Promise<OAuthProfile> {
   // Check if this is a mock request (starts with mock_code_ or provider credentials missing)
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (code.startsWith('mock_code_') ?? !isConfigured(provider)) {
     return {
       providerId: `${provider}-mock-${crypto.randomBytes(6).toString('hex')}`,
@@ -232,13 +238,17 @@ export async function verifyCallbackAndGetUser(
       };
     }
 
-    throw new AppError('Invalid OAuth provider', 400, 'INVALID_PROVIDER');
+    throw new AppError(
+      AppErrorMessage.INVALID_OAUTH_PROVIDER,
+      HttpStatusCode.BAD_REQUEST,
+      AppErrorCode.INVALID_PROVIDER,
+    );
   } catch (error: any) {
     logger.error({ err: error, provider }, 'OAuth callback verification failure');
     throw new AppError(
-      `OAuth login failed with provider ${provider}: ${error.message}`,
-      401,
-      'OAUTH_VERIFICATION_FAILED',
+      AppErrorMessage.OAUTH_LOGIN_FAILED(provider, error.message),
+      HttpStatusCode.UNAUTHORIZED,
+      AppErrorCode.OAUTH_VERIFICATION_FAILED,
     );
   }
 }
@@ -251,6 +261,8 @@ export async function authenticateOAuthUser(
   profile: OAuthProfile,
   clientMetadata?: { userAgent: string | null; ipAddress: string | null },
 ): Promise<User> {
+  const email = profile.email.trim().toLowerCase();
+
   // 1. Query by provider ID
   let user: User | null = null;
   if (provider === 'google') {
@@ -263,7 +275,11 @@ export async function authenticateOAuthUser(
 
   if (user) {
     if (user.isBlocked) {
-      throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
+      throw new AppError(
+        AppErrorMessage.ACCOUNT_SUSPENDED_CONTACT_SUPPORT,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.ACCOUNT_BLOCKED,
+      );
     }
     // Update last login
     user.lastLoginAt = new Date();
@@ -272,7 +288,7 @@ export async function authenticateOAuthUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.success',
+      event: SecurityEvent.LOGIN_SUCCESS,
       ipAddress: clientMetadata?.ipAddress ?? null,
       userAgent: clientMetadata?.userAgent ?? null,
       details: { method: `oauth_${provider}` },
@@ -283,12 +299,16 @@ export async function authenticateOAuthUser(
 
   // 2. Query by Email (Auto-linking)
   user = await userRepository.findOne({
-    where: { email: profile.email },
+    where: { email },
   });
 
   if (user) {
     if (user.isBlocked) {
-      throw new AppError('Account suspended. Contact support.', 403, 'ACCOUNT_BLOCKED');
+      throw new AppError(
+        AppErrorMessage.ACCOUNT_SUSPENDED_CONTACT_SUPPORT,
+        HttpStatusCode.FORBIDDEN,
+        AppErrorCode.ACCOUNT_BLOCKED,
+      );
     }
 
     // Link provider account
@@ -310,7 +330,7 @@ export async function authenticateOAuthUser(
     await logSecurityEvent({
       userId: user.id,
       email: user.email,
-      event: 'login.success',
+      event: SecurityEvent.LOGIN_SUCCESS,
       ipAddress: clientMetadata?.ipAddress ?? null,
       userAgent: clientMetadata?.userAgent ?? null,
       details: { method: `oauth_${provider}`, action: 'linked' },
@@ -326,7 +346,7 @@ export async function authenticateOAuthUser(
 
   const newUserDto: Partial<User> = {
     name: profile.name,
-    email: profile.email,
+    email,
     passwordHash,
     emailVerified: true, // OAuth emails are pre-verified by provider
     accountType: AccountType.USER,
@@ -352,7 +372,7 @@ export async function authenticateOAuthUser(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'register.success',
+    event: SecurityEvent.REGISTER_SUCCESS,
     ipAddress: clientMetadata?.ipAddress ?? null,
     userAgent: clientMetadata?.userAgent ?? null,
     details: { method: `oauth_${provider}` },
@@ -361,7 +381,7 @@ export async function authenticateOAuthUser(
   await logSecurityEvent({
     userId: user.id,
     email: user.email,
-    event: 'login.success',
+    event: SecurityEvent.LOGIN_SUCCESS,
     ipAddress: clientMetadata?.ipAddress ?? null,
     userAgent: clientMetadata?.userAgent ?? null,
     details: { method: `oauth_${provider}` },

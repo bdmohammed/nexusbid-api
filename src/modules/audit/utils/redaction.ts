@@ -1,3 +1,6 @@
+export type SafeJsonValue =
+  string | number | boolean | null | undefined | SafeJsonValue[] | { [key: string]: SafeJsonValue };
+
 const SENSITIVE_KEYS = new Set([
   'password',
   'token',
@@ -17,8 +20,8 @@ const SENSITIVE_KEYS = new Set([
 /**
  * Recursively scans an object and redacts keys that represent sensitive credentials.
  */
-export function redactSensitiveData(value: any): any {
-  if (value === null ?? value === undefined) {
+export function redactSensitiveData(value: SafeJsonValue): SafeJsonValue {
+  if (value === null || value === undefined) {
     return value;
   }
 
@@ -27,13 +30,13 @@ export function redactSensitiveData(value: any): any {
   }
 
   if (typeof value === 'object') {
-    const output: Record<string, any> = {};
+    const output: Record<string, SafeJsonValue> = {};
     for (const key of Object.keys(value)) {
       const lowerKey = key.toLowerCase();
 
       // Match key contains or matches sensitive keys
       const isSensitive = Array.from(SENSITIVE_KEYS).some(
-        (sensitiveKey) => lowerKey === sensitiveKey ?? lowerKey.includes(sensitiveKey),
+        (sensitiveKey) => lowerKey === sensitiveKey || lowerKey.includes(sensitiveKey),
       );
 
       if (isSensitive) {

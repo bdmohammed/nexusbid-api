@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { startCronJobs } from '../jobs';
 
 import { app } from './app';
-import { appDataSource } from './database';
+import { AppDataSource } from './database';
 import { env } from './env';
 import { logger } from './logger';
 
@@ -36,7 +36,7 @@ async function bootstrap(): Promise<void> {
 
   // ── Step 1: Connect to database ─────────────────────────────────────────────
   try {
-    await appDataSource.initialize();
+    await AppDataSource.initialize();
     logger.info('Database connected');
 
     // Initialize real-time notification listener bindings
@@ -67,7 +67,7 @@ async function bootstrap(): Promise<void> {
     const durationMs = performance.now() - startTime;
     logger.info({ reason: signal, durationMs }, 'Application shutting down');
     try {
-      await appDataSource.destroy();
+      await AppDataSource.destroy();
       logger.info('Database connection closed');
     } catch (err) {
       logger.error({ err }, 'Error during shutdown');
@@ -75,8 +75,15 @@ async function bootstrap(): Promise<void> {
     process.exit(0);
   };
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM');
+  });
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT');
+  });
 }
 
-bootstrap();
+void bootstrap().catch((err) => {
+  logger.fatal({ err }, 'Fatal error during bootstrap');
+  process.exit(1);
+});

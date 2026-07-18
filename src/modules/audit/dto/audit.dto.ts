@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { RetentionCategory } from '../../../types/enums';
+
 export const AuditQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
@@ -25,17 +27,22 @@ export const AuditQuerySchema = z.object({
   requestId: z.string().optional(),
   search: z.string().optional(),
 
-  page: z.preprocess((val) => parseInt((val as string) ?? '1', 10), z.number().min(1).default(1)),
-  limit: z.preprocess(
-    (val) => parseInt((val as string) ?? '20', 10),
-    z.number().min(1).max(100).default(20),
-  ),
+  page: z.preprocess((val) => {
+    if (val === null || val === undefined) return 1;
+    const num = parseInt(String(val), 10);
+    return Number.isNaN(num) ? 1 : num;
+  }, z.number().min(1).default(1)),
+  limit: z.preprocess((val) => {
+    if (val === null || val === undefined) return 20;
+    const num = parseInt(String(val), 10);
+    return Number.isNaN(num) ? 20 : num;
+  }, z.number().min(1).max(100).default(20)),
 });
 
 export type AuditQueryDto = z.infer<typeof AuditQuerySchema>;
 
 export const UpdateRetentionSchema = z.object({
-  category: z.enum(['AUDIT', 'SECURITY', 'API']),
+  category: z.nativeEnum(RetentionCategory),
   retentionDays: z.number().min(1).max(3650), // up to 10 years
 });
 
@@ -47,3 +54,36 @@ export const RequestAuditExportSchema = z.object({
 });
 
 export type RequestAuditExportDto = z.infer<typeof RequestAuditExportSchema>;
+
+export const AuditLogIdParamSchema = z.object({
+  id: z.string().uuid('Invalid audit log ID format'),
+});
+
+export type AuditLogIdParamDto = z.infer<typeof AuditLogIdParamSchema>;
+
+export const CorrelationIdParamSchema = z.object({
+  correlationId: z.string().min(1, 'Correlation ID is required'),
+});
+
+export type CorrelationIdParamDto = z.infer<typeof CorrelationIdParamSchema>;
+
+export const RequestIdParamSchema = z.object({
+  requestId: z.string().min(1, 'Request ID is required'),
+});
+
+export type RequestIdParamDto = z.infer<typeof RequestIdParamSchema>;
+
+export const SecurityEventsQuerySchema = z.object({
+  page: z.preprocess((val) => {
+    if (val === null || val === undefined) return 1;
+    const num = parseInt(String(val), 10);
+    return Number.isNaN(num) ? 1 : num;
+  }, z.number().min(1).default(1)),
+  limit: z.preprocess((val) => {
+    if (val === null || val === undefined) return 20;
+    const num = parseInt(String(val), 10);
+    return Number.isNaN(num) ? 20 : num;
+  }, z.number().min(1).max(100).default(20)),
+});
+
+export type SecurityEventsQueryDto = z.infer<typeof SecurityEventsQuerySchema>;
