@@ -3,9 +3,10 @@ import { logger } from './logger';
 import type { Logger as TypeOrmLogger, QueryRunner } from 'typeorm';
 
 export class TypeOrmPinoLogger implements TypeOrmLogger {
-  logQuery(query: string, parameters?: unknown[], queryRunner?: QueryRunner) {
+  logQuery(query: string, parameters?: unknown[], _queryRunner?: QueryRunner) {
     if (logger.level === 'debug' || logger.level === 'trace') {
-      logger.debug({ query, parameters, queryRunner }, 'Database query');
+      // logger.debug({ query, parameters, queryRunner }, 'Database query');
+      logger.debug({ query, parameters }, 'Database query');
     }
   }
 
@@ -26,31 +27,31 @@ export class TypeOrmPinoLogger implements TypeOrmLogger {
     );
   }
 
-  logQuerySlow(time: number, query: string, parameters?: unknown[], queryRunner?: QueryRunner) {
+  logQuerySlow(time: number, query: string, parameters?: unknown[], _queryRunner?: QueryRunner) {
     logger.warn(
       {
         durationMs: time,
         query,
         parameters,
-        queryRunner,
+        // queryRunner,
       },
       'Database slow query warning',
     );
   }
 
-  logSchemaBuild(message: string, queryRunner?: QueryRunner) {
-    logger.info({ message, queryRunner }, 'Database schema build');
+  logSchemaBuild(message: string, _queryRunner?: QueryRunner) {
+    logger.info({ message }, 'Database schema build');
   }
 
-  logMigration(message: string, queryRunner?: QueryRunner) {
-    logger.info({ migrationMessage: message, queryRunner }, 'Database migration');
+  logMigration(message: string, _queryRunner?: QueryRunner) {
+    logger.info({ migrationMessage: message }, 'Database migration');
   }
 
-  log(level: 'log' | 'info' | 'warn', message: unknown, queryRunner?: QueryRunner) {
+  log(level: 'log' | 'info' | 'warn', message: unknown, _queryRunner?: QueryRunner) {
     if (level === 'warn') {
-      logger.warn({ message, queryRunner }, 'Database warning');
+      logger.warn({ message }, 'Database warning');
     } else {
-      logger.info({ message, queryRunner }, 'Database log');
+      logger.info({ message }, 'Database log');
     }
   }
 }

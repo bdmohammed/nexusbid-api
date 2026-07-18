@@ -178,8 +178,8 @@ export const AppDataSource = new DataSource({
     // Production: compiled JS files
     // Development (ts-node): TypeScript source files
     ['prod', 'uat'].includes(env.NODE_ENV)
-      ? 'dist/migrations_test/*.js'
-      : 'src/migrations_test/*.ts',
+      ? 'dist/database/migrations/*.js'
+      : 'src/database/migrations/*.ts',
   ],
 
   /**
